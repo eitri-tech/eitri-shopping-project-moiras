@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "claude-empty": {
+      "command": "node",
+      "args": [
+        "plugins/claude-empty/mcp/server.js"
+      ]
+    }
+  }
+}
