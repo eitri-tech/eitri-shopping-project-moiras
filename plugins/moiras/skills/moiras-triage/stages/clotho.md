@@ -46,6 +46,18 @@ Cada fonte tem um `status`: `ok` ou `falhou` (conector ausente, sem permissão, 
 
 Uma fonte com `status: falhou` e listas vazias é uma saída válida pelo contrato; não conta como campo faltando.
 
+### Outras fontes
+
+Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issues a triar) e o **Slack** (contexto). A Cloto pode monitorar outras fontes no futuro (ex.: PRs e issues do GitHub, alertas de observabilidade, Confluence, e-mail), desde que cada nova fonte siga o mesmo padrão:
+
+- um bloco próprio em `.moiras/sources.json`, com o que filtrar (pessoas, canais, repositórios, consultas);
+- coleta disparada na mesma rodada paralela do Jira e do Slack;
+- um bloco próprio na saída, com `status: ok | falhou` e listas vazias quando falhar;
+- itens ligados às issues pelas chaves citadas (padrão `[A-Z][A-Z0-9]+-\d+`), entrando em `evidencias` no formato de fonte;
+- registro na memória com chave `<fonte>:<id>` e o mesmo `com_quem`/`conteudo`.
+
+Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver documentada nesta etapa, não a use.
+
 ## Saída
 
 ```json

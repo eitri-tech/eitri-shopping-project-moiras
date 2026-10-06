@@ -4,7 +4,7 @@ Plugin para Claude que faz triagem de issues do Jira usando uma base de conhecim
 
 O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada um, e cada etapa da triagem leva o nome de uma delas:
 
-- **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack
+- **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack (hoje as fontes esperadas; outras podem ser adicionadas)
 - **Láquesis** (mede): identifica repositório e componente pelo glossário, classifica e avalia duplicados
 - **Átropos** (corta): justifica o problema, sugere até 3 soluções com % de confiança e anota a escolhida em `.moiras/solucoes.md`
 
