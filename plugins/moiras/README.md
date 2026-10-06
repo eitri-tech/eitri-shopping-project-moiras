@@ -31,7 +31,7 @@ moiras/
 
 ## Configuração
 
-Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha o épico, as pessoas e os canais do Slack e o caminho do registro de soluções (com os IDs `U…` e `C…`). O Jira e o Slack precisam estar conectados ao Claude (conectores do claude.ai ou servidores MCP próprios); o plugin não traz servidor MCP.
+Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha o épico, as pessoas e os canais do Slack (quantos precisar; cada canal pode ter pessoas próprias) e o caminho do registro de soluções (com os IDs `U…` e `C…`). O Jira e o Slack precisam estar conectados ao Claude (conectores do claude.ai ou servidores MCP próprios); o plugin não traz servidor MCP.
 
 ## Execução por cron
 

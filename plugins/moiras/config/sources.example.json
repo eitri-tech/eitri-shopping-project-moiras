@@ -10,12 +10,26 @@
       {
         "name": "Fulano",
         "id": "U0123456789"
+      },
+      {
+        "name": "Beltrana",
+        "id": "U0987654321"
       }
     ],
     "channels": [
       {
         "name": "#proj-squad",
         "id": "C0123456789"
+      },
+      {
+        "name": "#proj-suporte",
+        "id": "C0987654321",
+        "people": [
+          {
+            "name": "Sicrano",
+            "id": "U0555555555"
+          }
+        ]
       }
     ]
   },

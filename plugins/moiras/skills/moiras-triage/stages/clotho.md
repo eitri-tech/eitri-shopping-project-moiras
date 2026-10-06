@@ -29,11 +29,17 @@ A ordem final segue a do Jira (prioridade, depois data fim). Issues com `estoura
 
 ### B. Slack
 
-Busque mensagens dos últimos `slack.lookback_days` dias **apenas** das pessoas em `slack.people` e **apenas** nos canais em `slack.channels`:
+Monitore **todos** os canais de `slack.channels` (um ou mais), olhando os últimos `slack.lookback_days` dias e **apenas** as mensagens das pessoas configuradas:
 
-```
-from:<@USER_ID> in:<#CHANNEL_ID> after:<YYYY-MM-DD>
-```
+- Por padrão, cada canal usa as pessoas de `slack.people`. Um canal com `people` próprio usa a lista dele **somada** à global.
+- Faça uma leitura por canal, **todas em paralelo** e na mesma rodada do Jira: leia o histórico do canal no período e filtre os autores localmente. Se o conector só oferecer busca, use uma consulta por canal com as pessoas dele:
+
+  ```
+  in:<#CHANNEL_ID> from:<@USER_ID_1> after:<YYYY-MM-DD>
+  ```
+
+  (repita por pessoa quando a busca não aceitar vários `from:` na mesma consulta).
+- Uma mensagem citada em mais de um canal (ex.: compartilhada) entra uma vez só; guarde todos os canais em que apareceu.
 
 Abra a thread das mensagens que tiverem respostas e guarde cada resposta (autor, data, texto, permalink). Extraia as chaves de issue citadas (padrão `[A-Z][A-Z0-9]+-\d+`) da mensagem e das respostas; a mensagem passa a citar a união das duas.
 
@@ -42,7 +48,8 @@ Abra a thread das mensagens que tiverem respostas e guarde cada resposta (autor,
 Cada fonte tem um `status`: `ok` ou `falhou` (conector ausente, sem permissão, erro da API). Não invente dados da fonte que falhou.
 
 - **Jira falhou, épico não encontrado ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
-- **Slack falhou:** siga só com o Jira, com `slack.mensagens: []`, e acrescente o aviso `slack-indisponivel` em todas as issues.
+- **Slack falhou em todos os canais:** siga só com o Jira, com `slack.mensagens: []`, e acrescente o aviso `slack-indisponivel` em todas as issues.
+- **Slack falhou em alguns canais:** `slack.status: parcial`; siga com os canais que responderam e acrescente `slack-canal-indisponivel:<canal>` em todas as issues, um por canal que falhou.
 
 Uma fonte com `status: falhou` e listas vazias é uma saída válida pelo contrato; não conta como campo faltando.
 
@@ -84,11 +91,16 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
     ]
   },
   "slack": {
-    "status": "ok | falhou",
+    "status": "ok | parcial | falhou",
+    "canais": [
+      { "id": "C0123456789", "name": "#proj-squad", "status": "ok", "mensagens": 12 },
+      { "id": "C0987654321", "name": "#proj-suporte", "status": "falhou", "mensagens": 0 }
+    ],
     "periodo": { "de": "2026-09-29", "ate": "2026-10-06" },
     "mensagens": [
       {
         "canal": "#proj-squad",
+        "tambem_em": [],
         "autor": "Fulano",
         "data": "2026-10-03T14:12:00-03:00",
         "texto": "",
