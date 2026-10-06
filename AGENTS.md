@@ -35,6 +35,12 @@ Estrutura:
 - A taxonomia separa problema de plataforma (VTEX, Wake, Shopify) de problema do app.
 - Nunca commite tokens nem URLs com segredo (no `.mcp.json` inclusive).
 
+## Ambiente
+
+- `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, Python 3 e jq, fixados pelo `flake.lock`.
+- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`).
+- Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
+
 ## Convenções
 
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
