@@ -1,0 +1,27 @@
+{
+  "jira": {
+    "site": "example.atlassian.net",
+    "epic": "PROJ-100",
+    "project_end": "2026-12-15"
+  },
+  "slack": {
+    "lookback_days": 7,
+    "people": [
+      {
+        "name": "Fulano",
+        "id": "U0123456789"
+      }
+    ],
+    "channels": [
+      {
+        "name": "#proj-squad",
+        "id": "C0123456789"
+      }
+    ]
+  },
+  "memoria": {
+    "diretorio": ".moiras/memoria",
+    "execucoes": ".moiras/execucoes",
+    "solucoes": ".moiras/solucoes.md"
+  }
+}
