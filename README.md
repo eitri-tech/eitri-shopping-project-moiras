@@ -1,8 +1,6 @@
 # moiras
 Analisar, conhecer e gerar soluções com base de conhecimento.
 
-## Claude plugin scaffold
+## Plugin
 
-A minimal Claude plugin scaffold with **skills** and **MCP** support is available at:
-
-- `plugins/claude-empty`
+- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos).
