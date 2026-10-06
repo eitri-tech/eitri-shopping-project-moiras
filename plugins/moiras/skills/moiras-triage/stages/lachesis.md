@@ -93,6 +93,27 @@ Compartilhar só o componente não é duplicado.
 - A Láquesis **lê** o glossário, mas não o edita. Termos novos, repositórios que faltam ou dados desatualizados vão em `glossario_sugestoes`; a Átropos os apresenta e o usuário decide se aplica.
 - Repositório citado na issue que não está no glossário gera o aviso `repo-fora-do-glossario:<nome>`.
 
+## Memória
+
+Antes de classificar, calcule o hash da entrada (`hash`, com a entrada completa no stdin) e consulte o último registro da issue (`consultar laquesis --chave <KEY>`).
+
+- Mesmo hash e sem `--completo`: reaproveite os campos do registro (`categoria`, `componente`, `repositorios`, `origem`, `confianca`, `duplicatas`), cite o registro como fonte (`ref` = `laquesis.jsonl#<KEY>@<ts>`) e acrescente o aviso `classificacao-reaproveitada:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo.
+- Caso contrário, classifique e registre:
+
+```json
+{
+  "chave": "PROJ-1423",
+  "run_id": "2026-10-06T11:00:00Z",
+  "hash": "<hash da entrada>",
+  "categoria": "bug",
+  "componente": "checkout",
+  "repositorios": ["acme-shop-checkout"],
+  "origem": "app",
+  "confianca": 0.78,
+  "duplicatas": ["PROJ-1187"]
+}
+```
+
 ## Confiança
 
 Número de 0 a 1:

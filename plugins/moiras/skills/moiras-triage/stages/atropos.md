@@ -88,9 +88,31 @@ Como calibrar:
 
 Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, folga até o fim do épico, ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas (1 a 3). Em seguida, as sugestões de glossário (`glossario_sugestoes`) agrupadas por repositório. Por fim, as saídas completas em JSON.
 
-Termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-1423: 2`), aceitando "nenhuma".
+No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-1423: 2`), aceitando "nenhuma". Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `escolha: null`).
 
-## 6. Registro de soluções
+No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha.
+
+## 6. Memória
+
+Registre cada veredito em `registrar atropos`, inclusive no modo automático:
+
+```json
+{
+  "chave": "PROJ-1423",
+  "run_id": "2026-10-06T11:00:00Z",
+  "modo": "interativo | automatico",
+  "hash": "<hash da entrada>",
+  "acao": "pronto-para-dev",
+  "solucoes": [{ "titulo": "", "confianca": 70 }],
+  "escolha": null
+}
+```
+
+`escolha` é `null` até o usuário escolher. Quando escolher, grave um novo registro da mesma chave com `escolha` = número da solução ou `"nenhuma"` e, se for uma solução, o `id` da entrada criada no registro de soluções.
+
+## 7. Registro de soluções
+
+Só no modo interativo e só depois da escolha do usuário.
 
 Quando o usuário escolher, registre a escolha no arquivo de `memoria.solucoes` (o mesmo lido no passo 1; crie se não existir).
 

@@ -19,6 +19,7 @@ Estrutura:
 - `.claude-plugin/plugin.json` — manifesto
 - `skills/moiras-triage/SKILL.md` — skill que orquestra as três etapas, em ordem; cada etapa fica em `stages/`
 - `config/sources.example.json` — modelo da configuração lida de `.moiras/sources.json`
+- `scripts/memoria.mjs` — grava e consulta a memória de cada etapa (`.moiras/memoria/<etapa>.jsonl`) com hash SHA-256
 - `knowledge/` — base de conhecimento (glossário de repositórios, taxonomia, componentes, decisões)
 
 ## Regras do domínio
@@ -27,7 +28,9 @@ Estrutura:
 - Cada etapa tem contrato `{entrada, saida}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
 - A Láquesis não edita o glossário: só sugere; o usuário aprova.
-- A única escrita do plugin é o registro de soluções (`memoria.solucoes`, padrão `.moiras/solucoes.md`), só depois da escolha do usuário. Entradas não são apagadas; só `resultado` e `observacao` mudam.
+- Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/execucoes/`).
+- Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash).
+- Fora a memória e os relatórios, a única escrita do plugin é o registro de soluções (`memoria.solucoes`, padrão `.moiras/solucoes.md`), só depois da escolha do usuário. Entradas não são apagadas; só `resultado` e `observacao` mudam.
 - Arquivos da base de conhecimento levam frontmatter com `last_verified`; conteúdo antigo deve ser sinalizado na saída.
 - A taxonomia separa problema de plataforma (VTEX, Wake, Shopify) de problema do app.
 - Nunca commite tokens nem URLs com segredo (no `.mcp.json` inclusive).
@@ -36,6 +39,7 @@ Estrutura:
 
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
+- Scripts em Node.js de preferência, na versão LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), em ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
 - Ao criar um plugin novo, siga a estrutura de `plugins/moiras/` e registre-o no `README.md`.
 
 ## Commits e PRs

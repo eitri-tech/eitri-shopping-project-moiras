@@ -20,6 +20,8 @@
     ]
   },
   "memoria": {
+    "diretorio": ".moiras/memoria",
+    "execucoes": ".moiras/execucoes",
     "solucoes": ".moiras/solucoes.md"
   }
 }

@@ -63,6 +63,7 @@ Uma fonte com `status: falhou` e listas vazias é uma saída válida pelo contra
         "status": "To Do",
         "duedate": "2026-11-30",
         "folga_dias": 15,
+        "mudanca": "novo | alterado | inalterado",
         "avisos": []
       }
     ],
@@ -91,6 +92,35 @@ Uma fonte com `status: falhou` e listas vazias é uma saída válida pelo contra
   "erros": []
 }
 ```
+
+## Memória
+
+Depois da coleta, registre **cada interação** em uma única chamada `registrar cloto`, um objeto por item:
+
+```json
+[
+  {
+    "chave": "jira:PROJ-1423",
+    "run_id": "2026-10-06T11:00:00Z",
+    "fonte": "jira",
+    "com_quem": { "relator": "Fulano", "atualizado_por": "Beltrana" },
+    "atualizado_em": "2026-10-05T17:40:00-03:00",
+    "conteudo": { "resumo": "", "descricao": "", "prioridade": "", "status": "", "duedate": "" }
+  },
+  {
+    "chave": "slack:C0123456789:1696341120.000100",
+    "run_id": "2026-10-06T11:00:00Z",
+    "fonte": "slack",
+    "com_quem": { "autor": "Fulano", "canal": "#proj-squad" },
+    "atualizado_em": "2026-10-03T14:12:00-03:00",
+    "conteudo": { "texto": "", "respostas": ["<texto de cada resposta>"] }
+  }
+]
+```
+
+- `ts` (quando a Cloto viu o item) é preenchido pelo script; `conteudo` vira `hash` e não é guardado.
+- O retorno diz se cada item é `novo`, `alterado` ou `inalterado` desde a última execução. Copie isso para o campo `mudanca` de cada issue em `jira.issues`. Uma issue também conta como `alterado` se alguma mensagem do Slack que a cita for `novo` ou `alterado`.
+- No modo automático (sem `--completo`), só issues `novo` ou `alterado` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
 
 ## Entrada da Láquesis
 

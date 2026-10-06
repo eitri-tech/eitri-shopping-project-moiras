@@ -1,9 +1,26 @@
 ---
 name: moiras-triage
-description: Faz a triagem das issues sem responsável de um épico do Jira da Acme. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com a base de conhecimento do projeto e sugere até 3 soluções com porcentagem de confiança, citando as fontes e anotando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico da Acme (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte.
+description: Faz a triagem das issues sem responsável de um épico do Jira da Acme. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com a base de conhecimento do projeto e sugere até 3 soluções com porcentagem de confiança, citando as fontes e anotando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico da Acme (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
+argument-hint: "[EPICO] [--auto] [--completo]"
+allowed-tools: Bash(node:*)
 ---
 
 # Triagem do épico
+
+Argumentos: `$ARGUMENTS`
+
+## Modos de execução
+
+| Modo | Como | Comportamento |
+|---|---|---|
+| Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e grava o registro de soluções |
+| Automático | argumento `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa só issues novas ou alteradas desde a última execução; não grava o registro de soluções; salva o relatório em arquivo |
+
+`--completo` reprocessa todas as issues, mesmo as que não mudaram.
+
+Cada execução tem um `run_id` = horário de início em ISO 8601 (UTC), usado na memória e no nome do relatório.
+
+No modo automático, salve o relatório da Átropos em `<memoria.execucoes>/<run_id>.md` e as saídas completas em `<memoria.execucoes>/<run_id>.json` (crie a pasta se não existir).
 
 Execute as três etapas **em ordem**:
 
@@ -27,7 +44,21 @@ Láquesis  : uma issue + evidências   → repositórios, categoria, confiança,
 - `avisos` se acumulam: cada etapa recebe os avisos na entrada, repassa todos na saída e acrescenta os seus.
 - Uma fonte com `status: falhou` e listas vazias é saída válida (ver Cloto). Se a Cloto encerrar a triagem, não chame as outras etapas.
 
-## Fontes
+## Memória das etapas
+
+Cada etapa tem uma memória própria, só de acréscimo, em `<memoria.diretorio>/<etapa>.jsonl` (padrão `.moiras/memoria/`). Ela é gravada **somente** pelo script do plugin, que calcula o hash SHA-256 do conteúdo e descarta o conteúdo bruto:
+
+```bash
+# grava (stdin: objeto ou lista com "chave" e "conteudo" ou "hash"); devolve novo | alterado | inalterado
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" registrar cloto --dir .moiras/memoria < registros.json
+# hash de um conteúdo, sem gravar
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" hash < conteudo.json
+# último registro de cada chave (filtros opcionais)
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" consultar laquesis --chave PROJ-1423 --desde 2026-10-01T00:00:00Z
+```
+
+Nunca escreva nesses arquivos à mão nem grave texto bruto de issue ou mensagem neles. O que cada etapa registra está no arquivo da etapa, na seção "Memória".
+
 
 Toda fonte segue este formato:
 
