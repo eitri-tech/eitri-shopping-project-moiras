@@ -40,6 +40,7 @@ Estrutura:
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
 - Scripts em Node.js de preferência, na versão LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), em ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
+- Testes dos scripts com `node:test`, ao lado do script (`*.test.mjs`). Rode `node --test plugins/moiras/scripts/*.test.mjs` antes de commitar.
 - Ao criar um plugin novo, siga a estrutura de `plugins/moiras/` e registre-o no `README.md`.
 
 ## Commits e PRs
