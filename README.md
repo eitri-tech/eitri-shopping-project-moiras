@@ -22,6 +22,50 @@ direnv allow        # ou: nix develop
 
 O shell traz Node LTS, TypeScript (só para checar tipos), Python 3 e jq, fixados pelo `flake.lock`. Sem Nix, use `nvm use` (Node LTS, via `.nvmrc`); nesse caso você roda os testes, mas não o `tsc`.
 
+#### Não tem Nix nem direnv? (Linux, ex.: Ubuntu)
+
+Instale por fora. Escolha **um** dos dois caminhos.
+
+**A) Instalar Nix e direnv (mesmo ambiente do time):**
+
+```bash
+sudo apt update && sudo apt install -y git curl direnv
+
+# Nix (instalador oficial, modo multiusuário) — abra um terminal novo depois
+sh <(curl -L https://nixos.org/nix/install) --daemon
+
+# habilita flakes
+mkdir -p ~/.config/nix
+echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+
+# ativa o direnv no shell (bash; no zsh use "direnv hook zsh" e ~/.zshrc)
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+```
+
+Depois, na raiz do projeto: `direnv allow` (ou `nix develop`). O `nix-direnv` é opcional: acelera o carregamento, mas o `use flake` do `.envrc` já funciona sem ele.
+
+**B) Sem Nix, instalando as ferramentas à mão:**
+
+```bash
+sudo apt update && sudo apt install -y git curl jq
+
+# Node LTS: instale o nvm (instruções em https://github.com/nvm-sh/nvm), abra um terminal novo e:
+nvm install   # lê o .nvmrc (lts/*)
+nvm use
+node --version  # deve ser a LTS mais recente
+
+# testes (só precisam do Node)
+node --test plugins/moiras/scripts/*.test.ts
+
+# checagem de tipos (opcional): TypeScript + tipos do Node, fora do repositório
+mkdir -p .direnv/types/node
+tmp=$(mktemp -d) && npm pack @types/node@24 --pack-destination "$tmp" --silent
+tar -xzf "$tmp"/types-node-*.tgz -C .direnv/types/node --strip-components=1
+npx -y -p typescript tsc -p tsconfig.json
+```
+
+O `.direnv/` já está no `.gitignore`. Python 3 só é necessário se você for escrever scripts em Python (o Ubuntu já traz o `python3`). O `claude plugin validate` e o `nix flake check` da seção de testes dependem do Claude Code e do Nix, respectivamente.
+
 ### 2. Onde mexer
 
 | O que | Onde |
