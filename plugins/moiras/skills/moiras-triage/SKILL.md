@@ -50,11 +50,11 @@ Cada etapa tem uma memória própria, só de acréscimo, em `<memoria.diretorio>
 
 ```bash
 # grava (stdin: objeto ou lista com "chave" e "conteudo" ou "hash"); devolve novo | alterado | inalterado
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" registrar cloto --dir .moiras/memoria < registros.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" registrar cloto --dir .moiras/memoria < registros.json
 # hash de um conteúdo, sem gravar
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" hash < conteudo.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" hash < conteudo.json
 # último registro de cada chave (filtros opcionais)
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.mjs" consultar laquesis --chave PROJ-1423 --desde 2026-10-01T00:00:00Z
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" consultar laquesis --chave PROJ-1423 --desde 2026-10-01T00:00:00Z
 ```
 
 Nunca escreva nesses arquivos à mão nem grave texto bruto de issue ou mensagem neles. O que cada etapa registra está no arquivo da etapa, na seção "Memória".

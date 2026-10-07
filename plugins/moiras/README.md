@@ -13,7 +13,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 ```
 moiras/
 ├── .claude-plugin/plugin.json      # manifesto
-├── scripts/memoria.mjs             # memória das etapas (hash + JSONL)
+├── scripts/memoria.ts             # memória das etapas (hash + JSONL)
 ├── config/sources.example.json     # modelo de .moiras/sources.json (épico, pessoas, canais)
 ├── skills/
 │   └── moiras-triage/
@@ -45,7 +45,7 @@ Liste em `--allowedTools` as ferramentas dos conectores de Jira e Slack que a co
 
 ## Memória
 
-Cada etapa grava uma memória só de acréscimo em `.moiras/memoria/<etapa>.jsonl`, pelo script `scripts/memoria.mjs` (Node LTS mais recente, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes.
+Cada etapa grava uma memória só de acréscimo em `.moiras/memoria/<etapa>.jsonl`, pelo script `scripts/memoria.ts` (Node LTS mais recente, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes.
 
 ## Instalação
 

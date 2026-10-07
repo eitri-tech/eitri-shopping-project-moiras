@@ -5,20 +5,21 @@ import { hash as digestOf } from 'node:crypto';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hash, parseConteudo, registrar, consultar, main } from './memoria.mjs';
+import type { TestContext } from 'node:test';
+import { hash, parseConteudo, registrar, consultar, main } from './memoria.ts';
 
-const script = join(import.meta.dirname, 'memoria.mjs');
-const digest = text => `sha256:${digestOf('sha256', text)}`;
-const quiet = () => {};
+const script = join(import.meta.dirname, 'memoria.ts');
+const digest = (text: string) => `sha256:${digestOf('sha256', text)}`;
+const quiet = (): void => {};
 
-function fixture(t) {
+function fixture(t: TestContext) {
   const dir = mkdtempSync(join(tmpdir(), 'moiras-memoria-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return { dir, file: join(dir, 'cloto.jsonl') };
 }
 
 // Runs the real CLI in a child process.
-const cli = (args, input = '', cwd) =>
+const cli = (args: string[], input = '', cwd?: string) =>
   spawnSync(process.execPath, [script, ...args], { input, cwd, encoding: 'utf8' });
 
 describe('hash', () => {
@@ -78,8 +79,8 @@ describe('registrar', () => {
   it('tolerates malformed lines and an unterminated last line', t => {
     const { dir, file } = fixture(t);
     writeFileSync(file, 'broken\nnull\n{"chave":"A","hash":"old"}');
-    const avisos = [];
-    const avisar = message => avisos.push(message);
+    const avisos: string[] = [];
+    const avisar = (message: string): void => { avisos.push(message); };
     assert.equal(registrar('cloto', { chave: 'A', hash: 'old' }, { dir, avisar })[0].mudanca, 'inalterado');
     assert.equal(avisos.length, 2);
     assert.match(avisos[0], /Aviso/);

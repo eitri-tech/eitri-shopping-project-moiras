@@ -19,7 +19,7 @@ Estrutura:
 - `.claude-plugin/plugin.json` — manifesto
 - `skills/moiras-triage/SKILL.md` — skill que orquestra as três etapas, em ordem; cada etapa fica em `stages/`
 - `config/sources.example.json` — modelo da configuração lida de `.moiras/sources.json`
-- `scripts/memoria.mjs` — grava e consulta a memória de cada etapa (`.moiras/memoria/<etapa>.jsonl`) com hash SHA-256
+- `scripts/memoria.ts` — grava e consulta a memória de cada etapa (`.moiras/memoria/<etapa>.jsonl`) com hash SHA-256
 - `knowledge/` — base de conhecimento (glossário de repositórios, taxonomia, componentes, decisões)
 
 ## Regras do domínio
@@ -45,8 +45,8 @@ Estrutura:
 
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
-- Scripts em Node.js de preferência, na versão LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), em ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
-- Testes dos scripts com `node:test`, ao lado do script (`*.test.mjs`). Rode `node --test plugins/moiras/scripts/*.test.mjs` antes de commitar.
+- Scripts em TypeScript executado direto pelo Node LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), sem build: só sintaxe apagável (sem `enum`, `namespace` nem parameter properties) e imports locais com extensão `.ts`. ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
+- Testes dos scripts com `node:test`, ao lado do script (`*.test.ts`). Rode `node --test plugins/moiras/scripts/*.test.ts` antes de commitar.
 - Ao criar um plugin novo, siga a estrutura de `plugins/moiras/` e registre-o no `README.md`.
 
 ## Commits e PRs
