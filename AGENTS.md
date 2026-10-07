@@ -37,7 +37,7 @@ Estrutura:
 
 ## Ambiente
 
-- `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, Python 3 e jq, fixados pelo `flake.lock`.
+- `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
 - Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`).
 - Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
 
@@ -46,7 +46,8 @@ Estrutura:
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
 - Scripts em TypeScript executado direto pelo Node LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), sem build: só sintaxe apagável (sem `enum`, `namespace` nem parameter properties) e imports locais com extensão `.ts`. ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
-- Testes dos scripts com `node:test`, ao lado do script (`*.test.ts`). Rode `node --test plugins/moiras/scripts/*.test.ts` antes de commitar.
+- Testes dos scripts com `node:test`, ao lado do script (`*.test.ts`). Antes de commitar, rode `node --test plugins/moiras/scripts/*.test.ts` e `tsc -p tsconfig.json`.
+- O Node executa os `.ts`; o `tsc` (pacote TypeScript do shell Nix) serve só para checar tipos (`noEmit`). Não gere `.js`.
 - Ao criar um plugin novo, siga a estrutura de `plugins/moiras/` e registre-o no `README.md`.
 
 ## Commits e PRs

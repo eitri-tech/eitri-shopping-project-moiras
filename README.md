@@ -7,4 +7,4 @@ Analisar, conhecer e gerar soluções com base de conhecimento.
 
 ## Ambiente de desenvolvimento
 
-Com Nix e direnv: `direnv allow` (ou `nix develop`) entra num shell com Node LTS, Python 3 e jq. Sem Nix: `nvm use`.
+Com Nix e direnv: `direnv allow` (ou `nix develop`) entra num shell com Node LTS, TypeScript (só para checar tipos: `tsc -p tsconfig.json`), Python 3 e jq. Sem Nix: `nvm use`.
