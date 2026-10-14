@@ -1,41 +1,52 @@
 # Moiras
 
-Plugin para Claude que faz triagem de issues do Jira usando uma base de conhecimento do projeto.
+Plugin para Claude que faz triagem de issues do Jira usando um knowledge do time.
 
 O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada um, e cada etapa da triagem leva o nome de uma delas:
 
 - **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack (hoje as fontes esperadas; outras podem ser adicionadas)
 - **Láquesis** (mede): identifica repositório e componente pelo glossário, classifica e avalia duplicados
-- **Átropos** (corta): justifica o problema, sugere até 3 soluções com % de confiança e anota a escolhida em `.moiras/solucoes.md`
+- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
 
 ## Estrutura
 
 ```
 moiras/
 ├── .claude-plugin/plugin.json      # manifesto
-├── scripts/memoria.ts             # memória das etapas (hash + JSONL)
-├── config/sources.example.json     # modelo de .moiras/sources.json (épico, pessoas, canais)
-├── skills/
-│   └── moiras-triage/
-│       ├── SKILL.md                # orquestra as três etapas, em ordem
-│       └── stages/
-│           ├── clotho.md           # ingestão
-│           ├── lachesis.md         # classificação
-│           └── atropos.md          # veredito
-└── knowledge/                      # base de conhecimento (com last_verified)
-    ├── repositories.md             # glossário de repositórios
-    ├── taxonomy.md
-    ├── components.md
-    └── decisions.md
+├── scripts/memory.ts               # memória das etapas (hash + JSONL)
+├── config/sources.example.json     # modelo de .moiras/sources.json
+└── skills/
+    └── moiras-triage/
+        ├── SKILL.md                # orquestra as três etapas e define o knowledge
+        └── stages/
+            ├── clotho.md           # coleta
+            ├── lachesis.md         # classificação
+            └── atropos.md          # veredito
 ```
+
+## Knowledge
+
+O knowledge não vem no plugin: é o que o time sabe e não está no código (glossário de repositórios, critérios e aprendizado). Ele nunca tem cópia de código.
+
+- **Local** (padrão): `.moiras/knowledge/` no projeto, fora do git. É onde as Moiras escrevem.
+- **Compartilhado**: repositórios privados criados a partir do template público de knowledge, com escopo `project`, `group` ou `global`. Na leitura, o mais específico vence (`local` > `project` > `group` > `global`).
+
+Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Detalhes em `skills/moiras-triage/SKILL.md`.
 
 ## Configuração
 
-Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha o épico, as pessoas e os canais do Slack (quantos precisar; cada canal pode ter pessoas próprias) e o caminho do registro de soluções (com os IDs `U…` e `C…`). O Jira e o Slack precisam estar conectados ao Claude (conectores do claude.ai ou servidores MCP próprios); o plugin não traz servidor MCP.
+Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha:
+
+- `jira`: site, épico e data fim do projeto;
+- `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
+- `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
+- `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
+
+O Jira e o Slack precisam estar conectados ao Claude (conectores do claude.ai ou servidores MCP próprios); o plugin não traz servidor MCP.
 
 ## Execução por cron
 
-No modo `--auto` a skill não faz perguntas, processa só o que mudou desde a última execução e salva o relatório em `.moiras/execucoes/`. Exemplo (dias úteis às 8h):
+No modo `--auto` a skill não faz perguntas, processa só o que mudou desde a última execução e salva o relatório em `.moiras/runs/`. Exemplo (dias úteis às 8h):
 
 ```
 0 8 * * 1-5 cd /caminho/do/projeto && claude -p "/moiras:moiras-triage PROJ-100 --auto" --allowedTools "Read,Write,Bash(node:*),<ferramentas do Jira e do Slack>" >> .moiras/cron.log 2>&1
@@ -45,12 +56,12 @@ Liste em `--allowedTools` as ferramentas dos conectores de Jira e Slack que a co
 
 ## Memória
 
-Cada etapa grava uma memória só de acréscimo em `.moiras/memoria/<etapa>.jsonl`, pelo script `scripts/memoria.ts` (Node LTS mais recente, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes.
+Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl`, pelo script `scripts/memory.ts` (Node LTS mais recente, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes. A memória é local e nunca vai para um knowledge.
 
 ## Instalação
 
 ```
-/plugin marketplace add acme/moiras
+/plugin marketplace add <owner>/<repo>
 /plugin install moiras@moiras
 ```
 

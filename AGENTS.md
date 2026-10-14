@@ -4,36 +4,48 @@ Instruções para agentes de código (Claude Code, Codex, Copilot etc.) neste re
 
 ## Sobre o projeto
 
-**Moiras**: plugin para Claude que faz triagem de issues do Jira da Acme usando uma base de conhecimento do projeto.
+**Moiras**: plugin para Claude que faz triagem de issues do Jira usando um knowledge do time.
 
 A triagem segue três etapas, cada uma com entrada e saída verificáveis:
 
-1. **Cloto** — coleta em paralelo: issues sem responsável do épico no Jira (por prioridade e data fim, comparando com o fim do épico/projeto) e mensagens do Slack de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
-2. **Láquesis** — identifica repositório e componente pelo glossário de repositórios, classifica (categoria, origem, confiança) e avalia duplicados
-3. **Átropos** — justifica o problema, decide a ação (duplicado, bloqueado, pronto para dev, precisa de info, fechar), sugere até 3 soluções com % de confiança e anota a solução escolhida no registro de soluções
+1. **Cloto**: coleta em paralelo. Do Jira, as issues sem responsável do épico, por prioridade e data fim, comparando com o fim do épico/projeto. Do Slack, as mensagens de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
+2. **Láquesis**: identifica repositório e componente pelo glossário, classifica (categoria, origem, confiança) e avalia duplicados
+3. **Átropos**: justifica o problema, decide a ação (`duplicate`, `blocked`, `ready-for-dev`, `needs-info`, `close`), sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
 
 O plugin fica em `plugins/moiras/` e é publicado pelo marketplace em `.claude-plugin/marketplace.json`. Jira e Slack vêm dos conectores do usuário; o plugin não traz servidor MCP.
 
 Estrutura:
 
-- `.claude-plugin/plugin.json` — manifesto
-- `skills/moiras-triage/SKILL.md` — skill que orquestra as três etapas, em ordem; cada etapa fica em `stages/`
-- `config/sources.example.json` — modelo da configuração lida de `.moiras/sources.json`
-- `scripts/memoria.ts` — grava e consulta a memória de cada etapa (`.moiras/memoria/<etapa>.jsonl`) com hash SHA-256
-- `knowledge/` — base de conhecimento (glossário de repositórios, taxonomia, componentes, decisões)
+- `.claude-plugin/plugin.json`: manifesto
+- `skills/moiras-triage/SKILL.md`: skill que orquestra as três etapas, em ordem, e define como ler e escrever o knowledge; cada etapa fica em `stages/`
+- `config/sources.example.json`: modelo da configuração lida de `.moiras/sources.json`
+- `scripts/memory.ts`: grava e consulta a memória de cada etapa (`.moiras/memory/<stage>.jsonl`) com hash SHA-256
+
+## Repositório público
+
+Este repositório é público. Nada de informação da empresa nem dados sensíveis:
+
+- Sem nomes reais de clientes, repositórios, sites, projetos do Jira, canais ou pessoas, nem URLs internas.
+- Exemplos usam um universo fictício: empresa Acme, repositório `acme-shop-checkout`, issues `PROJ-123`, pessoas Fulano, Beltrana e Sicrano, canal `#proj-squad`.
+- O knowledge real fica fora daqui: local em `.moiras/` (no `.gitignore`) ou em repositórios privados criados a partir do template público de knowledge.
 
 ## Regras do domínio
 
-- O plugin só lê e sugere no Jira; nunca escreve em ticket sem aprovação humana.
-- Cada etapa tem contrato `{entrada, saida}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
+- O plugin só lê e sugere no Jira e no Slack; nunca escreve sem aprovação humana.
+- Cada etapa tem contrato `{input, output}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
-- A Láquesis não edita o glossário: só sugere; o usuário aprova.
-- Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/execucoes/`).
-- Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash).
-- Fora a memória e os relatórios, a única escrita do plugin é o registro de soluções (`memoria.solucoes`, padrão `.moiras/solucoes.md`), só depois da escolha do usuário. Entradas não são apagadas; só `resultado` e `observacao` mudam.
-- Arquivos da base de conhecimento levam frontmatter com `last_verified`; conteúdo antigo deve ser sinalizado na saída.
-- A taxonomia separa problema de plataforma (VTEX, Wake, Shopify) de problema do app.
+- O glossário é derivado do código (indexação). A Láquesis não o edita: só sugere.
+- Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
+- Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash). Ela é local e nunca vai para um knowledge.
+- Fora a memória e os relatórios, o plugin só escreve no knowledge local (`learnings/` e `criteria/`), no modo interativo e depois da escolha ou do "sim" do usuário. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
+- O knowledge nunca tem cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
+- Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
+- O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time, não do plugin.
 - Nunca commite tokens nem URLs com segredo (no `.mcp.json` inclusive).
+
+## Idioma
+
+O que a máquina lê é em inglês: flags, pastas, nomes de arquivo, chaves de configuração e de frontmatter, campos dos contratos e valores fixos (ex.: `action: needs-info`, `change: unchanged`, `result: resolved`). O que pessoas leem é em português: documentação, justificativas, relatórios e descrições.
 
 ## Ambiente
 
@@ -53,4 +65,4 @@ Estrutura:
 ## Commits e PRs
 
 - Commits em inglês, no imperativo (`Add ...`, `Fix ...`).
-- PRs com título `[PROJ-NNNN] <resumo curto>` e descrição em português, curta: link do Jira, o que muda em poucos bullets e como testar.
+- PRs com título curto e descrição em português, curta: o que muda em poucos bullets e como testar.

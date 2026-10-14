@@ -1,5 +1,6 @@
-# moiras
-Analisar, conhecer e gerar soluções com base de conhecimento.
+# Moiras
+
+Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do time: analisar, conhecer e gerar soluções.
 
 ## Sumário
 
@@ -27,8 +28,8 @@ O caminho padrão não precisa de Nix nem de direnv: só Node LTS, git e jq. Nos
 ```bash
 sudo apt update && sudo apt install -y git curl jq
 
-git clone git@github.com:acme/moiras.git
-cd moiras
+git clone git@github.com:<owner>/<repo>.git
+cd <repo>
 ```
 
 **Node LTS.** Instale o nvm (instruções em https://github.com/nvm-sh/nvm), abra um terminal novo e, na raiz do projeto:
@@ -76,19 +77,18 @@ Depois, na raiz do projeto, rode `direnv allow` (ou `nix develop`). O `nix-diren
 | O que | Onde |
 |---|---|
 | Comportamento de cada etapa (contratos, regras) | `plugins/moiras/skills/moiras-triage/stages/*.md` |
-| Orquestração, modos `--auto` e `--completo` | `plugins/moiras/skills/moiras-triage/SKILL.md` |
-| Base de conhecimento (repositórios, taxonomia, componentes, decisões) | `plugins/moiras/knowledge/` |
-| Memória das etapas (hash + JSONL) | `plugins/moiras/scripts/memoria.ts` |
-| Modelo de configuração (épico, Slack) | `plugins/moiras/config/sources.example.json` |
+| Orquestração, modos `--auto` e `--full`, leitura e escrita do knowledge | `plugins/moiras/skills/moiras-triage/SKILL.md` |
+| Memória das etapas (hash + JSONL) | `plugins/moiras/scripts/memory.ts` |
+| Modelo de configuração (épico, Slack, knowledges, pastas) | `plugins/moiras/config/sources.example.json` |
 
-Regras do projeto, convenções e o domínio estão no [AGENTS.md](AGENTS.md). O Node roda os `.ts` direto (sem build): sintaxe apagável e imports locais com extensão `.ts`.
+O knowledge (glossário de repositórios, critérios e aprendizado) não fica neste repositório: ele é local (`.moiras/knowledge/`, fora do git) ou fica em repositórios privados criados a partir de um template público de knowledge. Regras do projeto, convenções e o domínio estão no [AGENTS.md](AGENTS.md). O Node roda os `.ts` direto (sem build): sintaxe apagável e imports locais com extensão `.ts`.
 
 ### 4. Fluxo de trabalho
 
 1. Crie uma branch a partir da `main`.
 2. Faça a mudança e rode as [checagens](#checagens).
 3. Commits em inglês, no imperativo (`Add ...`, `Fix ...`).
-4. PR com título `[PROJ-NNNN] <resumo curto>` e descrição curta em português.
+4. PR com título curto e descrição curta em português: o que muda e como testar.
 
 ## Como testar
 
@@ -116,14 +116,14 @@ Use uma pasta temporária para não sujar o repositório:
 
 ```bash
 cd "$(mktemp -d)"
-S=/caminho/do/repo/plugins/moiras/scripts/memoria.ts
+S=/caminho/do/repo/plugins/moiras/scripts/memory.ts
 
 echo '{"b":2,"a":1}' | node $S hash                                     # hash canônico (ordem das chaves não importa)
-echo '{"chave":"jira:PROJ-1","conteudo":{"a":1}}' | node $S registrar cloto   # "novo"
-echo '{"chave":"jira:PROJ-1","conteudo":{"a":1}}' | node $S registrar cloto   # "inalterado"
-echo '{"chave":"jira:PROJ-1","conteudo":{"a":2}}' | node $S registrar cloto   # "alterado"
-node $S consultar cloto                                                 # último registro de cada chave
-cat .moiras/memoria/cloto.jsonl                                         # só hash, nunca o texto bruto
+echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "new"
+echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "unchanged"
+echo '{"key":"jira:PROJ-1","content":{"a":2}}' | node $S record clotho      # "changed"
+node $S query clotho                                                    # último registro de cada chave
+cat .moiras/memory/clotho.jsonl                                         # só hash, nunca o texto bruto
 ```
 
 ### Testar o plugin no Claude Code
@@ -134,16 +134,16 @@ claude --plugin-dir plugins/moiras
 
 Dentro da sessão:
 
-1. Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar e preencha o épico, as pessoas e os canais do Slack (com os IDs `U…` e `C…`).
+1. Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar e preencha o épico, as pessoas e os canais do Slack (com os IDs `U…` e `C…`) e os knowledges (sem nenhum, vale só `.moiras/knowledge/`).
 2. Conecte o Jira e o Slack ao Claude (conectores do claude.ai ou servidores MCP). O plugin não traz servidor próprio.
-3. Rode `/moiras:moiras-triage PROJ-100` (interativo) ou `/moiras:moiras-triage PROJ-100 --auto` (sem perguntas, só o que mudou; relatório em `.moiras/execucoes/`).
+3. Rode `/moiras:moiras-triage PROJ-100` (interativo) ou `/moiras:moiras-triage PROJ-100 --auto` (sem perguntas, só o que mudou; relatório em `.moiras/runs/`).
 4. Depois de editar arquivos do plugin, rode `/reload-plugins` na sessão.
 
 Para instalar a partir do repositório, como o time faria:
 
 ```
-/plugin marketplace add acme/moiras
+/plugin marketplace add <owner>/<repo>
 /plugin install moiras@moiras
 ```
 
-> A base de conhecimento ainda está com `TODO`. Enquanto isso, a Láquesis devolve categoria `desconhecida` com confiança baixa; é o comportamento esperado, não um erro.
+> Sem glossário nem critérios no knowledge, a Láquesis devolve categoria `unknown` com confiança baixa e o aviso `criteria-missing`; é o comportamento esperado, não um erro.
