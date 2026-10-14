@@ -152,3 +152,5 @@ vite.config.ts.timestamp-*
 .direnv/
 
 .vscode/
+# Moiras local data (config, knowledge, memory, runs)
+.moiras/
