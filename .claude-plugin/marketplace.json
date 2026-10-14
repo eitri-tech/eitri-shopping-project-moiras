@@ -1,13 +1,13 @@
 {
   "name": "moiras",
   "owner": {
-    "name": "acme"
+    "name": "Moiras"
   },
   "plugins": [
     {
       "name": "moiras",
       "source": "./plugins/moiras",
-      "description": "Triagem de épicos do Jira com Slack e conhecimento do projeto: coleta, classifica, avalia duplicados e sugere até 3 soluções com % de confiança."
+      "description": "Triagem de épicos do Jira com Slack e conhecimento do projeto: coleta, classifica, avalia duplicados e sugere de 3 a 5 soluções com % de confiança."
     }
   ]
 }

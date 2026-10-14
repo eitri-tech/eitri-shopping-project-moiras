@@ -7,35 +7,23 @@
   "slack": {
     "lookback_days": 7,
     "people": [
-      {
-        "name": "Fulano",
-        "id": "U0123456789"
-      },
-      {
-        "name": "Beltrana",
-        "id": "U0987654321"
-      }
+      { "name": "Fulano", "id": "U0123456789" },
+      { "name": "Beltrana", "id": "U0987654321" }
     ],
     "channels": [
+      { "name": "#proj-squad", "id": "C0123456789" },
       {
-        "name": "#proj-squad",
-        "id": "C0123456789"
-      },
-      {
-        "name": "#proj-suporte",
+        "name": "#proj-support",
         "id": "C0987654321",
-        "people": [
-          {
-            "name": "Sicrano",
-            "id": "U0555555555"
-          }
-        ]
+        "people": [{ "name": "Sicrano", "id": "U0555555555" }]
       }
     ]
   },
-  "memoria": {
-    "diretorio": ".moiras/memoria",
-    "execucoes": ".moiras/execucoes",
-    "solucoes": ".moiras/solucoes.md"
-  }
+  "knowledge": [
+    { "name": "local", "scope": "local", "dir": ".moiras/knowledge" },
+    { "name": "acme", "scope": "group", "repository": "git@github.com:<org>/acme-knowledge.git", "dir": "../acme-knowledge" },
+    { "name": "team", "scope": "global", "repository": "git@github.com:<org>/team-knowledge.git", "dir": "../team-knowledge" }
+  ],
+  "memory": { "dir": ".moiras/memory" },
+  "runs": { "dir": ".moiras/runs" }
 }
