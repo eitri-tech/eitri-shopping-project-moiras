@@ -19,13 +19,13 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    ```
 
    Em projetos que ainda usam o campo antigo de épico, troque `parent = <EPIC>` por `"Epic Link" = <EPIC>`.
-3. Para cada issue, calcule `folga_dias` = data fim do épico − `duedate` da issue.
-   - `duedate` vazio: `folga_dias = null`, com o aviso `sem-data`.
-   - `duedate` depois da data fim do épico: aviso `estoura-epico`.
+3. Para cada issue, calcule `buffer_days` = data fim do épico − `duedate` da issue.
+   - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
+   - `duedate` depois da data fim do épico: aviso `exceeds-epic`.
 
-A ordem final segue a do Jira (prioridade, depois data fim). Issues com `estoura-epico` sobem dentro da mesma prioridade.
+A ordem final segue a do Jira (prioridade, depois data fim). Issues com `exceeds-epic` sobem dentro da mesma prioridade.
 
-4. Na mesma rodada, busque **todas** as issues do épico, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `parent = <EPIC> ORDER BY key`. Elas formam `jira.irmas`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2.
+4. Na mesma rodada, busque **todas** as issues do épico, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `parent = <EPIC> ORDER BY key`. Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2.
 
 ### B. Slack
 
@@ -45,23 +45,23 @@ Abra a thread das mensagens que tiverem respostas e guarde cada resposta (autor,
 
 ### Falhas
 
-Cada fonte tem um `status`: `ok` ou `falhou` (conector ausente, sem permissão, erro da API). Não invente dados da fonte que falhou.
+Cada fonte tem um `status`: `ok`, `partial` ou `failed` (conector ausente, sem permissão, erro da API). Não invente dados da fonte que falhou.
 
 - **Jira falhou, épico não encontrado ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
-- **Slack falhou em todos os canais:** siga só com o Jira, com `slack.mensagens: []`, e acrescente o aviso `slack-indisponivel` em todas as issues.
-- **Slack falhou em alguns canais:** `slack.status: parcial`; siga com os canais que responderam e acrescente `slack-canal-indisponivel:<canal>` em todas as issues, um por canal que falhou.
+- **Slack falhou em todos os canais:** siga só com o Jira, com `slack.messages: []`, e acrescente o aviso `slack-unavailable` em todas as issues.
+- **Slack falhou em alguns canais:** `slack.status: partial`; siga com os canais que responderam e acrescente `slack-channel-unavailable:<canal>` em todas as issues, um por canal que falhou.
 
-Uma fonte com `status: falhou` e listas vazias é uma saída válida pelo contrato; não conta como campo faltando.
+Uma fonte com `status: failed` e listas vazias é uma saída válida pelo contrato; não conta como campo faltando.
 
 ### Outras fontes
 
-Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issues a triar) e o **Slack** (contexto). A Cloto pode monitorar outras fontes no futuro (ex.: PRs e issues do GitHub, alertas de observabilidade, Confluence, e-mail), desde que cada nova fonte siga o mesmo padrão:
+Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issues a triar) e o **Slack** (contexto). A Cloto pode monitorar outras fontes no futuro (ex.: PRs e issues do GitHub, alertas de observabilidade, wikis, e-mail), desde que cada nova fonte siga o mesmo padrão:
 
 - um bloco próprio em `.moiras/sources.json`, com o que filtrar (pessoas, canais, repositórios, consultas);
 - coleta disparada na mesma rodada paralela do Jira e do Slack;
-- um bloco próprio na saída, com `status: ok | falhou` e listas vazias quando falhar;
-- itens ligados às issues pelas chaves citadas (padrão `[A-Z][A-Z0-9]+-\d+`), entrando em `evidencias` no formato de fonte;
-- registro na memória com chave `<fonte>:<id>` e o mesmo `com_quem`/`conteudo`.
+- um bloco próprio na saída, com `status: ok | partial | failed` e listas vazias quando falhar;
+- itens ligados às issues pelas chaves citadas (padrão `[A-Z][A-Z0-9]+-\d+`), entrando em `evidence` no formato de fonte;
+- registro na memória com chave `<source>:<id>` e os mesmos `with_whom`/`content`.
 
 Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver documentada nesta etapa, não a use.
 
@@ -69,94 +69,94 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
 
 ```json
 {
-  "coletado_em": "2026-10-06T18:00:00-03:00",
+  "collected_at": "2026-10-06T18:00:00-03:00",
   "jira": {
-    "status": "ok | falhou",
-    "epico": { "key": "PROJ-100", "resumo": "", "data_fim": "2026-12-15", "origem_data_fim": "duedate | target | project_end" },
+    "status": "ok | failed",
+    "epic": { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15", "end_date_source": "duedate | target | project_end" },
     "issues": [
       {
-        "key": "PROJ-1423",
-        "resumo": "",
-        "descricao": "",
-        "prioridade": "High",
+        "key": "PROJ-123",
+        "summary": "",
+        "description": "",
+        "priority": "High",
         "status": "To Do",
         "duedate": "2026-11-30",
-        "folga_dias": 15,
-        "mudanca": "novo | alterado | inalterado",
-        "avisos": []
+        "buffer_days": 15,
+        "change": "new | changed | unchanged",
+        "warnings": []
       }
     ],
-    "irmas": [
-      { "key": "PROJ-1187", "resumo": "", "status": "Done", "responsavel": "Fulano", "resolvida_em": "2026-08-20" }
+    "siblings": [
+      { "key": "PROJ-187", "summary": "", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20" }
     ]
   },
   "slack": {
-    "status": "ok | parcial | falhou",
-    "canais": [
-      { "id": "C0123456789", "name": "#proj-squad", "status": "ok", "mensagens": 12 },
-      { "id": "C0987654321", "name": "#proj-suporte", "status": "falhou", "mensagens": 0 }
+    "status": "ok | partial | failed",
+    "channels": [
+      { "id": "C0123456789", "name": "#proj-squad", "status": "ok", "messages": 12 },
+      { "id": "C0987654321", "name": "#proj-support", "status": "failed", "messages": 0 }
     ],
-    "periodo": { "de": "2026-09-29", "ate": "2026-10-06" },
-    "mensagens": [
+    "period": { "from": "2026-09-29", "to": "2026-10-06" },
+    "messages": [
       {
-        "canal": "#proj-squad",
-        "tambem_em": [],
-        "autor": "Fulano",
-        "data": "2026-10-03T14:12:00-03:00",
-        "texto": "",
+        "channel": "#proj-squad",
+        "also_in": [],
+        "author": "Fulano",
+        "date": "2026-10-03T14:12:00-03:00",
+        "text": "",
         "permalink": "",
-        "issues_citadas": ["PROJ-1423"],
-        "respostas": [
-          { "autor": "Beltrana", "data": "2026-10-03T15:01:00-03:00", "texto": "", "permalink": "" }
+        "cited_issues": ["PROJ-123"],
+        "replies": [
+          { "author": "Beltrana", "date": "2026-10-03T15:01:00-03:00", "text": "", "permalink": "" }
         ]
       }
     ],
-    "sem_issue": []
+    "without_issue": []
   },
-  "erros": []
+  "errors": []
 }
 ```
 
 ## Memória
 
-Depois da coleta, registre **cada interação** em uma única chamada `registrar cloto`, um objeto por item:
+Depois da coleta, registre **cada interação** numa única chamada `record clotho`, um objeto por item:
 
 ```json
 [
   {
-    "chave": "jira:PROJ-1423",
+    "key": "jira:PROJ-123",
     "run_id": "2026-10-06T11:00:00Z",
-    "fonte": "jira",
-    "com_quem": { "relator": "Fulano", "atualizado_por": "Beltrana" },
-    "atualizado_em": "2026-10-05T17:40:00-03:00",
-    "conteudo": { "resumo": "", "descricao": "", "prioridade": "", "status": "", "duedate": "" }
+    "source": "jira",
+    "with_whom": { "reporter": "Fulano", "updated_by": "Beltrana" },
+    "updated_at": "2026-10-05T17:40:00-03:00",
+    "content": { "summary": "", "description": "", "priority": "", "status": "", "duedate": "" }
   },
   {
-    "chave": "slack:C0123456789:1696341120.000100",
+    "key": "slack:C0123456789:1696341120.000100",
     "run_id": "2026-10-06T11:00:00Z",
-    "fonte": "slack",
-    "com_quem": { "autor": "Fulano", "canal": "#proj-squad" },
-    "atualizado_em": "2026-10-03T14:12:00-03:00",
-    "conteudo": { "texto": "", "respostas": ["<texto de cada resposta>"] }
+    "source": "slack",
+    "with_whom": { "author": "Fulano", "channel": "#proj-squad" },
+    "updated_at": "2026-10-03T14:12:00-03:00",
+    "content": { "text": "", "replies": ["<texto de cada resposta>"] }
   }
 ]
 ```
 
-- `ts` (quando a Cloto viu o item) é preenchido pelo script; `conteudo` vira `hash` e não é guardado.
-- O retorno diz se cada item é `novo`, `alterado` ou `inalterado` desde a última execução. Copie isso para o campo `mudanca` de cada issue em `jira.issues`. Uma issue também conta como `alterado` se alguma mensagem do Slack que a cita for `novo` ou `alterado`.
-- No modo automático (sem `--completo`), só issues `novo` ou `alterado` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
+- `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
+- O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
+- No modo automático (sem `--full`), só issues `new` ou `changed` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
 
 ## Entrada da Láquesis
 
 Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem do Jira:
 
-- `key`, `resumo`, `descricao`, `prioridade`: do item de `jira.issues`.
-- `evidencias`: as mensagens do Slack cuja `issues_citadas` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `trecho` = texto, `last_verified` = data).
-- `irmas`: `jira.irmas` sem a própria issue.
-- `avisos`: os da issue (`sem-data`, `estoura-epico`) mais os da coleta (`slack-indisponivel`).
+- `key`, `summary`, `description`, `priority`: do item de `jira.issues`.
+- `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
+- `siblings`: `jira.siblings` sem a própria issue.
+- `warnings`: os da issue (`no-due-date`, `exceeds-epic`) mais os da coleta (`slack-unavailable`).
 
-Mensagens que não citam nenhuma issue ficam em `slack.sem_issue`, como contexto geral.
+Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 
-O item completo de `jira.issues` (com `descricao`, `duedate` e `folga_dias`) fica guardado: ele é o `ticket` da entrada da Átropos.
+O item completo de `jira.issues` (com `description`, `duedate` e `buffer_days`) fica guardado: ele é o `ticket` da entrada da Átropos.
 
 Somente leitura: esta etapa nunca cria, comenta ou atribui issues, nem posta no Slack.

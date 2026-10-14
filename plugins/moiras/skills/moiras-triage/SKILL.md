@@ -1,7 +1,7 @@
 ---
 name: moiras-triage
-description: Faz a triagem das issues sem responsável de um épico do Jira da Acme. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com a base de conhecimento do projeto e sugere até 3 soluções com porcentagem de confiança, citando as fontes e anotando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico da Acme (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
-argument-hint: "[EPICO] [--auto] [--completo]"
+description: Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere pelo menos 3 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
+argument-hint: "[EPIC] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
 
@@ -13,67 +13,97 @@ Argumentos: `$ARGUMENTS`
 
 | Modo | Como | Comportamento |
 |---|---|---|
-| Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e grava o registro de soluções |
-| Automático | argumento `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa só issues novas ou alteradas desde a última execução; não grava o registro de soluções; salva o relatório em arquivo |
+| Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e registra o aprendizado |
+| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa só issues novas ou alteradas desde a última execução; não registra aprendizado; salva o relatório em arquivo |
 
-`--completo` reprocessa todas as issues, mesmo as que não mudaram.
+`--full` reprocessa todas as issues, mesmo as que não mudaram.
 
 Cada execução tem um `run_id` = horário de início em ISO 8601 (UTC), usado na memória e no nome do relatório.
 
-No modo automático, salve o relatório da Átropos em `<memoria.execucoes>/<run_id>.md` e as saídas completas em `<memoria.execucoes>/<run_id>.json` (crie a pasta se não existir).
+No modo automático, salve o relatório da Átropos em `<runs.dir>/<run_id>.md` e as saídas completas em `<runs.dir>/<run_id>.json` (padrão `.moiras/runs/`; crie a pasta se não existir).
 
 Execute as três etapas **em ordem**:
 
 1. **Cloto** (coleta Jira + Slack, em paralelo): siga `stages/clotho.md`.
 2. **Láquesis** (classificação): siga `stages/lachesis.md`.
-3. **Átropos** (veredito): siga `stages/atropos.md`.
+3. **Átropos** (veredito e soluções): siga `stages/atropos.md`.
 
 ## Protocolo entre etapas
 
-Cada etapa tem um contrato `{entrada, saida}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
+Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
 
 ```
 Cloto     : configuração + épico     → issues do Jira + mensagens do Slack
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
-Átropos   : issue + classificação    → justificativa, ação e até 3 soluções com % de confiança
-            + precedentes             → (após escolha do usuário) entrada no registro de soluções
+Átropos   : issue + classificação    → justificativa, ação e de 3 a 5 soluções com % de confiança
+            + precedentes             → (após a escolha do usuário) registro no aprendizado
 ```
 
 - Esta skill guarda as saídas de todas as etapas e monta a entrada de cada uma exatamente como o contrato pede.
 - Antes de passar adiante, confira se a saída tem todos os campos do contrato. Se faltar algum ou o tipo estiver errado, pare naquela issue e informe qual etapa falhou, em vez de deixar o erro contaminar a etapa seguinte.
-- `avisos` se acumulam: cada etapa recebe os avisos na entrada, repassa todos na saída e acrescenta os seus.
-- Uma fonte com `status: falhou` e listas vazias é saída válida (ver Cloto). Se a Cloto encerrar a triagem, não chame as outras etapas.
+- `warnings` se acumulam: cada etapa recebe os avisos na entrada, repassa todos na saída e acrescenta os seus.
+- Uma fonte com `status: failed` e listas vazias é saída válida (ver Cloto). Se a Cloto encerrar a triagem, não chame as outras etapas.
+
+Identificadores (campos, valores fixos, flags, pastas) são em inglês. Textos para pessoas (justificativas, relatórios, descrições) são em português.
+
+## Knowledge
+
+O knowledge é o que não está escrito no código, ou que seria caro redescobrir a cada issue. Ele nunca tem cópia de código: as Moiras sempre olham o código real.
+
+Ele é declarado em `knowledge` no `.moiras/sources.json`: uma lista de knowledges, cada um com `name`, `scope` (`local | project | group | global`), `dir` e, opcionalmente, `repository` (um repositório git privado, criado a partir do template público de knowledge). Sem nenhum item, vale só `.moiras/knowledge/` com escopo `local`.
+
+Todo knowledge tem a mesma estrutura:
+
+| Pasta | Conteúdo | Quem escreve |
+|---|---|---|
+| `glossary/` | Glossário de repositórios: um arquivo por repositório, com localização e metadados | `moiras-index` (derivado do código, pode ser regenerado) |
+| `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando |
+| `learnings/solutions/` | Soluções escolhidas e o resultado delas | Átropos |
+| `learnings/patterns/` | Padrões de problema recorrentes | Láquesis / Átropos |
+| `learnings/decisions/` | Decisões que valem para casos futuros | as Moiras, a partir de soluções que funcionaram |
+
+Regras de leitura:
+
+- Leia sob demanda; não carregue tudo de uma vez.
+- Junte todos os knowledges declarados. Em conflito, o mais específico vence: `local` > `project` > `group` > `global`. A ordem vem do `scope`, não da ordem na lista.
+- Cite sempre de qual knowledge veio a informação: `ref` = `knowledge:<name>/<caminho>` (ex.: `knowledge:acme/glossary/acme-shop-checkout.md`).
+- Arquivo vazio, com `TODO` ou sem `indexed_at`/`created_at` **não é evidência**: não o cite como fonte.
+- Glossário com `indexed_at` de mais de 6 meses gera o aviso `knowledge-stale:<arquivo>`.
+- Glossário vazio ou issue que cita um repositório fora do glossário: no modo interativo, pergunte se pode rodar `moiras-index` agora; no modo automático, siga sem e avise no relatório. Nunca reindexe sozinha no meio da triagem.
+- Se algum knowledge declarado tem `repository`, sugira rodar `moiras-sync` antes, no início do relatório. O sync é opcional.
+
+Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
+
+- Aprendizado (`learnings/`): só acréscimo, um arquivo por registro, nomeado pelo `id`. Antes de criar, procure registros parecidos; se já existir, atualize em vez de duplicar.
+- Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces: [<ids>]`, e apague os antigos.
+- Nunca grave código maior que 20 linhas, código sem referência (repositório, caminho, commit), segredos, dados pessoais ou texto bruto de issue e de conversa.
+- Levar o aprendizado local para um knowledge compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
 ## Memória das etapas
 
-Cada etapa tem uma memória própria, só de acréscimo, em `<memoria.diretorio>/<etapa>.jsonl` (padrão `.moiras/memoria/`). Ela é gravada **somente** pelo script do plugin, que calcula o hash SHA-256 do conteúdo e descarta o conteúdo bruto:
+Cada etapa tem uma memória própria, só de acréscimo, em `<memory.dir>/<stage>.jsonl` (padrão `.moiras/memory/`). Ela é local, por máquina, e nunca vai para um knowledge. É gravada **somente** pelo script do plugin, que calcula o hash SHA-256 do conteúdo e descarta o conteúdo bruto:
 
 ```bash
-# grava (stdin: objeto ou lista com "chave" e "conteudo" ou "hash"); devolve novo | alterado | inalterado
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" registrar cloto --dir .moiras/memoria < registros.json
+# grava (stdin: objeto ou lista com "key" e "content" ou "hash"); devolve new | changed | unchanged
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" record clotho --dir .moiras/memory < records.json
 # hash de um conteúdo, sem gravar
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" hash < conteudo.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" hash < content.json
 # último registro de cada chave (filtros opcionais)
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memoria.ts" consultar laquesis --chave PROJ-1423 --desde 2026-10-01T00:00:00Z
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" query lachesis --key PROJ-123 --since 2026-10-01T00:00:00Z
 ```
 
 Nunca escreva nesses arquivos à mão nem grave texto bruto de issue ou mensagem neles. O que cada etapa registra está no arquivo da etapa, na seção "Memória".
 
+## Fontes
 
 Toda fonte segue este formato:
 
 ```json
-{ "ref": "${CLAUDE_PLUGIN_ROOT}/knowledge/components.md#checkout | PROJ-1187 | <permalink do Slack>", "trecho": "", "last_verified": "2026-09-15 | null" }
+{ "ref": "knowledge:acme/glossary/acme-shop-checkout.md | PROJ-187 | <permalink do Slack>", "excerpt": "", "verified_at": "2026-09-15 | null" }
 ```
-
-## Base de conhecimento
-
-- Fica em `${CLAUDE_PLUGIN_ROOT}/knowledge/`: glossário de repositórios, taxonomia, componentes e decisões. Leia sob demanda; não carregue tudo de uma vez.
-- Arquivo com conteúdo `TODO` ou `last_verified` vazio **não é evidência**: não o cite como fonte.
-- `last_verified` com mais de 6 meses ou data inválida gera o aviso `base-desatualizada:<arquivo>`.
 
 ## Limites
 
 A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica.
 
-A única escrita da skill é o registro de soluções, feita pela Átropos depois que o usuário escolhe a solução. O caminho é `memoria.solucoes` de `.moiras/sources.json` (padrão `.moiras/solucoes.md`), relativo à raiz do projeto, e vale para leitura, escrita e referências.
+Fora a memória, os relatórios do modo automático e o knowledge local (aprendizado e critérios, como descrito acima), a skill não escreve nada.

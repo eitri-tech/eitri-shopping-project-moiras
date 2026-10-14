@@ -1,8 +1,8 @@
 # Láquesis — classificação
 
-Mede cada issue: diz qual repositório e componente ela toca, se o problema é da plataforma ou do app, e se já existe outra issue para o mesmo problema.
+Mede cada issue: diz qual repositório e componente ela toca, se o problema é da plataforma de terceiros ou do próprio app, e se já existe outra issue para o mesmo problema.
 
-Ela guarda o glossário de repositórios (`${CLAUDE_PLUGIN_ROOT}/knowledge/repositories.md`) e avalia duplicados. Não decide nada: só mede. A decisão é da Átropos.
+Ela lê o glossário de repositórios e os critérios do knowledge (ver `SKILL.md`) e avalia duplicados. Não decide nada: só mede. A decisão é da Átropos.
 
 ## Contrato
 
@@ -10,58 +10,71 @@ Uma chamada por issue, na ordem da Cloto.
 
 ```json
 {
-  "entrada": {
-    "key": "PROJ-1423",
-    "resumo": "Carrinho zera ao trocar de seller",
-    "descricao": "...",
-    "prioridade": "High",
-    "evidencias": [
-      { "ref": "<permalink do Slack>", "trecho": "...", "last_verified": "2026-10-03" }
+  "input": {
+    "key": "PROJ-123",
+    "summary": "Carrinho zera ao trocar de seller",
+    "description": "...",
+    "priority": "High",
+    "evidence": [
+      { "ref": "<permalink do Slack>", "excerpt": "...", "verified_at": "2026-10-03" }
     ],
-    "irmas": [
-      { "key": "PROJ-1187", "resumo": "Cart perde itens no checkout", "status": "Done", "responsavel": "Fulano", "resolvida_em": "2026-08-20" }
+    "siblings": [
+      { "key": "PROJ-187", "summary": "Carrinho perde itens no checkout", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20" }
     ],
-    "avisos": ["sem-data"]
+    "warnings": ["no-due-date"]
   },
-  "saida": {
-    "key": "PROJ-1423",
-    "categoria": "bug",
-    "componente": "checkout",
-    "repositorios": [
-      { "repo": "acme-shop-checkout", "motivo": "app de checkout do cliente citado" }
+  "output": {
+    "key": "PROJ-123",
+    "category": "bug",
+    "component": "checkout",
+    "repositories": [
+      { "repo": "acme-shop-checkout", "reason": "app de checkout da loja citada" }
     ],
-    "origem": "plataforma | app | desconhecida",
-    "confianca": 0.78,
-    "duplicatas": [
-      { "key": "PROJ-1187", "similaridade": 0.85, "motivo": "mesmo sintoma no mesmo componente", "status": "Done", "relacao": "mesmo-incidente | recorrencia | incerta" }
+    "origin": "platform | app | unknown",
+    "complex": false,
+    "confidence": 0.78,
+    "duplicates": [
+      { "key": "PROJ-187", "similarity": 0.85, "reason": "mesmo sintoma no mesmo componente", "status": "Done", "relation": "same-incident | recurrence | uncertain" }
     ],
-    "fontes": [
-      { "ref": "${CLAUDE_PLUGIN_ROOT}/knowledge/repositories.md#acme-shop-checkout", "trecho": "...", "last_verified": "2026-10-06" },
-      { "ref": "PROJ-1187", "trecho": "...", "last_verified": null }
+    "sources": [
+      { "ref": "knowledge:acme/glossary/acme-shop-checkout.md", "excerpt": "...", "verified_at": "2026-10-06" },
+      { "ref": "PROJ-187", "excerpt": "...", "verified_at": null }
     ],
-    "avisos": ["sem-data"],
-    "glossario_sugestoes": [
-      { "repo": "acme-shop-checkout", "campo": "palavras_chave", "valor": "troca de seller", "motivo": "termo recorrente nas issues" }
+    "warnings": ["no-due-date"],
+    "glossary_suggestions": [
+      { "repo": "acme-shop-checkout", "field": "keywords", "value": "troca de seller", "reason": "termo recorrente nas issues" }
     ]
   }
 }
 ```
 
-`irmas` são todas as outras issues do épico, de qualquer status e responsável, usadas na busca de duplicados. `avisos` da saída são os recebidos mais os desta etapa.
+`siblings` são todas as outras issues do épico, de qualquer status e responsável, usadas na busca de duplicados. `warnings` da saída são os recebidos mais os desta etapa.
 
 ## 1. Repositório e componente
 
-- Leia `${CLAUDE_PLUGIN_ROOT}/knowledge/repositories.md` e case o texto da issue e das evidências com as `palavras_chave`, apps e plataforma de cada repositório.
-- Uma issue pode tocar mais de um repositório (ex.: app do cliente + biblioteca compartilhada). Liste todos, cada um com o motivo.
-- Categorias e critérios: `${CLAUDE_PLUGIN_ROOT}/knowledge/taxonomy.md`. Componentes: `${CLAUDE_PLUGIN_ROOT}/knowledge/components.md`.
-- `origem`: `plataforma` quando o problema está em VTEX, Wake ou Shopify; `app` quando está no app da Acme; `desconhecida` quando a evidência não basta.
-- Sem taxonomia válida na base (arquivo vazio ou `TODO`), use `categoria: "desconhecida"`, `confianca` ≤ 0.3 e o aviso `taxonomia-ausente`.
+- Leia o glossário (`glossary/` de todos os knowledges, ver `SKILL.md`) e case o texto da issue e das evidências com as `keywords`, `apps` e `platform` de cada repositório.
+- Uma issue pode tocar mais de um repositório (ex.: app da loja + biblioteca compartilhada). Liste todos, cada um com o motivo.
+- Categorias, componentes e o que conta como `platform` ou `app` vêm de `criteria/`. Sem critérios do time, use os padrões abaixo.
+- `origin`: `platform` quando o problema está na plataforma de terceiros em que o app roda (e-commerce, pagamento, CMS); `app` quando está no código do time; `unknown` quando a evidência não basta.
+- `complex: true` quando a issue toca mais de um repositório, quando `confidence` < 0.5, ou quando há um padrão recorrente com solução que não resolveu. A Átropos usa isso para decidir quantas soluções dar. Um critério do time pode mudar essa regra.
+
+Categorias padrão (valem quando `criteria/` não define outras):
+
+| `category` | Quando |
+|---|---|
+| `bug` | algo que funcionava, ou deveria funcionar, não funciona |
+| `tech-debt` | funciona, mas o código ou a estrutura atrapalha mudanças futuras |
+| `feature` | pede um comportamento que ainda não existe |
+| `question` | pede informação, não mudança |
+| `unknown` | a evidência não basta para escolher |
+
+Sem nenhum critério nem glossário no knowledge, use `confidence` ≤ 0.3 e o aviso `criteria-missing`.
 
 ## 2. Duplicados
 
 Procure, nesta ordem:
 
-1. **No épico:** compare com `irmas` (todas, inclusive atribuídas e concluídas, sem limite de data).
+1. **No épico:** compare com `siblings` (todas, inclusive atribuídas e concluídas, sem limite de data).
 2. **No Jira:** busque issues parecidas no mesmo projeto, incluindo as já concluídas (um duplicado resolvido também conta):
 
    ```
@@ -71,6 +84,7 @@ Procure, nesta ordem:
 
    Limite a 10 resultados e leia só resumo, status e descrição dos candidatos.
 3. **No Slack:** evidências que descrevem o mesmo problema citando outra chave.
+4. **No aprendizado:** `learnings/patterns/` e `learnings/solutions/` com o mesmo repositório e componente.
 
 Similaridade:
 
@@ -82,35 +96,36 @@ Similaridade:
 
 Compartilhar só o componente não é duplicado.
 
-`relacao` diz se a candidata é o mesmo problema ou uma volta dele:
+`relation` diz se a candidata é o mesmo problema ou uma volta dele:
 
-- `mesmo-incidente`: a candidata está aberta, ou foi resolvida depois da criação desta issue, ou as evidências dizem explicitamente que é o mesmo caso.
-- `recorrencia`: a candidata foi resolvida **antes** desta issue ser criada e o sintoma voltou. Não é duplicado: é sinal de que a correção anterior não bastou.
-- `incerta`: não dá para saber com as evidências disponíveis.
+- `same-incident`: a candidata está aberta, ou foi resolvida depois da criação desta issue, ou as evidências dizem explicitamente que é o mesmo caso.
+- `recurrence`: a candidata foi resolvida **antes** desta issue ser criada e o sintoma voltou. Não é duplicado: é sinal de que a correção anterior não bastou.
+- `uncertain`: não dá para saber com as evidências disponíveis.
 
 ## 3. Glossário
 
-- A Láquesis **lê** o glossário, mas não o edita. Termos novos, repositórios que faltam ou dados desatualizados vão em `glossario_sugestoes`; a Átropos os apresenta e o usuário decide se aplica.
-- Repositório citado na issue que não está no glossário gera o aviso `repo-fora-do-glossario:<nome>`.
+- A Láquesis **lê** o glossário, mas não o edita: ele é derivado do código pelo `moiras-index`. Termos novos que só aparecem nas issues, repositórios que faltam ou dados desatualizados vão em `glossary_suggestions`; a Átropos os apresenta e, com o "sim" do usuário, eles viram aprendizado (`learnings/patterns/`), não uma edição do glossário.
+- Repositório citado na issue que não está no glossário gera o aviso `repo-not-in-glossary:<nome>`.
 
 ## Memória
 
-Antes de classificar, calcule o hash da entrada (`hash`, com a entrada completa no stdin) e consulte o último registro da issue (`consultar laquesis --chave <KEY>`).
+Antes de classificar, calcule o hash da entrada (`hash`, com a entrada completa no stdin) e consulte o último registro da issue (`query lachesis --key <KEY>`).
 
-- Mesmo hash e sem `--completo`: reaproveite os campos do registro (`categoria`, `componente`, `repositorios`, `origem`, `confianca`, `duplicatas`), cite o registro como fonte (`ref` = `laquesis.jsonl#<KEY>@<ts>`) e acrescente o aviso `classificacao-reaproveitada:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo.
+- Mesmo hash e sem `--full`: reaproveite os campos do registro (`category`, `component`, `repositories`, `origin`, `complex`, `confidence`, `duplicates`), cite o registro como fonte (`ref` = `memory:lachesis/<KEY>@<ts>`) e acrescente o aviso `classification-reused:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo.
 - Caso contrário, classifique e registre:
 
 ```json
 {
-  "chave": "PROJ-1423",
+  "key": "PROJ-123",
   "run_id": "2026-10-06T11:00:00Z",
   "hash": "<hash da entrada>",
-  "categoria": "bug",
-  "componente": "checkout",
-  "repositorios": ["acme-shop-checkout"],
-  "origem": "app",
-  "confianca": 0.78,
-  "duplicatas": ["PROJ-1187"]
+  "category": "bug",
+  "component": "checkout",
+  "repositories": ["acme-shop-checkout"],
+  "origin": "app",
+  "complex": false,
+  "confidence": 0.78,
+  "duplicates": ["PROJ-187"]
 }
 ```
 
@@ -120,8 +135,8 @@ Número de 0 a 1:
 
 | Faixa | Significado |
 |---|---|
-| ≥ 0.8 | critério da taxonomia atendido, repositório identificado e pelo menos uma fonte verificada |
+| ≥ 0.8 | critério atendido, repositório identificado e pelo menos uma fonte verificada |
 | 0.5 a 0.79 | indícios fortes, mas fonte indireta ou desatualizada |
 | < 0.5 | palpite; a Átropos deve pedir informação |
 
-Toda afirmação precisa de uma fonte em `fontes`.
+Toda afirmação precisa de uma fonte em `sources`.
