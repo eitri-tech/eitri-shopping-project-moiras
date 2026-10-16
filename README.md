@@ -143,7 +143,7 @@ Dentro da sessão:
 3. Rode `/moiras:moiras-triage PROJ-100` (interativo) ou `/moiras:moiras-triage PROJ-100 --auto` (sem perguntas, só o que mudou; relatório em `.moiras/runs/`).
 4. Para revisar o knowledge fora de uma triagem, rode `/moiras:moiras-audit` (ou `/moiras:moiras-audit criteria`). É só interativa: cada ajuste espera o seu "sim". `audit.auditors` em `.moiras/sources.json` é opcional e limita quem pode fazer ajustes.
 5. Para criar o glossário a partir do código, rode `/moiras:moiras-index` (preencha `index` em `.moiras/sources.json`). Ela só lê os repositórios e grava `glossary/` no knowledge local depois do seu "sim".
-6. Com knowledges compartilhados (`repository` na configuração), rode `/moiras:moiras-sync <nome>` para trazer o que foi mergeado e `/moiras:moiras-publish <nome>` para abrir um PR com o que é novo no seu knowledge local. Nenhuma das duas faz push na branch principal nem merge.
+6. Com knowledges compartilhados (`repository` na configuração), rode `/moiras:moiras-sync <nome>` para trazer o que foi mergeado e `/moiras:moiras-publish <nome>` para abrir um PR com o que é novo no seu knowledge local. O sync só atualiza o clone local com `merge --ff-only`; o publish envia um branch novo e abre PR, sem fazer merge do PR. Nenhuma das duas faz push na branch principal.
 7. Depois de editar arquivos do plugin, rode `/reload-plugins` na sessão.
 
 Para instalar a partir do repositório, como o time faria:
