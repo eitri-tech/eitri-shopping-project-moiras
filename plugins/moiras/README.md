@@ -14,6 +14,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 moiras/
 ├── .claude-plugin/plugin.json      # manifesto
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
+├── scripts/knowledge.ts            # hash das fontes, checagem e plano de publicação do knowledge
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
     ├── moiras-triage/
@@ -22,6 +23,12 @@ moiras/
     │       ├── clotho.md           # coleta
     │       ├── lachesis.md         # classificação
     │       └── atropos.md          # veredito
+    ├── moiras-index/
+    │   └── SKILL.md                # glossário derivado do código
+    ├── moiras-sync/
+    │   └── SKILL.md                # traz o que foi mergeado nos knowledges compartilhados
+    ├── moiras-publish/
+    │   └── SKILL.md                # leva o knowledge local a um compartilhado, por PR
     └── moiras-audit/
         └── SKILL.md                # auditoria e ajustes do knowledge
 ```
@@ -35,6 +42,13 @@ O knowledge não vem no plugin: é o que o time sabe e não está no código (gl
 
 Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Detalhes em `skills/moiras-triage/SKILL.md`.
 
+Como o knowledge circula:
+
+1. `moiras-index` gera o glossário a partir do código e grava em `glossary/` do knowledge local, depois do seu "sim".
+2. `moiras-sync` (opcional) avança os clones dos knowledges compartilhados, sem enviar nada.
+3. A triagem e a auditoria escrevem no knowledge local.
+4. `moiras-publish` abre um PR num knowledge compartilhado com o que é novo; quem revisa o repositório faz o merge. Antes, cada registro passa em `scripts/knowledge.ts check` (sem segredos, caminhos pessoais ou código acima de 20 linhas).
+
 Para revisar o knowledge fora de uma triagem, use a skill `moiras-audit`: ela aponta registros velhos, pendentes, conflitantes ou fora das regras e aplica cada ajuste só depois do "sim" de quem audita, do mesmo jeito que o usuário avalia no fim da triagem.
 
 ## Configuração
@@ -45,6 +59,7 @@ Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde 
 - `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
 - `interactions` (opcional, desligado por padrão): deixa a Cloto reagir no Slack (emoji `slack.reaction`) e comentar no Jira que a issue foi citada, sempre depois do seu "sim" à lista; no `--auto` só as reações (`auto_types`) são aplicadas sem perguntar, e o comentário fica no relatório;
+- `index` (opcional): onde estão os repositórios para o `moiras-index`: `roots` (pastas com repositórios dentro) e `repositories` (`name`, `path` e, se quiser, `url`, `owner`, `agency`, `platform`, que valem mais que o detectado);
 - `audit` (opcional): `auditors`, a lista de quem pode fazer ajustes no knowledge pela skill `moiras-audit`; sem a chave, qualquer pessoa pode auditar;
 - `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
 - `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
@@ -60,6 +75,8 @@ No modo `--auto` a skill não faz perguntas, processa só o que mudou desde a ú
 ```
 
 Liste em `--allowedTools` as ferramentas dos conectores de Jira e Slack que a coleta usa; sem isso a execução sem terminal fica bloqueada esperando permissão.
+
+Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto` antes (ela só avança clones que já existem) e libere em `--allowedTools` os comandos `git status`, `git fetch`, `git merge --ff-only` e os de leitura que ela usa. `moiras-index`, `moiras-publish` e `moiras-audit` não rodam em `--auto`.
 
 ## Memória
 

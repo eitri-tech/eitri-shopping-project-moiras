@@ -20,7 +20,11 @@ Estrutura:
 - `skills/moiras-triage/SKILL.md`: skill que orquestra as três etapas, em ordem, e define como ler e escrever o knowledge; cada etapa fica em `stages/`
 - `config/sources.example.json`: modelo da configuração lida de `.moiras/sources.json`
 - `skills/moiras-audit/SKILL.md`: skill de auditoria do knowledge (revisão e ajustes aprovados por quem audita)
+- `skills/moiras-index/SKILL.md`: skill que gera o glossário a partir do código (única que escreve em `glossary/`)
+- `skills/moiras-sync/SKILL.md`: skill que traz o que foi mergeado nos knowledges compartilhados (só avança o clone)
+- `skills/moiras-publish/SKILL.md`: skill que leva o knowledge local a um knowledge compartilhado, por PR
 - `scripts/memory.ts`: grava e consulta a memória de cada etapa (`.moiras/memory/<stage>.jsonl`) com hash SHA-256
+- `scripts/knowledge.ts`: ferramentas só de leitura para o knowledge: `hash` (fingerprint das fontes), `check` (regras dos registros) e `plan` (o que o `moiras-publish` levaria)
 
 ## Repositório público
 
@@ -35,12 +39,13 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - O plugin só lê e sugere no Jira e no Slack; nunca escreve sem aprovação humana. A única exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira): desligadas por padrão (`interactions.enabled`) e aplicadas depois do "sim" do usuário à lista exata. No `--auto` só a reação, se autorizada na configuração (`interactions.auto_types`, padrão reação), dispensa o "sim"; comentários sempre dependem dele e nunca vão para issue com agência.
 - Cada etapa tem contrato `{input, output}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
-- O glossário é derivado do código (indexação). A Láquesis não o edita: só sugere.
+- O glossário é derivado do código (indexação). Só o `moiras-index` o escreve, no modo interativo e com o "sim" do usuário à lista exata de arquivos; a Láquesis e a auditoria não o editam: só sugerem a reindexação. A indexação só lê os repositórios, não apaga registros e não leva cópia de código, caminho absoluto nem credencial em URL.
+- Sincronização (`moiras-sync`) só traz: `git fetch` e `merge --ff-only` num clone de knowledge limpo, sem tocar no knowledge local. Publicação (`moiras-publish`) é só interativa, só com o "sim" à lista exata, sempre num branch novo e por PR: nunca push na branch principal, `force push`, merge ou aprovação, e nenhum registro sai sem passar no `knowledge.ts check`.
 - Agência é opcional (`jira.agency_field` ou `agency` no glossário). Para issue com agência, a Átropos só oferece um rascunho de repasse, que o usuário envia: nada vai à agência (Jira, Slack ou outro canal) pelo plugin, e o rascunho não leva conversas internas nem dados de outros clientes.
 - Auditoria (`moiras-audit`) é só interativa e só altera o knowledge local, com o "sim" de quem audita à lista exata de ajustes: mesmas regras da escrita da triagem (aprendizado só muda `result` e a observação; critério só por regeneração com `replaces`; glossário nunca é editado). O relatório da auditoria não repete conteúdo sensível.
 - Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
 - Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash). Ela é local e nunca vai para um knowledge.
-- Fora a memória e os relatórios, o plugin só escreve no knowledge local (`learnings/` e `criteria/`), no modo interativo e depois da escolha ou do "sim" do usuário. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
+- Fora a memória e os relatórios, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` e `criteria/` pelas Moiras e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
 - O knowledge nunca tem cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
 - O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time, não do plugin.
