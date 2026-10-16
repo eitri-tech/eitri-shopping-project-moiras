@@ -14,7 +14,7 @@ Argumentos: `$ARGUMENTS`
 | Modo | Como | Comportamento |
 |---|---|---|
 | Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e registra o aprendizado |
-| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa só issues novas ou alteradas desde a última execução; não registra aprendizado; não aplica interações (só as lista); salva o relatório em arquivo |
+| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa só issues novas ou alteradas desde a última execução; não registra aprendizado; aplica só as interações de baixo impacto autorizadas na configuração (reações) e lista as demais; salva o relatório em arquivo |
 
 `--full` reprocessa todas as issues, mesmo as que não mudaram.
 
@@ -105,6 +105,6 @@ Toda fonte segue este formato:
 
 ## Limites
 
-A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica. A única exceção prevista são as interações opcionais da Cloto (reação no Slack e comentário curto no Jira, ver `stages/clotho.md`): desligadas por padrão, só no modo interativo, e aplicadas apenas depois do "sim" do usuário à lista exata. Isso vale para o repasse à agência (ver `stages/atropos.md`, seção 9): a skill só prepara o rascunho, e quem envia é o usuário.
+A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica. A única exceção prevista são as interações opcionais da Cloto (reação no Slack e comentário curto no Jira, ver `stages/clotho.md`): desligadas por padrão e aplicadas apenas depois do "sim" do usuário à lista exata. No modo automático, só as de baixo impacto que a configuração autoriza (`interactions.auto_types`, padrão reação) dispensam o "sim"; as demais ficam no relatório. Isso vale para o repasse à agência (ver `stages/atropos.md`, seção 9): a skill só prepara o rascunho, e quem envia é o usuário.
 
 Fora a memória, os relatórios do modo automático e o knowledge local (aprendizado e critérios, como descrito acima), a skill não escreve nada.

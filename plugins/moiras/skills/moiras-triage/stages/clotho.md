@@ -82,7 +82,7 @@ Ações permitidas (e só estas):
 Regras:
 
 1. **Aprovação.** A Cloto nunca escreve sozinha. Depois da coleta e antes de chamar a Láquesis, monte a lista de `interactions` (alvo, tipo, texto, link) e mostre ao usuário. O "sim" aplica exatamente aquela lista; o usuário pode tirar itens, e itens novos precisam de nova aprovação. Sem resposta ou com "não", nada é aplicado.
-2. **Modo automático.** Não escreve nunca: as interações ficam com `status: proposed` e aparecem no relatório.
+2. **Modo automático.** Sem perguntas, então só as interações de baixo impacto, que o usuário já autorizou na configuração, são aplicadas: os tipos de `interactions.auto_types` (padrão `["reaction"]`). Todas as outras, como o comentário no Jira, ficam com `status: proposed` e aparecem no relatório para o usuário aprovar depois. As regras 3 a 6 valem igual.
 3. **Texto.** Uma linha em português, começando com `Moiras:`, por exemplo `Moiras: esta issue foi citada no Slack em 03/10 (<link>)`. Nada de texto bruto de issues ou conversas, segredos ou dados pessoais. Em issue com `agency`, o Jira pode ser visível a externos: comente sem o link do Slack, só com a data.
 4. **Sem repetir.** Antes de propor, consulte `query clotho --key interaction:<source>:<alvo>:<tipo>`; se já existe, pule. Depois de aplicar com sucesso, registre essa chave com `record clotho` (`content` = tipo, texto e link, que vira hash). Esses registros não contam para o `change` das issues.
 5. **Falha.** Conector sem permissão de escrita ou erro da API: marque a interação como `failed`, acrescente o aviso `interaction-failed:<fonte>` e siga a triagem. Não tente de novo na mesma execução.

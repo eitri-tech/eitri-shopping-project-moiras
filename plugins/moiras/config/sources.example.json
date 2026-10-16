@@ -25,6 +25,7 @@
   },
   "interactions": {
     "enabled": false,
+    "auto_types": ["reaction"],
     "slack": { "reaction": "eyes" },
     "jira": { "comment": true }
   },
