@@ -19,6 +19,7 @@ Estrutura:
 - `.claude-plugin/plugin.json`: manifesto
 - `skills/moiras-triage/SKILL.md`: skill que orquestra as três etapas, em ordem, e define como ler e escrever o knowledge; cada etapa fica em `stages/`
 - `config/sources.example.json`: modelo da configuração lida de `.moiras/sources.json`
+- `skills/moiras-audit/SKILL.md`: skill de auditoria do knowledge (revisão e ajustes aprovados por quem audita)
 - `scripts/memory.ts`: grava e consulta a memória de cada etapa (`.moiras/memory/<stage>.jsonl`) com hash SHA-256
 
 ## Repositório público
@@ -36,6 +37,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
 - O glossário é derivado do código (indexação). A Láquesis não o edita: só sugere.
 - Agência é opcional (`jira.agency_field` ou `agency` no glossário). Para issue com agência, a Átropos só oferece um rascunho de repasse, que o usuário envia: nada vai à agência (Jira, Slack ou outro canal) pelo plugin, e o rascunho não leva conversas internas nem dados de outros clientes.
+- Auditoria (`moiras-audit`) é só interativa e só altera o knowledge local, com o "sim" de quem audita à lista exata de ajustes: mesmas regras da escrita da triagem (aprendizado só muda `result` e a observação; critério só por regeneração com `replaces`; glossário nunca é editado). O relatório da auditoria não repete conteúdo sensível.
 - Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
 - Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash). Ela é local e nunca vai para um knowledge.
 - Fora a memória e os relatórios, o plugin só escreve no knowledge local (`learnings/` e `criteria/`), no modo interativo e depois da escolha ou do "sim" do usuário. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).

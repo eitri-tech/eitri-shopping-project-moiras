@@ -17,7 +17,7 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
 
 ## Plugin
 
-- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos).
+- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos) e auditoria do knowledge (`moiras-audit`).
 
 ## Como trabalhar neste projeto
 

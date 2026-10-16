@@ -58,7 +58,7 @@ Todo knowledge tem a mesma estrutura:
 | Pasta | Conteúdo | Quem escreve |
 |---|---|---|
 | `glossary/` | Glossário de repositórios: um arquivo por repositório, com localização e metadados (e, opcionalmente, `agency`, a agência que cuida dele) | `moiras-index` (derivado do código, pode ser regenerado) |
-| `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando |
+| `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando ou audita (`moiras-audit`) |
 | `learnings/solutions/` | Soluções escolhidas e o resultado delas | Átropos |
 | `learnings/patterns/` | Padrões de problema recorrentes | Láquesis / Átropos |
 | `learnings/decisions/` | Decisões que valem para casos futuros | as Moiras, a partir de soluções que funcionaram |
