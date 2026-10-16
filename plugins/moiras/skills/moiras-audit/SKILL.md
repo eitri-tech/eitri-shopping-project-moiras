@@ -67,7 +67,7 @@ replaces: []
 **Por quê:** <o caso que motivou, sem texto bruto da issue>
 ```
 
-Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague os arquivos antigos. Mudar um critério existente é gerar um novo com `replaces` do antigo, nunca reescrever o arquivo.
+Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague só os antigos que estão no knowledge local. Os de um knowledge compartilhado (`project`, `group`, `global`) ficam intocados: o critério local os substitui pelo `replaces`, e a remoção deles no repositório compartilhado é com o `moiras-publish`, num PR. Mudar um critério existente é gerar um novo com `replaces` do antigo, nunca reescrever o arquivo.
 
 ## Dados sensíveis
 

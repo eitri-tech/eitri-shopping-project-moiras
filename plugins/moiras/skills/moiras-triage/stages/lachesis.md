@@ -110,7 +110,7 @@ Compartilhar só o componente não é duplicado.
 
 1. Se a entrada trouxe `agency` (campo do Jira lido pela Cloto), use-o.
 2. Senão, olhe o campo opcional `agency` do arquivo de cada repositório de `repositories` no glossário. Se todos que têm o campo concordam, use esse valor e cite o arquivo do glossário em `sources`.
-3. Se os repositórios apontam agências diferentes e a entrada não trouxe nenhuma, use `null` e acrescente o aviso `agency-ambiguous:<agência 1>,<agência 2>`.
+3. Se os repositórios apontam agências diferentes e a entrada não trouxe nenhuma, use `null` e acrescente o aviso `agency-ambiguous:<agência 1>,<agência 2>`. Na dúvida, a Cloto trata a issue como possivelmente gerida por agência e não comenta no Jira.
 
 A Láquesis só informa a agência; quem oferece o repasse da solução é a Átropos.
 
