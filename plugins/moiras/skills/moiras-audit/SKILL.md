@@ -15,7 +15,7 @@ A triagem já deixa o usuário corrigir a Átropos no fim do pipeline: escolher 
 
 - Auditor é quem está conversando com a skill. A skill pergunta o nome e o usa em `approved_by` dos critérios que gerar e na observação dos aprendizados que ajustar.
 - Se `audit.auditors` existir em `.moiras/sources.json`, o nome precisa estar na lista; se não estiver, a skill avisa e só permite a leitura (sem ajustes). Sem a chave, qualquer pessoa pode auditar. É uma identificação, não uma autenticação: o plugin roda na máquina de quem o usa.
-- A skill só altera o knowledge de escopo `local`. Um registro de knowledge compartilhado (`project`, `group`, `global`) que precise de ajuste vira um registro local que o sobrepõe (mesmo `id`); levá-lo ao compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
+- A skill só altera o knowledge de escopo `local`. Um registro de knowledge compartilhado (`project`, `group`, `global`) nunca é alterado por aqui, e o que fazer com ele depende do tipo: critério é substituído por um critério local com `replaces`; aprendizado e glossário só são reportados (o aprendizado é ajustado por quem tem o registro no knowledge local ou no repositório compartilhado, e o glossário se resolve com `moiras-index`). Levar um ajuste local ao compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
 ## Escopo
 
