@@ -56,7 +56,7 @@ Uma chamada por issue, na ordem da Cloto.
 
 - Leia o glossário (`glossary/` de todos os knowledges, ver `SKILL.md`) e case o texto da issue e das evidências com as `keywords`, `apps` e `platform` de cada repositório.
 - Uma issue pode tocar mais de um repositório (ex.: app da loja + biblioteca compartilhada). Liste todos, cada um com o motivo.
-- Categorias, componentes e o que conta como `platform` ou `app` vêm de `criteria/`. Sem critérios do time, use os padrões abaixo.
+- Categorias, componentes e o que conta como `platform` ou `app` vêm de `criteria/`. Sem critérios aplicáveis do time, use os padrões abaixo apenas como fallback e acrescente `criteria-missing`, mesmo que exista glossário. O fallback não define uma regra do time.
 - `origin`: `platform` quando o problema está na plataforma de terceiros em que o app roda (e-commerce, pagamento, CMS); `app` quando está no código do time; `unknown` quando a evidência não basta.
 - `complex: true` quando a issue toca mais de um repositório, quando `confidence` < 0.5, ou quando há um padrão recorrente com solução que não resolveu. A Átropos usa isso para decidir quantas soluções dar. Um critério do time pode mudar essa regra.
 
@@ -107,6 +107,8 @@ Compartilhar só o componente não é duplicado.
 ## 3. Agência (opcional)
 
 `agency` diz quem gerencia a issue quando não é o time. É opcional: sem agência o valor é `null`, sem aviso, e nada muda no resto da etapa.
+
+A resolução desta seção roda em toda execução para todas as issues coletadas, inclusive `unchanged`, antes do filtro incremental da Cloto. Resolva os repositórios pelo glossário atual (seção 1), sem depender de uma classificação em cache; substitua os avisos de agência antigos pelos atuais.
 
 1. Se a entrada trouxe `agency` (campo do Jira lido pela Cloto), use-o.
 2. Senão, olhe o campo opcional `agency` do arquivo de cada repositório de `repositories` no glossário. Se todos que têm o campo concordam, use esse valor e cite o arquivo do glossário em `sources`.

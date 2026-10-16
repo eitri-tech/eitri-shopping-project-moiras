@@ -25,7 +25,7 @@ No modo automático, salve o relatório da Átropos em `<runs.dir>/<run_id>.md` 
 Execute as três etapas **em ordem**:
 
 1. **Cloto** (coleta Jira + Slack, em paralelo): siga `stages/clotho.md`.
-2. **Láquesis** (classificação): siga `stages/lachesis.md`. Depois dela, e antes da Átropos, aplique as interações aprovadas da Cloto, se houver (ver `stages/clotho.md`, "Interações").
+2. **Láquesis** (classificação): antes de aplicar o filtro incremental do `--auto`, resolva os repositórios no glossário atual e recalcule `agency` e os avisos de agência para **todas** as issues coletadas, inclusive `unchanged` (seção 3 da etapa). Use esse resultado nas interações e no relatório mesmo quando a classificação completa for pulada. Depois, siga `stages/lachesis.md`. Depois dela, e antes da Átropos, aplique as interações aprovadas da Cloto, se houver (ver `stages/clotho.md`, "Interações").
 3. **Átropos** (veredito e soluções): siga `stages/atropos.md`.
 
 ## Protocolo entre etapas
@@ -76,7 +76,8 @@ Regras de leitura:
 Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
 
 - Aprendizado (`learnings/`): só acréscimo, um arquivo por registro, nomeado pelo `id`. Antes de criar, procure registros parecidos; se já existir, atualize em vez de duplicar.
-- Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces: [<ids>]`, e apague os antigos.
+- Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces: [<ids>]`, e apague apenas os antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; referencie-os em `replaces` com a fonte `knowledge:<name>/<caminho>`.
+- `chosen_by` e `approved_by` usam um pseudônimo não identificável escolhido pela pessoa, nunca nome real, e-mail ou identificador de conta. Na auditoria, `audit.auditors` usa esses mesmos pseudônimos; a identificação é declarada, não autenticação. Preserve o pseudônimo nos registros e na observação para rastrear escolhas e aprovações sem dados pessoais.
 - Nunca grave código maior que 20 linhas, código sem referência (repositório, caminho, commit), segredos, dados pessoais ou texto bruto de issue e de conversa.
 - Levar o aprendizado local para um knowledge compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
@@ -105,6 +106,6 @@ Toda fonte segue este formato:
 
 ## Limites
 
-A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica. A única exceção prevista são as interações opcionais da Cloto (reação no Slack e comentário curto no Jira, ver `stages/clotho.md`): desligadas por padrão e aplicadas apenas depois do "sim" do usuário à lista exata. No modo automático, só as de baixo impacto que a configuração autoriza (`interactions.auto_types`, padrão reação) dispensam o "sim"; as demais ficam no relatório. Isso vale para o repasse à agência (ver `stages/atropos.md`, seção 9): a skill só prepara o rascunho, e quem envia é o usuário.
+A skill termina na recomendação. As únicas escritas no Jira e no Slack são as interações opcionais da Cloto (reação no Slack e comentário curto no Jira, ver `stages/clotho.md`): desligadas por padrão (`interactions.enabled`) e aplicadas apenas depois do "sim" do usuário à lista exata. No modo automático, somente `reaction`, se autorizada em `interactions.auto_types` (padrão `["reaction"]`), dispensa o "sim"; comentários nunca são aplicados, mesmo se incluídos nessa configuração. Comentários também nunca vão para issues com agência ou com agência ambígua. O repasse à agência (ver `stages/atropos.md`, seção 9) é sempre só um rascunho: quem envia é o usuário; o plugin nunca o envia, nem com aprovação.
 
 Fora a memória, os relatórios do modo automático e o knowledge local (aprendizado e critérios, como descrito acima), a skill não escreve nada.

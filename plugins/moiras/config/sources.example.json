@@ -34,7 +34,7 @@
     { "name": "acme", "scope": "group", "repository": "git@github.com:<org>/acme-knowledge.git", "dir": "../acme-knowledge" },
     { "name": "team", "scope": "global", "repository": "git@github.com:<org>/team-knowledge.git", "dir": "../team-knowledge" }
   ],
-  "audit": { "auditors": ["Fulano", "Beltrana"] },
+  "audit": { "auditors": ["reviewer-01", "reviewer-02"] },
   "memory": { "dir": ".moiras/memory" },
   "runs": { "dir": ".moiras/runs" }
 }
