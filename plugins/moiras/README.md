@@ -40,7 +40,7 @@ O knowledge não vem no plugin: é o que o time sabe e não está no código (gl
 - **Local** (padrão): `.moiras/knowledge/` no projeto, fora do git. É onde as Moiras escrevem.
 - **Compartilhado**: repositórios privados criados a partir do template público de knowledge, com escopo `project`, `group` ou `global`. Na leitura, o mais específico vence (`local` > `project` > `group` > `global`).
 
-Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Detalhes em `skills/moiras-triage/SKILL.md`.
+Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Sem glossário nem critérios, a Láquesis pode usar categorias padrão quando houver evidência; usa `unknown` quando ela não basta. Em ambos os casos, `confidence` ≤ 0.3 e aviso `criteria-missing`. Detalhes em `skills/moiras-triage/SKILL.md`.
 
 Como o knowledge circula:
 
@@ -68,7 +68,7 @@ O Jira e o Slack precisam estar conectados ao Claude (conectores do claude.ai ou
 
 ## Execução por cron
 
-No modo `--auto` a skill não faz perguntas, processa só o que mudou desde a última execução e salva o relatório em `.moiras/runs/`. Exemplo (dias úteis às 8h):
+No modo `--auto` a skill não faz perguntas, processa o que mudou (incluindo o knowledge), repete issues sem conclusão comprovada e salva o relatório em `.moiras/runs/`. Exemplo (dias úteis às 8h):
 
 ```
 0 8 * * 1-5 cd /caminho/do/projeto && claude -p "/moiras:moiras-triage PROJ-100 --auto" --allowedTools "Read,Write,Bash(node:*),<ferramentas do Jira e do Slack>" >> .moiras/cron.log 2>&1
