@@ -222,9 +222,17 @@ describe('check', () => {
     record('indent-sem-ref', `Exemplo:\n\n${code(3, '\t')}`);
     record('indent-ok', `Exemplo em ${reference}:\n\n${code(3, '    ')}`);
     record('lista', `- item\n\n    continua o item da lista\n\n${code(1, '    ')}\n\ntexto`);
+    const quote = (lines: string) => lines.split('\n').map(line => `> ${line}`).join('\n');
+    record('citacao-longo', `${reference}\n\n${quote(`~~~ts\n${code(21, '')}\n~~~`)}`);
+    record('citacao-sem-ref', quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``));
+    record('citacao-ok', `${reference}\n\n${quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``)}\n\n> só uma citação, sem código`);
+    record('lista-longo', `- passo\n\n  ${reference}\n\n  \`\`\`ts\n${code(21, '  ')}\n  \`\`\``);
     assert.deepEqual(rules(local), [
+      'learnings/patterns/citacao-longo.md:code-too-long',
+      'learnings/patterns/citacao-sem-ref.md:code-without-reference',
       'learnings/patterns/indent-longo.md:code-too-long',
       'learnings/patterns/indent-sem-ref.md:code-without-reference',
+      'learnings/patterns/lista-longo.md:code-too-long',
       'learnings/patterns/til-aberto.md:code-fence-unclosed',
       'learnings/patterns/til-longo.md:code-too-long',
     ]);

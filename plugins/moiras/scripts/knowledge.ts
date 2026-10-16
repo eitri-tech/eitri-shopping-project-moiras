@@ -147,15 +147,19 @@ interface CodeBlock {
   size: number; // lines of code, fences excluded
 }
 
-const fenceOpening = /^ {0,3}(`{3,}|~{3,})/;
+const fenceOpening = /^\s*(`{3,}|~{3,})/;
+/** The line without its blockquote markers (`> > `) and, before a fence, its list marker (`- `, `1. `). */
+const unwrap = (line: string): string =>
+  line.replace(/^(?:\s{0,3}>[ \t]?)+/, '').replace(/^(\s*)(?:[-*+]|\d+[.)])[ \t]+(?=(?:`{3,}|~{3,}))/, '$1');
 const listItem = /^\s*(?:[-*+]|\d+[.)])\s/;
 
 /**
- * Code blocks from line `from` on, as Markdown reads them: fenced with ``` or ~~~ (closed by a fence of the
+ * Code blocks from line `from` on, as Markdown reads them (also inside blockquotes and list items): fenced with ``` or ~~~ (closed by a fence of the
  * same character, at least as long), and indented by 4 spaces or a tab after a blank line. Indented lines that
  * continue a list item are text, not code. `unclosed` is the line of a fence that never closes.
  */
-function codeBlocks(lines: string[], from: number): { blocks: CodeBlock[]; unclosed?: number } {
+function codeBlocks(rawLines: string[], from: number): { blocks: CodeBlock[]; unclosed?: number } {
+  const lines = rawLines.map(unwrap);
   const blocks: CodeBlock[] = [];
   let unclosed: number | undefined;
   const indented = (line: string) => /^(?: {4}|\t)/.test(line) && line.trim() !== '';
@@ -163,7 +167,7 @@ function codeBlocks(lines: string[], from: number): { blocks: CodeBlock[]; unclo
     const fence = fenceOpening.exec(lines[i]!);
     if (fence) {
       const mark = fence[1]!;
-      const closing = new RegExp(`^ {0,3}${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
+      const closing = new RegExp(`^\\s*${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
       let close = -1;
       for (let j = i + 1; j < lines.length; j++) {
         if (closing.test(lines[j]!)) {
