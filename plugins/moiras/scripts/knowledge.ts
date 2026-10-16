@@ -330,7 +330,7 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       const replaces = Array.isArray(doc.fields.replaces) ? doc.fields.replaces : [];
       for (const id of replaces) {
         // A qualified reference only counts for the knowledge it names; without --shared-name it stays unresolved.
-        const source = /^knowledge:([a-zA-Z0-9_-]+)\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
+        const source = /^knowledge:([^/\s]+)\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
         const old = source ? (source[1] === sharedName ? source[2]! : '') : /^[a-zA-Z0-9_-]+$/.test(id) ? `${kind.dir}/${id}.md` : '';
         if (shared.has(old) && old !== path) remove.push({ path: old, replacedBy: path });
       }

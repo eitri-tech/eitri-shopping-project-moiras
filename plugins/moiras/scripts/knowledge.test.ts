@@ -453,6 +453,13 @@ describe('security regressions', () => {
     assert.deepEqual(plan(local, shared).remove, []);
   });
 
+  it('accepts any configured knowledge name in qualified replacements', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('local', 'criteria/c.md', criterion('c', 'knowledge:group.acme/criteria/a.md'));
+    assert.deepEqual(plan(local, shared, 'group.acme').remove, [{ path: 'criteria/a.md', replacedBy: 'criteria/c.md' }]);
+  });
+
   it('flags an e-mail inside a URL but not URL userinfo or scp-style git remotes', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/patterns/p.md', patternDoc('p', 'Convite https://example.test/invite?email=real.person@example.com'));
