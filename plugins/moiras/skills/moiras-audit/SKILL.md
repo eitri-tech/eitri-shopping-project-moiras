@@ -38,8 +38,9 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 | Solução com `result: not-resolved` e sem observação do que mudou | `learnings/solutions/` | pedir a observação |
 | Soluções resolvidas que se repetem | `learnings/solutions/` | propor padrão (`patterns/`) ou decisão (`decisions/`) |
 | Critérios que se contradizem ou se sobrepõem | `criteria/` | unir num critério regenerado (`replaces`) |
-| Critério sem `approved_by` ou sem `created_at` | `criteria/` | pedir quem aprovou e completar |
-| Registro sem `created_at`/`indexed_at` | qualquer pasta | completar com o auditor; sem a data ele não é evidência |
+| Critério sem `approved_by` ou sem `created_at` | `criteria/` | regenerar o critério com `replaces`, completando os campos com o auditor |
+| Aprendizado sem `created_at` | `learnings/` | só sinalizar no relatório: o registro não é editado e segue sem valer como fonte |
+| Glossário sem `indexed_at` | `glossary/` | só sugerir `moiras-index`; sem a data ele não é evidência |
 | Código com mais de 20 linhas, sem referência (repositório, caminho, commit), segredo, dado pessoal ou texto bruto de issue ou conversa | qualquer pasta | remover o trecho ou trocar por referência; ver "Dados sensíveis" |
 | Registro duplicado | `learnings/` | indicar o registro a manter; não apague (ver "Limites") |
 
@@ -79,5 +80,5 @@ Ao achar segredo, token, dado pessoal ou texto bruto num registro, o ajuste é s
 - Critérios só mudam por regeneração (`replaces`), com o "sim" do auditor.
 - O glossário vem do código: a skill nunca o edita, só sugere a reindexação.
 - O knowledge nunca recebe cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
-- Registros novos ou ajustados levam `created_at` (ou `indexed_at` no glossário) em formato de data.
+- Registros novos (critério regenerado, padrão ou decisão) levam `created_at` em formato de data; o glossário leva `indexed_at`, mas só a indexação o grava.
 - Identificadores (campos, valores fixos, pastas) em inglês; justificativas e relatórios em português.
