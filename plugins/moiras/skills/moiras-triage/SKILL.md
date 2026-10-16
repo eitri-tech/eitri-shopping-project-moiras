@@ -82,16 +82,22 @@ Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
 
 ## Memória das etapas
 
+Nos exemplos, defina a variável de shell `memory_dir` com o valor de `memory.dir` lido da configuração; se ausente, use `.moiras/memory`. Passe esse mesmo diretório a toda chamada de `record` e `query`, inclusive nas etapas.
+
 Cada etapa tem uma memória própria, só de acréscimo, em `<memory.dir>/<stage>.jsonl` (padrão `.moiras/memory/`). Ela é local, por máquina, e nunca vai para um knowledge. É gravada **somente** pelo script do plugin, que calcula o hash SHA-256 do conteúdo e descarta o conteúdo bruto:
 
 ```bash
 # grava (stdin: objeto ou lista com "key" e "content" ou "hash"); devolve new | changed | unchanged
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" record clotho --dir .moiras/memory < records.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" record clotho --dir "${memory_dir}" < records.json
 # hash de um conteúdo, sem gravar
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" hash < content.json
 # último registro de cada chave (filtros opcionais)
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" query lachesis --key PROJ-123 --since 2026-10-01T00:00:00Z
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" query lachesis --dir "${memory_dir}" --key PROJ-123 --since 2026-10-01T00:00:00Z
 ```
+
+O script rejeita campos fora da lista da etapa e hashes fora de `sha256:<64 hex>`. Metadados são resumos derivados; texto bruto só entra em `content`, que é descartado após o hash.
+
+Registros legados com chaves em português (`chave`, `com_quem` etc.) não são migrados: ao encontrar `chave`, o script avisa com arquivo e linha e ignora o registro, inclusive se também houver `key`. Nunca reescreve nem apaga linhas antigas. Recolete e reclassifique para acrescentar registros novos com chaves em inglês; eles iniciam uma nova comparação (`new` se não houver registro válido anterior). O diretório antigo `.moiras/memoria` não é descoberto automaticamente: a configuração define o diretório lido. Não renomeie campos manualmente nem trate classificações legadas como saída válida.
 
 Nunca escreva nesses arquivos à mão nem grave texto bruto de issue ou mensagem neles. O que cada etapa registra está no arquivo da etapa, na seção "Memória".
 
