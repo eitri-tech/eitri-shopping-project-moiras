@@ -177,6 +177,7 @@ Quando o usuário discordar de uma ação, de uma categoria ou da ordem das solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
+approved_by: <usuário>
 applies_to: category | origin | action | solutions
 replaces: []
 ---
