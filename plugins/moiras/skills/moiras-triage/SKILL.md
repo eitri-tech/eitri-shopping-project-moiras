@@ -25,7 +25,7 @@ No modo automático, salve o relatório da Átropos em `<runs.dir>/<run_id>.md` 
 Execute as três etapas **em ordem**:
 
 1. **Cloto** (coleta Jira + Slack, em paralelo): siga `stages/clotho.md`.
-2. **Láquesis** (classificação): siga `stages/lachesis.md`.
+2. **Láquesis** (classificação): siga `stages/lachesis.md`. Depois dela, e antes da Átropos, aplique as interações aprovadas da Cloto, se houver (ver `stages/clotho.md`, "Interações").
 3. **Átropos** (veredito e soluções): siga `stages/atropos.md`.
 
 ## Protocolo entre etapas
