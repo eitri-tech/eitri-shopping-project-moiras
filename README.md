@@ -17,7 +17,7 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
 
 ## Plugin
 
-- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos) e auditoria do knowledge (`moiras-audit`).
+- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos) , indexação dos repositórios (`moiras-index`), sincronização e publicação do knowledge (`moiras-sync`, `moiras-publish`) e auditoria (`moiras-audit`).
 
 ## Como trabalhar neste projeto
 
@@ -79,7 +79,10 @@ Depois, na raiz do projeto, rode `direnv allow` (ou `nix develop`). O `nix-diren
 | Comportamento de cada etapa (contratos, regras) | `plugins/moiras/skills/moiras-triage/stages/*.md` |
 | Orquestração, modos `--auto` e `--full`, leitura e escrita do knowledge | `plugins/moiras/skills/moiras-triage/SKILL.md` |
 | Auditoria e ajustes do knowledge (revisão aprovada por quem audita) | `plugins/moiras/skills/moiras-audit/SKILL.md` |
+| Indexação dos repositórios (gera o glossário a partir do código) | `plugins/moiras/skills/moiras-index/SKILL.md` |
+| Sincronização e publicação do knowledge compartilhado | `plugins/moiras/skills/moiras-sync/SKILL.md`, `plugins/moiras/skills/moiras-publish/SKILL.md` |
 | Memória das etapas (hash + JSONL) | `plugins/moiras/scripts/memory.ts` |
+| Regras dos registros do knowledge (`hash`, `check`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
 | Modelo de configuração (épico, Slack, agências, interações, auditores, knowledges, pastas) | `plugins/moiras/config/sources.example.json` |
 
 O knowledge (glossário de repositórios, critérios e aprendizado) não fica neste repositório: ele é local (`.moiras/knowledge/`, fora do git) ou fica em repositórios privados criados a partir de um template público de knowledge. Regras do projeto, convenções e o domínio estão no [AGENTS.md](AGENTS.md). O Node roda os `.ts` direto (sem build): sintaxe apagável e imports locais com extensão `.ts`.
@@ -139,7 +142,9 @@ Dentro da sessão:
 2. Conecte o Jira e o Slack ao Claude (conectores do claude.ai ou servidores MCP). O plugin não traz servidor próprio.
 3. Rode `/moiras:moiras-triage PROJ-100` (interativo) ou `/moiras:moiras-triage PROJ-100 --auto` (sem perguntas, só o que mudou; relatório em `.moiras/runs/`).
 4. Para revisar o knowledge fora de uma triagem, rode `/moiras:moiras-audit` (ou `/moiras:moiras-audit criteria`). É só interativa: cada ajuste espera o seu "sim". `audit.auditors` em `.moiras/sources.json` é opcional e limita quem pode fazer ajustes.
-5. Depois de editar arquivos do plugin, rode `/reload-plugins` na sessão.
+5. Para criar o glossário a partir do código, rode `/moiras:moiras-index` (preencha `index` em `.moiras/sources.json`). Ela só lê os repositórios e grava `glossary/` no knowledge local depois do seu "sim".
+6. Com knowledges compartilhados (`repository` na configuração), rode `/moiras:moiras-sync <nome>` para trazer o que foi mergeado e `/moiras:moiras-publish <nome>` para abrir um PR com o que é novo no seu knowledge local. Nenhuma das duas faz push na branch principal nem merge.
+7. Depois de editar arquivos do plugin, rode `/reload-plugins` na sessão.
 
 Para instalar a partir do repositório, como o time faria:
 

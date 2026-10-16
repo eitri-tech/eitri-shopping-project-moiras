@@ -1,0 +1,60 @@
+---
+name: moiras-sync
+description: Traz para a máquina o que foi mergeado nos repositórios de knowledge compartilhados (projeto, grupo, global), só avançando o clone local, e mostra o que chegou. Nunca envia nada. Use antes de uma triagem quando algum knowledge tiver `repository`, ou quando o usuário pedir para sincronizar (ex.: "sincroniza o knowledge do time", "traz as novidades do knowledge").
+argument-hint: "[knowledge...] [--auto]"
+allowed-tools: Bash(node:*)
+---
+
+# Sincronização do knowledge
+
+Argumentos: `$ARGUMENTS`
+
+Os knowledges com `repository` no `.moiras/sources.json` são clones de repositórios git privados, criados a partir do template público de knowledge. A triagem lê esses clones direto (ver `moiras-triage/SKILL.md`, "Knowledge"), então sincronizar é deixar cada clone igual à `main` do repositório dele. **Só traz, nunca envia**: quem publica é o `moiras-publish`.
+
+A skill nunca toca em `.moiras/knowledge` (escopo `local`), no Jira, no Slack nem nos repositórios de código.
+
+## Modos
+
+| Modo | Como | Comportamento |
+|---|---|---|
+| Interativo (padrão) | o usuário chama a skill | pode clonar um knowledge que ainda não existe, depois do "sim"; mostra o que chegou |
+| Automático | `--auto` (ex.: antes do cron da triagem) | nunca pergunta; só avança clones que já existem; salva o relatório em `<runs.dir>/sync-<sync_id>.md` |
+
+`sync_id` = horário de início em ISO 8601 UTC. No `--auto`, o ambiente precisa permitir os comandos git abaixo (`status`, `fetch`, `merge --ff-only` e os de leitura), porque nada é perguntado.
+
+Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo knowledge com `repository`.
+
+## Passos (por knowledge)
+
+1. **Verificar o clone.**
+   - `dir` não existe: no modo interativo, pergunte e, com o "sim", rode `git clone <repository> <dir>`; no `--auto`, pule e avise.
+   - `dir` existe: confira que é um repositório git e que o `origin` é o `repository` declarado (ignore `.git` no fim e a diferença entre ssh e https). Se não for, **pare** nesse knowledge e avise: a pasta pode ser de outro repositório.
+2. **Garantir que o clone está limpo e na branch padrão.** `git status --porcelain` precisa vir vazio, e a branch atual precisa ser a padrão (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`). Se houver alteração local ou outra branch (por exemplo, uma branch de `moiras-publish` ainda aberta), **pare** nesse knowledge, diga o motivo e deixe a decisão com o usuário. Nunca faça `stash`, `checkout`, `reset` nem descarte nada.
+3. **Buscar.** `git fetch origin`.
+4. **Avançar.** `git merge --ff-only origin/<padrão>`. Se não for possível avançar (o clone tem commits locais ou divergiu), **pare** e avise. Nunca faça merge com commit, rebase, `reset` ou `pull --force`.
+5. **Conferir o que chegou.** Compare o commit anterior com o novo: `git log --oneline <antes>..<depois>` e `git diff --name-status <antes> <depois>`. Agrupe por pasta (`glossary/`, `criteria/`, `learnings/`) e por ação (novo, alterado, removido). Não mostre o conteúdo dos arquivos.
+6. **Validar.** Rode a checagem no clone e relate só caminho e regra:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir>
+   ```
+
+   Registro fora das regras (segredo, caminho pessoal, código acima de 20 linhas, sem `indexed_at`/`created_at`) é apontado, não corrigido: o clone é um espelho. Quem corrige é o `moiras-audit` num PR, ou o repositório de origem.
+7. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local .moiras/knowledge --shared <dir>
+   ```
+
+   Liste-os no relatório como "já no compartilhado". A cópia local **não é apagada** por esta skill (aprendizado não se apaga); na leitura, o `local` já tem precedência sobre o compartilhado.
+
+## Relatório
+
+Por knowledge: `name`, `scope`, situação (`updated`, `unchanged`, `cloned`, `skipped`, `stopped`), commits trazidos, arquivos por pasta e ação, os achados da validação e os registros já no compartilhado. Quando parar ou pular, o motivo vem em uma frase. Sem texto bruto de issues ou conversas.
+
+## Limites
+
+- Só `git fetch` e `git merge --ff-only` num clone que já é do knowledge (e `git clone` de um knowledge declarado, com o "sim"). Nada de `push`, `commit`, `checkout`, `reset`, `rebase`, `stash` ou `clean`.
+- O sync não cria nem altera registros em nenhum knowledge: não escreve no `local` e não altera o clone além de avançá-lo.
+- Se o knowledge declarado tem `repository` mas o usuário não quer sincronizar, a triagem funciona com o que já estiver no clone, e o conteúdo velho é sinalizado por `indexed_at` e `created_at`.
+- Identificadores (campos, valores fixos) em inglês; relatórios em português.
