@@ -14,10 +14,11 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
   - [Checagens](#checagens)
   - [Rodar o script de memória na mão](#rodar-o-script-de-memória-na-mão)
   - [Testar o plugin no Claude Code](#testar-o-plugin-no-claude-code)
+  - [Teste real das skills de knowledge](#teste-real-das-skills-de-knowledge)
 
 ## Plugin
 
-- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos) , indexação dos repositórios (`moiras-index`), sincronização e publicação do knowledge (`moiras-sync`, `moiras-publish`) e auditoria (`moiras-audit`).
+- [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos), indexação dos repositórios (`moiras-index`), sincronização e publicação do knowledge (`moiras-sync`, `moiras-publish`) e auditoria (`moiras-audit`).
 
 ## Como trabalhar neste projeto
 
@@ -101,7 +102,7 @@ O knowledge (glossário de repositórios, critérios e aprendizado) não fica ne
 Na raiz do projeto, no Ubuntu sem Nix:
 
 ```bash
-# testes automatizados do script de memória (node:test)
+# testes automatizados dos scripts de memória e de knowledge (node:test)
 node --test plugins/moiras/scripts/*.test.ts
 
 # erros de tipo (precisa do passo opcional de tipos da seção 1)
@@ -154,3 +155,27 @@ Para instalar a partir do repositório, como o time faria:
 ```
 
 > Sem glossário nem critérios no knowledge, a Láquesis devolve categoria `unknown` com confiança baixa e o aviso `criteria-missing`; é o comportamento esperado, não um erro.
+
+### Teste real das skills de knowledge
+
+Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-publish` num projeto de verdade. Os passos 1 a 6 só leem os seus repositórios e escrevem em `.moiras/` (fora do git); só o passo 8 sai da máquina, e abre um PR num knowledge privado.
+
+1. **Clone o plugin** e confira o ambiente: `node --test plugins/moiras/scripts/*.test.ts` (Node LTS; `nvm use` ou `nix develop`).
+2. **Crie uma pasta de teste fora do repositório** (ex.: `~/moiras-teste`) com um `.moiras/sources.json` mínimo. Os caminhos são relativos à pasta que contém `.moiras/`. Comece com um único repositório; `roots` descobre vários de uma vez.
+
+   ```json
+   {
+     "knowledge": [{ "name": "local", "scope": "local", "dir": ".moiras/knowledge" }],
+     "index": { "repositories": [{ "name": "acme-shop-checkout", "path": "../acme-shop-checkout" }] }
+   }
+   ```
+
+3. **Abra o Claude nessa pasta** com o plugin: `claude --plugin-dir <clone>/plugins/moiras`. O `/help` lista as cinco skills.
+4. **Indexe:** `/moiras:moiras-index`. Nada é gravado antes do seu "sim" à lista. Depois confira o `glossary/<repo>.md` e rode `node <clone>/plugins/moiras/scripts/knowledge.ts check .moiras/knowledge`: sem achados; `url` sem credencial, `local_path` relativo, `owner` vazio ou um time, e nenhum trecho de código.
+5. **Reindexe:** sem mudanças, o repositório volta como `unchanged` e o arquivo não muda; mexa na estrutura do código (uma pasta nova em `src/`) e ele volta como `changed`.
+6. **Audite:** `/moiras:moiras-audit glossary`. Com o `indexed_at` alterado para mais de 6 meses atrás, a skill aponta o glossário velho e só sugere `moiras-index`.
+7. **Sincronize:** acrescente em `knowledge` um item com `scope: project`, `repository` e `dir` do knowledge privado e rode `/moiras:moiras-sync <nome>`. Ela pergunta antes de clonar; um clone sujo ou divergente a faz parar, sem mexer em nada.
+8. **Publique:** `/moiras:moiras-publish <nome>`. A skill mostra a lista exata, só copia depois do "sim", cria o branch `moiras/publish-<id>` e abre o PR (com o `gh`, ou mostrando o endereço de comparação). Nada na `main`, nenhum merge. Feche o PR e apague o branch se não quiser manter o glossário de teste.
+9. **Triagem (opcional):** com Jira e Slack conectados, siga o passo 1 de "Testar o plugin no Claude Code" e confira se a Láquesis cita `knowledge:local/glossary/...`.
+
+Ao testar, anote onde a skill perguntou o que a documentação não prevê (ou não perguntou onde devia), campos do glossário errados ou inventados e mensagens de erro, sem colar conteúdo de repositório ou de issue. Limpeza: apague a pasta de teste e o clone do knowledge.
