@@ -55,6 +55,8 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 
 O que a máquina lê é em inglês: flags, pastas, nomes de arquivo, chaves de configuração e de frontmatter, campos dos contratos e valores fixos (ex.: `action: needs-info`, `change: unchanged`, `result: resolved`). O que pessoas leem é em português: documentação, justificativas, relatórios e descrições.
 
+Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_at`, `created_at`); na coleta e na memória, data e hora com fuso, de preferência em UTC (ex.: `2026-10-06T18:00:00Z` em `run_id`, `ts`, `resolved_at`). A issue tem o seu `created_at` com hora; o do knowledge é só data.
+
 ## Ambiente
 
 - `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
