@@ -36,7 +36,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 | Glossário com `indexed_at` de mais de 6 meses, vazio ou com `TODO` | `glossary/` | só sugerir rodar `moiras-index`; a skill não edita o glossário |
 | Solução com `result: pending` há muito tempo | `learnings/solutions/` | perguntar o desfecho e atualizar `result` e a observação |
 | Solução com `result: not-resolved` e sem observação do que mudou | `learnings/solutions/` | pedir a observação |
-| Soluções resolvidas que se repetem | `learnings/solutions/` | propor padrão (`patterns/`) ou decisão (`decisions/`) |
+| Soluções resolvidas que se repetem | `learnings/solutions/` | só sugerir no relatório; criar padrão ou decisão é com a Átropos, numa triagem |
 | Critérios que se contradizem ou se sobrepõem | `criteria/` | unir num critério regenerado (`replaces`) |
 | Critério sem `approved_by` ou sem `created_at` | `criteria/` | regenerar o critério com `replaces`, completando os campos com o auditor |
 | Aprendizado sem `created_at` | `learnings/` | só sinalizar no relatório: o registro não é editado e segue sem valer como fonte |
@@ -80,5 +80,5 @@ Ao achar segredo, token, dado pessoal ou texto bruto num registro, o ajuste é s
 - Critérios só mudam por regeneração (`replaces`), com o "sim" do auditor.
 - O glossário vem do código: a skill nunca o edita, só sugere a reindexação.
 - O knowledge nunca recebe cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
-- Registros novos (critério regenerado, padrão ou decisão) levam `created_at` em formato de data; o glossário leva `indexed_at`, mas só a indexação o grava.
+- A auditoria não cria aprendizado (`solutions/`, `patterns/` ou `decisions/`); o critério regenerado leva `created_at` em formato de data; o glossário leva `indexed_at`, mas só a indexação o grava.
 - Identificadores (campos, valores fixos, pastas) em inglês; justificativas e relatórios em português.
