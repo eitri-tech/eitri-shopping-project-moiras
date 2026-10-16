@@ -19,6 +19,8 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    ```
 
    Em projetos que ainda usam o campo antigo de épico, troque `parent = <EPIC>` por `"Epic Link" = <EPIC>`.
+
+   Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
 3. Para cada issue, calcule `buffer_days` = data fim do épico − `duedate` da issue.
    - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
    - `duedate` depois da data fim do épico: aviso `exceeds-epic`.
@@ -65,6 +67,30 @@ Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issu
 
 Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver documentada nesta etapa, não a use.
 
+## Interações (opcional)
+
+Além de ler, a Cloto pode sinalizar nas próprias fontes que viu o item e ligar uma fonte à outra, com a menor ação possível. **Está desligada por padrão**: só vale com `interactions.enabled: true` em `.moiras/sources.json`.
+
+Ações permitidas (e só estas):
+
+| Fonte | Tipo | O que faz |
+|---|---|---|
+| Slack | `reaction` | reage com o emoji de `interactions.slack.reaction` (padrão `eyes`) nas mensagens coletadas que citam uma issue a triar: "vista pela triagem" |
+| Jira | `comment` | comenta na issue, uma linha, que ela foi citada no Slack, com o link da mensagem |
+
+Outras fontes que forem adicionadas ficam só de leitura: não há interação para elas.
+
+Regras:
+
+1. **Aprovação.** A Cloto nunca escreve sozinha: na saída ela só propõe, com `status: proposed`. A escrita acontece depois da Láquesis, quando a agência final de cada issue já é conhecida, e antes da Átropos. Nesse ponto, a skill mostra a lista de `interactions` (alvo, tipo, texto, link) ao usuário. O "sim" aplica exatamente aquela lista; o usuário pode tirar itens, e itens novos precisam de nova aprovação. Sem resposta ou com "não", nada é aplicado.
+2. **Modo automático.** Sem perguntas, então só a reação, que é de baixo impacto, e só se `reaction` estiver em `interactions.auto_types` (padrão `["reaction"]`), é aplicada sem o "sim". O comentário no Jira nunca é aplicado no `--auto`, mesmo que apareça em `auto_types`: fica com `status: proposed` e aparece no relatório para o usuário aprovar depois. As regras 3 a 8 valem igual.
+3. **Texto.** Uma linha em português, começando com `Moiras:`, por exemplo `Moiras: esta issue foi citada no Slack em 03/10 (<link>)`. Nada de texto bruto de issues ou conversas, segredos ou dados pessoais.
+4. **Agência.** Issue com `agency` (do Jira ou do glossário, já resolvida pela Láquesis) ou com o aviso `agency-ambiguous` (a agência não pôde ser definida, então a issue é tratada como se tivesse agência) nunca recebe comentário no Jira, porque ele pode ser visível a externos e o repasse à agência é um rascunho que o usuário envia. Para ela só vale a reação no Slack.
+5. **Chaves liga/desliga.** `interactions.jira.comment: false` desliga a proposta de comentários no Jira; `interactions.slack.reaction` define o emoji, e, sem ele, o padrão é `eyes`.
+6. **Sem repetir.** Antes de propor, consulte `query clotho --key interaction:<source>:<alvo>:<tipo>`; se já existe, pule. Depois de aplicar com sucesso, registre essa chave com `record clotho` (`content` = tipo, texto e link, que vira hash). Esses registros não contam para o `change` das issues.
+7. **Falha.** Conector sem permissão de escrita ou erro da API: marque a interação como `failed`, acrescente o aviso `interaction-failed:<fonte>` e siga a triagem. Não tente de novo na mesma execução.
+8. **Nunca**: editar ou apagar conteúdo, atribuir ou transicionar issue, criar issue, postar mensagem nova no Slack, nem qualquer ação fora da tabela acima.
+
 ## Saída
 
 ```json
@@ -82,6 +108,7 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
         "status": "To Do",
         "duedate": "2026-11-30",
         "buffer_days": 15,
+        "agency": "Agência Aurora | null",
         "change": "new | changed | unchanged",
         "warnings": []
       }
@@ -113,6 +140,16 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
     ],
     "without_issue": []
   },
+  "interactions": [
+    {
+      "id": "slack:C0123456789:1696341120.000100:reaction",
+      "source": "slack",
+      "type": "reaction | comment",
+      "target": "<permalink ou chave>",
+      "content": "eyes | Moiras: ...",
+      "status": "proposed | applied | skipped | failed"
+    }
+  ],
   "errors": []
 }
 ```
@@ -143,6 +180,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 ```
 
 - `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
+- Inclua `agency` em `content` das issues só quando houver valor: assim as issues sem agência mantêm o hash de antes, e trocar a agência conta como `changed`.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
 - No modo automático (sem `--full`), só issues `new` ou `changed` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
 
@@ -150,7 +188,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 
 Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem do Jira:
 
-- `key`, `summary`, `description`, `priority`: do item de `jira.issues`.
+- `key`, `summary`, `description`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
 - `warnings`: os da issue (`no-due-date`, `exceeds-epic`) mais os da coleta (`slack-unavailable`).
@@ -159,4 +197,4 @@ Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como cont
 
 O item completo de `jira.issues` (com `description`, `duedate` e `buffer_days`) fica guardado: ele é o `ticket` da entrada da Átropos.
 
-Somente leitura: esta etapa nunca cria, comenta ou atribui issues, nem posta no Slack.
+A coleta é somente leitura. As únicas escritas possíveis são as interações opcionais acima (reação e comentário curto), aprovadas pelo usuário. Esta etapa nunca cria ou atribui issues, nem posta mensagens novas no Slack. Com `interactions` desligado, `interactions` na saída é `[]`.

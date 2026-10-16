@@ -6,7 +6,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 
 - **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack (hoje as fontes esperadas; outras podem ser adicionadas)
 - **Láquesis** (mede): identifica repositório e componente pelo glossário, classifica e avalia duplicados
-- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
+- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado; se a task é gerida por uma agência, oferece um rascunho para repassar a solução a ela
 
 ## Estrutura
 
@@ -16,12 +16,14 @@ moiras/
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
-    └── moiras-triage/
-        ├── SKILL.md                # orquestra as três etapas e define o knowledge
-        └── stages/
-            ├── clotho.md           # coleta
-            ├── lachesis.md         # classificação
-            └── atropos.md          # veredito
+    ├── moiras-triage/
+    │   ├── SKILL.md                # orquestra as três etapas e define o knowledge
+    │   └── stages/
+    │       ├── clotho.md           # coleta
+    │       ├── lachesis.md         # classificação
+    │       └── atropos.md          # veredito
+    └── moiras-audit/
+        └── SKILL.md                # auditoria e ajustes do knowledge
 ```
 
 ## Knowledge
@@ -33,12 +35,17 @@ O knowledge não vem no plugin: é o que o time sabe e não está no código (gl
 
 Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Detalhes em `skills/moiras-triage/SKILL.md`.
 
+Para revisar o knowledge fora de uma triagem, use a skill `moiras-audit`: ela aponta registros velhos, pendentes, conflitantes ou fora das regras e aplica cada ajuste só depois do "sim" de quem audita, do mesmo jeito que o usuário avalia no fim da triagem.
+
 ## Configuração
 
 Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha:
 
-- `jira`: site, épico e data fim do projeto;
+- `jira`: site, épico e data fim do projeto; opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task;
+- `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
+- `interactions` (opcional, desligado por padrão): deixa a Cloto reagir no Slack (emoji `slack.reaction`) e comentar no Jira que a issue foi citada, sempre depois do seu "sim" à lista; no `--auto` só as reações (`auto_types`) são aplicadas sem perguntar, e o comentário fica no relatório;
+- `audit` (opcional): `auditors`, a lista de quem pode fazer ajustes no knowledge pela skill `moiras-audit`; sem a chave, qualquer pessoa pode auditar;
 - `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
 - `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
 

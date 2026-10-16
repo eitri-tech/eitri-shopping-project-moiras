@@ -15,6 +15,7 @@ Uma chamada por issue, na ordem da Cloto.
     "summary": "Carrinho zera ao trocar de seller",
     "description": "...",
     "priority": "High",
+    "agency": "Agência Aurora | null",
     "evidence": [
       { "ref": "<permalink do Slack>", "excerpt": "...", "verified_at": "2026-10-03" }
     ],
@@ -31,6 +32,7 @@ Uma chamada por issue, na ordem da Cloto.
       { "repo": "acme-shop-checkout", "reason": "app de checkout da loja citada" }
     ],
     "origin": "platform | app | unknown",
+    "agency": "Agência Aurora | null",
     "complex": false,
     "confidence": 0.78,
     "duplicates": [
@@ -102,7 +104,17 @@ Compartilhar só o componente não é duplicado.
 - `recurrence`: a candidata foi resolvida **antes** desta issue ser criada e o sintoma voltou. Não é duplicado: é sinal de que a correção anterior não bastou.
 - `uncertain`: não dá para saber com as evidências disponíveis.
 
-## 3. Glossário
+## 3. Agência (opcional)
+
+`agency` diz quem gerencia a issue quando não é o time. É opcional: sem agência o valor é `null`, sem aviso, e nada muda no resto da etapa.
+
+1. Se a entrada trouxe `agency` (campo do Jira lido pela Cloto), use-o.
+2. Senão, olhe o campo opcional `agency` do arquivo de cada repositório de `repositories` no glossário. Se todos que têm o campo concordam, use esse valor e cite o arquivo do glossário em `sources`.
+3. Se os repositórios apontam agências diferentes e a entrada não trouxe nenhuma, use `null` e acrescente o aviso `agency-ambiguous:<agência 1>,<agência 2>`. Na dúvida, a Cloto trata a issue como possivelmente gerida por agência e não comenta no Jira.
+
+A Láquesis só informa a agência; quem oferece o repasse da solução é a Átropos.
+
+## 4. Glossário
 
 - A Láquesis **lê** o glossário, mas não o edita: ele é derivado do código pelo `moiras-index`. Termos novos que só aparecem nas issues, repositórios que faltam ou dados desatualizados vão em `glossary_suggestions`; a Átropos os apresenta e, com o "sim" do usuário, eles viram aprendizado (`learnings/patterns/`), não uma edição do glossário.
 - Repositório citado na issue que não está no glossário gera o aviso `repo-not-in-glossary:<nome>`.
@@ -111,7 +123,7 @@ Compartilhar só o componente não é duplicado.
 
 Antes de classificar, calcule o hash da entrada (`hash`, com a entrada completa no stdin) e consulte o último registro da issue (`query lachesis --key <KEY>`).
 
-- Mesmo hash e sem `--full`: reaproveite os campos do registro (`category`, `component`, `repositories`, `origin`, `complex`, `confidence`, `duplicates`), cite o registro como fonte (`ref` = `memory:lachesis/<KEY>@<ts>`) e acrescente o aviso `classification-reused:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo.
+- Mesmo hash e sem `--full`: reaproveite os campos do registro (`category`, `component`, `repositories`, `origin`, `complex`, `confidence`, `duplicates`), cite o registro como fonte (`ref` = `memory:lachesis/<KEY>@<ts>`) e acrescente o aviso `classification-reused:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo. O `agency` não é guardado no registro: recalcule-o a cada execução (seção 3), porque ele pode mudar no Jira ou no glossário sem que a entrada da classificação mude.
 - Caso contrário, classifique e registre:
 
 ```json

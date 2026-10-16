@@ -2,8 +2,12 @@
   "jira": {
     "site": "example.atlassian.net",
     "epic": "PROJ-100",
-    "project_end": "2026-12-15"
+    "project_end": "2026-12-15",
+    "agency_field": "Agency"
   },
+  "agencies": [
+    { "name": "Agência Aurora", "channel": "#proj-agency" }
+  ],
   "slack": {
     "lookback_days": 7,
     "people": [
@@ -19,11 +23,18 @@
       }
     ]
   },
+  "interactions": {
+    "enabled": false,
+    "auto_types": ["reaction"],
+    "slack": { "reaction": "eyes" },
+    "jira": { "comment": true }
+  },
   "knowledge": [
     { "name": "local", "scope": "local", "dir": ".moiras/knowledge" },
     { "name": "acme", "scope": "group", "repository": "git@github.com:<org>/acme-knowledge.git", "dir": "../acme-knowledge" },
     { "name": "team", "scope": "global", "repository": "git@github.com:<org>/team-knowledge.git", "dir": "../team-knowledge" }
   ],
+  "audit": { "auditors": ["Fulano", "Beltrana"] },
   "memory": { "dir": ".moiras/memory" },
   "runs": { "dir": ".moiras/runs" }
 }
