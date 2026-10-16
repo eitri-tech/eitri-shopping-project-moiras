@@ -131,7 +131,7 @@ id: PROJ-123-1
 type: solution
 issue: PROJ-123
 created_at: 2026-10-06
-chosen_by: <usuário>
+chosen_by: <pseudônimo não identificável escolhido pelo usuário>
 agency: Agência Aurora
 repositories: [acme-shop-checkout]
 component: checkout
@@ -177,7 +177,7 @@ Quando o usuário discordar de uma ação, de uma categoria ou da ordem das solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
-approved_by: <usuário>
+approved_by: <pseudônimo não identificável escolhido pelo usuário>
 applies_to: category | origin | action | solutions
 replaces: []
 ---
@@ -189,16 +189,16 @@ replaces: []
 **Por quê:** <o caso que motivou, sem texto bruto da issue>
 ```
 
-Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague os arquivos antigos. Critérios só chegam a um knowledge compartilhado pelo `moiras-publish`, com revisão no PR.
+Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague apenas os arquivos antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; identifique-os em `replaces` pela fonte `knowledge:<name>/<caminho>`. Critérios só chegam a um knowledge compartilhado pelo `moiras-publish`, com revisão no PR.
 
 ## 9. Repasse à agência (opcional)
 
 Só vale para issue com `agency` diferente de `null`. Sem agência, esta seção não existe e nada muda.
 
 - **Quando oferecer:** no modo interativo, logo depois da escolha da solução (ou, quando não há soluções por a ação ser `duplicate` ou `close`, logo depois do veredito), pergunte uma vez: "Quer o repasse para a <agência>?". Se o usuário já pediu o repasse na conversa, não pergunte. No modo automático, não ofereça: só sinalize no relatório as issues geridas por agência.
-- **O que é:** um rascunho em português, que o usuário copia e envia. O plugin não envia, não comenta no Jira nem posta no Slack; qualquer envio é uma ação separada, com aprovação explícita daquela operação (ver `SKILL.md`, Limites).
+- **O que é:** um rascunho em português, que o usuário copia e envia. O plugin nunca envia o repasse à agência, nem com aprovação: não comenta no Jira, não posta no Slack nem usa outro canal para esse envio (ver `SKILL.md`, Limites).
 - **De qual solução:** a escolhida. Se o usuário pedir o repasse sem ter escolhido, use a de maior confiança e diga no rascunho que a escolha ainda não foi confirmada. Sem soluções (`duplicate` ou `close`), o rascunho comunica a ação: qual é a issue duplicada (só a chave) ou o motivo do fechamento, e o que se espera da agência (por exemplo, acompanhar a outra issue ou confirmar o encerramento).
 - **Conteúdo:** chave e resumo da issue; o problema; a causa provável (ou "indeterminada"); a solução (descrição, passos e riscos), quando existir; o que se espera da agência (implementar, validar, responder uma dúvida, acompanhar a issue duplicada ou confirmar o encerramento); e a confiança da solução, quando houver.
-- **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes de outros clientes, segredos nem dados pessoais. Monte o rascunho só com o que a agência consegue ver (a issue do Jira, o código e a solução): não parafraseie fatos que só vieram de conversas internas do Slack. Se o problema, a causa ou a solução dependem de informação assim, deixe essa parte de fora, marque-a como "a confirmar" e avise o usuário para ele decidir o que pode ser compartilhado. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
+- **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes ou quaisquer dados de outros clientes, segredos nem dados pessoais. Monte o rascunho só com o que a agência consegue ver (a issue do Jira, o código e a solução): não parafraseie fatos que só vieram de conversas internas do Slack. Se o problema, a causa ou a solução dependem de informação assim, deixe essa parte de fora, marque-a como "a confirmar" e avise o usuário para ele decidir o que pode ser compartilhado. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
 - **Para onde:** se a agência estiver em `agencies` na configuração e tiver `channel`, sugira esse canal como destino. Agência que não está na lista funciona do mesmo jeito, só sem sugestão de destino.
 - **Depois:** o `agency` fica no registro do aprendizado (seção 7). O repasse em si não é gravado.

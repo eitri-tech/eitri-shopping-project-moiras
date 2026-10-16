@@ -186,6 +186,8 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 
 ## Entrada da Láquesis
 
+Antes do filtro incremental descrito acima, a skill resolve os repositórios no glossário atual e recalcula a agência de todas as issues coletadas pela seção 3 da Láquesis, inclusive `unchanged`. Esse passo obrigatório não depende do hash de Jira/Slack nem do cache da classificação. O filtro limita apenas a classificação completa e o veredito; as interações e o relatório sempre usam a agência e os avisos atuais.
+
 Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem do Jira:
 
 - `key`, `summary`, `description`, `priority`, `agency`: do item de `jira.issues`.
