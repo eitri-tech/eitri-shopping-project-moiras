@@ -227,12 +227,18 @@ describe('check', () => {
     record('citacao-sem-ref', quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``));
     record('citacao-ok', `${reference}\n\n${quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``)}\n\n> só uma citação, sem código`);
     record('lista-longo', `- passo\n\n  ${reference}\n\n  \`\`\`ts\n${code(21, '  ')}\n  \`\`\``);
+    record('lista-indent', `- passo ${reference}\n\n${code(21, '      ')}`);
+    record('quatro-espacos', `${reference}\n\n    \`\`\`ts\n${code(19, '    ')}\n    \`\`\``);
+    record('tres-espacos', `${reference}\n\n   \`\`\`ts\n${code(3, '   ')}\n   \`\`\``);
+    record('lista-continua', `- passo ${reference}\n\n    texto que continua o item\n\n    mais texto do mesmo item`);
     assert.deepEqual(rules(local), [
       'learnings/patterns/citacao-longo.md:code-too-long',
       'learnings/patterns/citacao-sem-ref.md:code-without-reference',
       'learnings/patterns/indent-longo.md:code-too-long',
       'learnings/patterns/indent-sem-ref.md:code-without-reference',
+      'learnings/patterns/lista-indent.md:code-too-long',
       'learnings/patterns/lista-longo.md:code-too-long',
+      'learnings/patterns/quatro-espacos.md:code-too-long',
       'learnings/patterns/til-aberto.md:code-fence-unclosed',
       'learnings/patterns/til-longo.md:code-too-long',
     ]);

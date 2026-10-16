@@ -147,56 +147,71 @@ interface CodeBlock {
   size: number; // lines of code, fences excluded
 }
 
-const fenceOpening = /^\s*(`{3,}|~{3,})/;
-/** The line without its blockquote markers (`> > `) and, before a fence, its list marker (`- `, `1. `). */
-const unwrap = (line: string): string =>
-  line.replace(/^(?:\s{0,3}>[ \t]?)+/, '').replace(/^(\s*)(?:[-*+]|\d+[.)])[ \t]+(?=(?:`{3,}|~{3,}))/, '$1');
-const listItem = /^\s*(?:[-*+]|\d+[.)])\s/;
+const unwrap = (line: string): string => line.replace(/^(?:\s{0,3}>[ \t]?)+/, '');
+const expandTabs = (line: string): string => line.replace(/^[ \t]+/, ws => ws.replaceAll('\t', '    '));
+const fenceStart = /^(`{3,}|~{3,})/;
+const listMarker = /^([-*+]|\d{1,9}[.)])( +|$)/;
 
 /**
- * Code blocks from line `from` on, as Markdown reads them (also inside blockquotes and list items): fenced with ``` or ~~~ (closed by a fence of the
- * same character, at least as long), and indented by 4 spaces or a tab after a blank line. Indented lines that
- * continue a list item are text, not code. `unclosed` is the line of a fence that never closes.
+ * Code blocks from line `from` on, as CommonMark reads them: fenced with ``` or ~~~ (up to 3 spaces of
+ * indentation, relative to the list item that holds it; closed by a fence of the same character, at least as
+ * long), or indented by 4 spaces past the enclosing content (after a blank line). Blockquote markers are
+ * stripped, and list items shift the content column, so a fence or code block nested in a quote or in a list
+ * item is found too, while an indented paragraph that continues a list item is text. `unclosed` is the line
+ * of a fence that never closes.
  */
 function codeBlocks(rawLines: string[], from: number): { blocks: CodeBlock[]; unclosed?: number } {
-  const lines = rawLines.map(unwrap);
+  const lines = rawLines.map(line => expandTabs(unwrap(line)));
   const blocks: CodeBlock[] = [];
-  let unclosed: number | undefined;
-  const indented = (line: string) => /^(?: {4}|\t)/.test(line) && line.trim() !== '';
+  const contents: number[] = []; // content column of each open list item, outermost first
+  const indentOf = (line: string) => line.length - line.trimStart().length;
+  let previousBlank = true;
   for (let i = from; i < lines.length; i++) {
-    const fence = fenceOpening.exec(lines[i]!);
+    const line = lines[i]!;
+    if (line.trim() === '') {
+      previousBlank = true;
+      continue;
+    }
+    const indent = indentOf(line);
+    if (previousBlank) while (contents.length > 0 && indent < contents.at(-1)!) contents.pop();
+    let rest = line.slice(indent);
+    let relative = indent - (contents.at(-1) ?? 0);
+    if (relative <= 3) {
+      const marker = listMarker.exec(rest);
+      if (marker) {
+        while (contents.length > 0 && indent < contents.at(-1)!) contents.pop();
+        const gap = marker[2]!.length;
+        const width = marker[1]!.length + (gap === 0 || gap > 4 ? 1 : gap);
+        contents.push(indent + width);
+        rest = rest.slice(width);
+        relative = rest.length - rest.trimStart().length;
+        rest = rest.trimStart();
+        if (rest === '') {
+          previousBlank = false;
+          continue;
+        }
+      }
+    }
+    previousBlank = false;
+    const fence = relative <= 3 ? fenceStart.exec(rest) : null;
     if (fence) {
       const mark = fence[1]!;
       const closing = new RegExp(`^\\s*${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
-      let close = -1;
-      for (let j = i + 1; j < lines.length; j++) {
-        if (closing.test(lines[j]!)) {
-          close = j;
-          break;
-        }
-      }
-      if (close === -1) {
-        unclosed = i;
-        break;
-      }
+      const close = lines.findIndex((candidate, j) => j > i && closing.test(candidate));
+      if (close === -1) return { blocks, unclosed: i };
       blocks.push({ open: i, close, size: close - i - 1 });
       i = close;
       continue;
     }
-    if (indented(lines[i]!)) {
-      let before = i - 1;
-      while (before >= from && lines[before]!.trim() === '') before--;
-      const afterBlank = i === from || lines[i - 1]!.trim() === '';
-      const afterList = before >= from && (listItem.test(lines[before]!) || indented(lines[before]!));
-      if (afterBlank && !afterList) {
-        let end = i;
-        for (let j = i + 1; j < lines.length && (indented(lines[j]!) || lines[j]!.trim() === ''); j++) if (lines[j]!.trim() !== '') end = j;
-        blocks.push({ open: i, close: end, size: end - i + 1 });
-        i = end;
-      }
+    if (relative >= 4 && (i === from || lines[i - 1]!.trim() === '')) {
+      const base = indent - relative + 4;
+      let end = i;
+      for (let j = i + 1; j < lines.length && (lines[j]!.trim() === '' || indentOf(lines[j]!) >= base); j++) if (lines[j]!.trim() !== '') end = j;
+      blocks.push({ open: i, close: end, size: end - i + 1 });
+      i = end;
     }
   }
-  return unclosed === undefined ? { blocks } : { blocks, unclosed };
+  return { blocks };
 }
 
 export function check(dir: string, only?: Scope): { checked: number; findings: Finding[] } {
