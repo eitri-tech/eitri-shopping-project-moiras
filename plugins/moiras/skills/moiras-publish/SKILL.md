@@ -23,7 +23,7 @@ Ela copia do knowledge `local` (`<local-dir>`) para um clone do destino, num bra
 4. **Planejar.** Compare o local com o destino:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir> --shared-name <name>
    ```
 
 5. **Validar a seleção.** Depois de escolher os itens e antes de pedir o "sim", monte uma pasta temporária só com os arquivos exatos a copiar, preservando os caminhos relativos, e rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <seleção>`. Exija resultado limpo, sem erros nem avisos; falha ou resultado inconclusivo interrompe a publicação. Aponte só caminho e regra, sem repetir conteúdo. `chosen_by` e `approved_by` devem ser pseudônimos não identificáveis: recuse e-mail (também sinalizado pelo `check`), nome real aparente ou identificador de conta, mesmo que o script não detecte. Dúvida exige correção antes de publicar.

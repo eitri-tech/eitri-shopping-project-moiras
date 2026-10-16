@@ -439,10 +439,26 @@ describe('security regressions', () => {
     write('shared', 'criteria/a.md', criterion('a'));
     write('shared', 'criteria/b.md', criterion('b'));
     write('local', 'criteria/c.md', criterion('c', 'a, knowledge:acme/criteria/b.md, knowledge:acme/criteria/../a.md'));
-    assert.deepEqual(plan(local, shared).remove, [
+    assert.deepEqual(plan(local, shared, 'acme').remove, [
       { path: 'criteria/a.md', replacedBy: 'criteria/c.md' },
       { path: 'criteria/b.md', replacedBy: 'criteria/c.md' },
     ]);
+  });
+
+  it('leaves qualified replacements unresolved for another or unnamed knowledge', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('local', 'criteria/c.md', criterion('c', 'knowledge:group-a/criteria/a.md'));
+    assert.deepEqual(plan(local, shared, 'group-b').remove, []);
+    assert.deepEqual(plan(local, shared).remove, []);
+  });
+
+  it('flags an e-mail inside a URL but not URL userinfo or scp-style git remotes', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'Convite https://example.test/invite?email=real.person@example.com'));
+    assert.ok(check(local).findings.some(f => f.rule === 'personal-data'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'Use git@github.com:org/repo.git e ssh://git@example.com/org/repo.git.'));
+    assert.ok(!check(local).findings.some(f => f.rule === 'personal-data'));
   });
 
   it('canonicalizes optional metadata and preserves the hash without metadata', t => {

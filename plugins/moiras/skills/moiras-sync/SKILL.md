@@ -46,7 +46,7 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
 8. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir> --shared-name <name>
    ```
 
    Liste-os no relatório como "já no compartilhado". A cópia local **não é apagada** por esta skill (aprendizado não se apaga); na leitura, o `local` já tem precedência sobre o compartilhado.

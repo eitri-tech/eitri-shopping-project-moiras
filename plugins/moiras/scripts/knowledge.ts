@@ -1,7 +1,7 @@
 /* Usage:
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
- * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge
+ * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
  * to a knowledge and never print the content of a record, only paths, rules and line numbers.
@@ -16,7 +16,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | plan --local <dir> --shared <dir>';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | plan --local <dir> --shared <dir> [--shared-name <name>]';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -232,7 +232,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (hasSecret(line)) add('secret', 'error', index + 1);
       for (const { rule, test } of patterns) {
         const safeLine = rule === 'url-credentials' ? line.replace(/\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi, (url, info: string) => info.split(':').every(placeholder) ? '' : url) : line;
-        const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s]{1,8192}/gi, '') : safeLine;
+        const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s/@]{1,512}@/gi, '').replace(/\bgit@(?=[\w.-]+:)/g, '') : safeLine;
         if (test.test(candidate) && !(rule === 'secret' && hasSecret(line))) add(rule, 'error', index + 1);
       }
     });
@@ -304,7 +304,7 @@ function staleOutcome(local: Doc, shared: Doc): string | null {
   return observation(local).startsWith(observation(shared)) ? null : 'shared-observation-not-kept';
 }
 
-export function plan(localDir: string, sharedDir: string): Plan {
+export function plan(localDir: string, sharedDir: string, sharedName?: string): Plan {
   const shared = new Map(records(sharedDir).filter(entry => !entry.issue).map(entry => [entry.path, entry]));
   const items: Item[] = [];
   const remove: Plan['remove'] = [];
@@ -329,8 +329,9 @@ export function plan(localDir: string, sharedDir: string): Plan {
     if (kind.type === 'criterion' && doc) {
       const replaces = Array.isArray(doc.fields.replaces) ? doc.fields.replaces : [];
       for (const id of replaces) {
-        const source = /^knowledge:[a-zA-Z0-9_-]+\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
-        const old = source ? source[1]! : /^[a-zA-Z0-9_-]+$/.test(id) ? `${kind.dir}/${id}.md` : '';
+        // A qualified reference only counts for the knowledge it names; without --shared-name it stays unresolved.
+        const source = /^knowledge:([a-zA-Z0-9_-]+)\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
+        const old = source ? (source[1] === sharedName ? source[2]! : '') : /^[a-zA-Z0-9_-]+$/.test(id) ? `${kind.dir}/${id}.md` : '';
         if (shared.has(old) && old !== path) remove.push({ path: old, replacedBy: path });
       }
     }
@@ -393,6 +394,7 @@ export function main(argv: string[]): { output: string; code: number } {
         only: { type: 'string' },
         local: { type: 'string' },
         shared: { type: 'string' },
+        'shared-name': { type: 'string' },
       },
     });
   } catch (error) {
@@ -410,7 +412,7 @@ export function main(argv: string[]): { output: string; code: number } {
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);
-    return { output: JSON.stringify(plan(values.local, values.shared)), code: 0 };
+    return { output: JSON.stringify(plan(values.local, values.shared, values['shared-name'])), code: 0 };
   }
   throw new Error(usage);
 }
