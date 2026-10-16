@@ -9,7 +9,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 ```json
 {
   "input": {
-    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15 },
+    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15 },
     "classification": "<saída da Láquesis para esta issue, com os avisos acumulados>",
     "precedents": [
       { "id": "PROJ-187-1", "solution": "", "result": "resolved | not-resolved | pending", "ref": "knowledge:local/learnings/solutions/PROJ-187-1.md" }
@@ -97,7 +97,7 @@ Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo
 
 Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
 
-No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`).
+No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`), recuperando as soluções completas pelo relatório da execução (seção 6).
 
 No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha e as que são geridas por agência.
 
@@ -116,6 +116,10 @@ Registre cada veredito em `record atropos`, inclusive no modo automático:
   "choice": null
 }
 ```
+
+O `run_id` é a referência persistente ao relatório completo `<runs.dir>/<run_id>.json`; dentro dele, localize a saída da Átropos pela chave da issue. Persista esse arquivo antes de registrar o veredito: ele deve conter a justificativa e todas as soluções na ordem original, com descrição, passos, riscos, fontes e os demais campos do contrato. Título e confiança da memória são apenas um resumo. Não substitua as soluções originais nem remova relatórios com escolhas pendentes; mantenha o `runs.dir` original acessível se a configuração mudar.
+
+Ao retomar, consulte também os relatórios anteriores: um veredito posterior da mesma issue não encerra uma escolha pendente anterior. Apresente cada conjunto por `(run_id, key)` e registre a escolha com o `run_id` do conjunto exibido, preservando a numeração. Guarde também `choice` (e o `id` do aprendizado, quando houver) no item desse relatório ao registrar a escolha, sem alterar o veredito ou as soluções; ao listar pendências, exclua os conjuntos já escolhidos. Assim a consulta do último registro por issue não perde o estado das outras execuções. Relatório ausente, ilegível ou sem soluções completas gera `pending-report-unavailable:<run_id>:<key>`: não reconstrua a escolha pelo resumo; ofereça nova triagem sem registrar escolha para aquele conjunto.
 
 `choice` é `null` até o usuário escolher. Quando escolher, grave um novo registro da mesma chave com `choice` = número da solução ou `"none"` e, se for uma solução, o `id` do registro criado no aprendizado.
 

@@ -14,13 +14,14 @@ Uma chamada por issue, na ordem da Cloto.
     "key": "PROJ-123",
     "summary": "Carrinho zera ao trocar de seller",
     "description": "...",
+    "created_at": "2026-10-01T10:00:00Z",
     "priority": "High",
     "agency": "Agência Aurora | null",
     "evidence": [
       { "ref": "<permalink do Slack>", "excerpt": "...", "verified_at": "2026-10-03" }
     ],
     "siblings": [
-      { "key": "PROJ-187", "summary": "Carrinho perde itens no checkout", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20" }
+      { "key": "PROJ-187", "summary": "Carrinho perde itens no checkout", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20T15:00:00Z" }
     ],
     "warnings": ["no-due-date"]
   },
@@ -84,7 +85,7 @@ Procure, nesta ordem:
    AND created >= -180d ORDER BY updated DESC
    ```
 
-   Limite a 10 resultados e leia só resumo, status e descrição dos candidatos.
+   Limite a 10 resultados e leia resumo, status, descrição e data de resolução (`resolved_at`, timestamp ISO 8601 com fuso) dos candidatos.
 3. **No Slack:** evidências que descrevem o mesmo problema citando outra chave.
 4. **No aprendizado:** `learnings/patterns/` e `learnings/solutions/` com o mesmo repositório e componente.
 
@@ -102,7 +103,7 @@ Compartilhar só o componente não é duplicado.
 
 - `same-incident`: a candidata está aberta, ou foi resolvida depois da criação desta issue, ou as evidências dizem explicitamente que é o mesmo caso.
 - `recurrence`: a candidata foi resolvida **antes** desta issue ser criada e o sintoma voltou. Não é duplicado: é sinal de que a correção anterior não bastou.
-- `uncertain`: não dá para saber com as evidências disponíveis.
+- `uncertain`: não dá para saber com as evidências disponíveis. Compare timestamps com fuso; se `created_at` ou a resolução da candidata concluída faltar, ou a precisão não permitir ordenar as datas, use `uncertain`, salvo evidência explícita do mesmo caso. `created_at` indisponível vem como `null` com `creation-date-unavailable`.
 
 ## 3. Agência (opcional)
 
@@ -121,16 +122,16 @@ A Láquesis só informa a agência; quem oferece o repasse da solução é a Át
 
 ## Memória
 
-Antes de classificar, calcule o hash da entrada (`hash`, com a entrada completa no stdin) e consulte o último registro da issue (`query lachesis --key <KEY>`).
+Antes de classificar, calcule o hash composto de `{ "input": <entrada completa>, "knowledge_fingerprint": "<fingerprint atual>" }` (`memory.ts hash`, conforme `SKILL.md`) e consulte o último registro da issue (`query lachesis --key <KEY>`).
 
-- Mesmo hash e sem `--full`: reaproveite os campos do registro (`category`, `component`, `repositories`, `origin`, `complex`, `confidence`, `duplicates`), cite o registro como fonte (`ref` = `memory:lachesis/<KEY>@<ts>`) e acrescente o aviso `classification-reused:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo. O `agency` não é guardado no registro: recalcule-o a cada execução (seção 3), porque ele pode mudar no Jira ou no glossário sem que a entrada da classificação mude.
+- Mesmo hash composto, fingerprint verificável no relatório completo correspondente e sem `--full`: reaproveite os campos do registro (`category`, `component`, `repositories`, `origin`, `complex`, `confidence`, `duplicates`), cite o registro como fonte (`ref` = `memory:lachesis/<KEY>@<ts>`) e acrescente o aviso `classification-reused:<ts>`. Se a Átropos precisar de detalhes que o registro não tem, classifique de novo. O `agency` não é guardado no registro: recalcule-o a cada execução (seção 3), porque ele pode mudar no Jira ou no glossário sem que a entrada da classificação mude.
 - Caso contrário, classifique e registre:
 
 ```json
 {
   "key": "PROJ-123",
   "run_id": "2026-10-06T11:00:00Z",
-  "hash": "<hash da entrada>",
+  "hash": "<hash da entrada + knowledge_fingerprint>",
   "category": "bug",
   "component": "checkout",
   "repositories": ["acme-shop-checkout"],

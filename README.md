@@ -148,4 +148,4 @@ Para instalar a partir do repositório, como o time faria:
 /plugin install moiras@moiras
 ```
 
-> Sem glossário nem critérios no knowledge, a Láquesis devolve categoria `unknown` com confiança baixa e o aviso `criteria-missing`; é o comportamento esperado, não um erro.
+> Sem glossário nem critérios no knowledge, a Láquesis pode usar as categorias padrão quando houver evidência; sem evidência suficiente, usa `unknown`. Em ambos os casos, limita `confidence` a 0.3 e inclui `criteria-missing`; é o comportamento esperado, não um erro.
