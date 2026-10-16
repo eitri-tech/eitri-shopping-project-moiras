@@ -62,6 +62,7 @@ export const kinds: readonly Kind[] = [
 ];
 
 const maxSnippetLines = 20;
+const bodyPlaceholder = /<(?!https?:\/\/|mailto:)[^<>\n]{2,}>|AAAA-MM-DD/;
 export const observationMarker = '**Observação:**';
 const results = new Set(['pending', 'resolved', 'not-resolved']);
 const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.direnv']);
@@ -69,6 +70,8 @@ const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.dir
 // What a record must never carry. Matches are reported by rule and line, never echoed.
 const patterns: { rule: string; test: RegExp }[] = [
   { rule: 'absolute-path', test: /(?:(?<![\w.~-])\/(?:home|Users)\/[\w.-]+\/|(?<![\w.-])~\/[\w.-]+|[A-Za-z]:\\Users\\[\w.-]+)/ },
+  // User info in a URL: user:password@ on any scheme, or a bare token@ on http(s).
+  { rule: 'url-credentials', test: /(?:\b[a-z][\w+.-]*:\/\/[^\s/@:]+:[^\s/@]+@|\bhttps?:\/\/[^\s/@]+@)/i },
   {
     rule: 'secret',
     test: /(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abprs]-[\w-]{10,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer\s+[\w.~+/-]{20,}|(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*["']?[^\s"'<>]{8,})/i,
@@ -147,6 +150,15 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       for (const { rule, test } of patterns) if (test.test(line)) add(rule, 'error', index + 1);
     });
 
+    // Template placeholders left in the body (<descrição>, AAAA-MM-DD); code is not prose, so it is skipped.
+    if (doc) {
+      let inFence = false;
+      lines.slice(doc.bodyLine - 1).forEach((line, offset) => {
+        if (line.trimStart().startsWith('```')) inFence = !inFence;
+        else if (!inFence && bodyPlaceholder.test(line.replace(/`[^`]*`/g, ''))) add('placeholder', 'error', doc.bodyLine + offset);
+      });
+    }
+
     // Snippets: at most one, at most 20 lines, always with a reference (repository/path@commit).
     const fences = lines.flatMap((line, index) => (line.trimStart().startsWith('```') ? [index] : []));
     if (fences.length % 2 === 1) add('code-fence-unclosed', 'error', (fences.at(-1) ?? 0) + 1);
@@ -168,6 +180,18 @@ function sameExceptResult(local: Doc, shared: Doc): boolean {
   return strip(local) === strip(shared) && head(local) === head(shared);
 }
 
+const observation = ({ body }: Doc): string => body.split(observationMarker).slice(1).join(observationMarker).trim();
+
+/**
+ * Why a local solution may not replace the shared one, or null when it only moves it forward:
+ * the observation keeps what is already shared, and a final result never goes back to `pending`
+ * (a stale local copy, left behind after the outcome was published and synced).
+ */
+function staleOutcome(local: Doc, shared: Doc): string | null {
+  if (asText(local.fields.result) === 'pending' && asText(shared.fields.result) !== 'pending') return 'shared-has-final-result';
+  return observation(local).startsWith(observation(shared)) ? null : 'shared-observation-not-kept';
+}
+
 export function plan(localDir: string, sharedDir: string): Plan {
   const shared = new Map(records(sharedDir).map(entry => [entry.path, entry]));
   const items: Item[] = [];
@@ -178,7 +202,11 @@ export function plan(localDir: string, sharedDir: string): Plan {
     const item = (action: Item['action'], reason: string) => items.push({ path, action, reason });
     if (!other) item('add', 'new');
     else if (other.text === text) item('skip', 'unchanged');
-    else if (kind.type === 'solution' && doc && other.doc && sameExceptResult(doc, other.doc)) item('update', 'result-or-observation');
+    else if (kind.type === 'solution' && doc && other.doc && sameExceptResult(doc, other.doc)) {
+      const stale = staleOutcome(doc, other.doc);
+      if (stale) item('conflict', stale);
+      else item('update', 'result-or-observation');
+    }
     else if (kind.type === 'repository' && doc && other.doc) {
       if (asText(doc.fields.indexed_at) > asText(other.doc.fields.indexed_at)) item('update', 'newer-index');
       else item('skip', 'shared-is-newer-or-equal');

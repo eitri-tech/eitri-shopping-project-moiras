@@ -128,6 +128,23 @@ describe('check', () => {
     assert.ok(!JSON.stringify(findings).includes(token));
   });
 
+  it('rejects credentials in URLs and placeholders left in the body, but not code or autolinks', t => {
+    const { local, write } = workspace(t);
+    const pattern = (id: string, lines: string[]) =>
+      write('local', `learnings/patterns/${id}.md`, ['---', `id: ${id}`, 'type: pattern', 'created_at: 2026-10-03', '---', '', ...lines, ''].join('\n'));
+    pattern('senha', ['Clone https://alice:hunter22@example.com/org/repo.git agora.']);
+    pattern('token', ['Use https://abc123def@example.com/org/repo.git.']);
+    pattern('ssh', ['Use ssh://git@example.com/org/repo.git e <https://example.com/doc>.']);
+    pattern('modelo', ['**Problema:** <descrição>', '', '**Riscos:** <riscos>']);
+    pattern('codigo', ['Use `Array<string>` e `<div>`.', '', '```tsx', 'const a: Array<string> = [];', '```', '`repo/src/a.ts@a1b2c3d`']);
+    assert.deepEqual(check(local).findings.map(f => `${f.path}:${f.rule}@${f.line}`).sort(), [
+      'learnings/patterns/modelo.md:placeholder@7',
+      'learnings/patterns/modelo.md:placeholder@9',
+      'learnings/patterns/senha.md:url-credentials@7',
+      'learnings/patterns/token.md:url-credentials@7',
+    ]);
+  });
+
   it('allows one snippet of up to 20 lines with a reference and rejects the rest', t => {
     const { local, write } = workspace(t);
     const fence = (lines: number) => ['```ts', ...Array.from({ length: lines }, (_, n) => `const x${n} = ${n};`), '```'].join('\n');
@@ -185,6 +202,26 @@ describe('plan', () => {
     assert.deepEqual(plan(local, shared).items, [
       { path: 'learnings/solutions/PROJ-1-1.md', action: 'conflict', reason: 'append-only' },
     ]);
+  });
+
+  it('never lets a stale local copy overwrite a shared outcome or its observation', t => {
+    const { local, shared, write } = workspace(t);
+    const path = 'learnings/solutions/PROJ-1-1.md';
+    const planned = () => plan(local, shared).items[0];
+
+    write('shared', path, solution('resolved', 'Funcionou em produção.'));
+    write('local', path, solution('pending'));
+    assert.deepEqual(planned(), { path, action: 'conflict', reason: 'shared-has-final-result' });
+
+    write('local', path, solution('not-resolved', 'Outra observação.'));
+    assert.deepEqual(planned(), { path, action: 'conflict', reason: 'shared-observation-not-kept' });
+
+    write('local', path, solution('not-resolved', 'Funcionou em produção.\nAuditoria 2026-10-20, Fulano: reaberto.'));
+    assert.deepEqual(planned(), { path, action: 'update', reason: 'result-or-observation' });
+
+    write('shared', path, solution('pending'));
+    write('local', path, solution('pending', 'Em teste.'));
+    assert.equal(planned()?.action, 'update');
   });
 
   it('reports a changed pattern as a conflict instead of rewriting it', t => {

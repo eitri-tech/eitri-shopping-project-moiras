@@ -23,7 +23,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 
 ## Passos
 
-1. **Ler.** Junte os knowledges declarados em `knowledge` (mesmas regras de leitura e de precedência da triagem) e, dentro do escopo, procure os achados abaixo. O que é mecânico (campos faltando, modelo não preenchido, segredo, caminho pessoal, código acima de 20 linhas ou sem referência) sai do script, que só devolve caminho e regra, sem repetir o conteúdo: `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir do knowledge> [--only glossary|criteria|learnings]`.
+1. **Ler.** Junte os knowledges declarados em `knowledge` (mesmas regras de leitura e de precedência da triagem) e, dentro do escopo, procure os achados abaixo. O que é mecânico (campos faltando, modelo não preenchido, segredo, credencial em URL, caminho pessoal, código acima de 20 linhas ou sem referência) sai do script, que só devolve caminho e regra, sem repetir o conteúdo: `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir do knowledge> [--only glossary|criteria|learnings]`.
 2. **Mostrar.** Apresente os achados numerados, do mais grave ao menos grave, cada um com a fonte (`ref` = `knowledge:<name>/<caminho>`), o motivo e o ajuste proposto.
 3. **Decidir.** Para cada achado, o auditor escolhe: aplicar, editar o ajuste, pular ou discordar (ver "Discordância").
 4. **Aplicar.** Só o que o auditor aprovou, e só depois do "sim" à lista exata. Item novo precisa de nova aprovação.

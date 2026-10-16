@@ -22,7 +22,7 @@ Ela copia do knowledge `local` (`.moiras/knowledge`) para um clone do destino, n
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check .moiras/knowledge
    ```
 
-   Registro com erro (segredo, caminho pessoal, código acima de 20 linhas ou sem referência, campo faltando, modelo não preenchido) **não entra** na lista: aponte o caminho e a regra, sem repetir o conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados.
+   Registro com erro (segredo, credencial em URL, caminho pessoal, código acima de 20 linhas ou sem referência, campo faltando, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte o caminho e a regra, sem repetir o conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados.
 3. **Planejar.** Compare o local com o destino:
 
    ```bash
@@ -34,9 +34,9 @@ Ela copia do knowledge `local` (`.moiras/knowledge`) para um clone do destino, n
 | Ação | Quando | O que a skill faz |
 |---|---|---|
 | `add` | o registro não existe no destino | oferece para publicar |
-| `update` | solução com a mesma `id` que só mudou em `result` ou na observação; ou glossário com `indexed_at` mais novo | oferece para publicar, mostrando o que mudou |
+| `update` | solução com a mesma `id` que só avançou em `result` ou na observação (a observação do destino é mantida e um resultado final não volta a `pending`); ou glossário com `indexed_at` mais novo | oferece para publicar, mostrando o que mudou |
 | `skip` | já é igual, ou o destino tem o glossário igual ou mais novo | não faz nada |
-| `conflict` | a mesma `id` com conteúdo diferente em aprendizado (só acréscimo) ou critério (só muda por regeneração) | **não publica**; explica ao usuário e sugere um critério novo com `replaces`, ou um `id` novo |
+| `conflict` | a mesma `id` com conteúdo diferente em aprendizado (só acréscimo) ou critério (só muda por regeneração); ou solução cuja cópia local está velha (o destino já tem resultado final e o local ainda está `pending`, ou a observação do destino não foi mantida) | **não publica**; explica ao usuário e sugere um critério novo com `replaces`, ou um `id` novo |
 | `remove` | critério do destino que um critério novo do local substitui (`replaces`) | oferece a remoção **no mesmo PR**, junto com o critério novo |
 
 A skill nunca reescreve um aprendizado do destino além de `result` e da observação, e nunca edita um critério do destino: o critério muda por regeneração.
