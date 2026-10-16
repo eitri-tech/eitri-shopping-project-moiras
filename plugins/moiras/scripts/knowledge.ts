@@ -196,8 +196,9 @@ function codeBlocks(rawLines: string[], from: number): { blocks: CodeBlock[]; un
     const fence = relative <= 3 ? fenceStart.exec(rest) : null;
     if (fence) {
       const mark = fence[1]!;
-      const closing = new RegExp(`^\\s*${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
-      const close = lines.findIndex((candidate, j) => j > i && closing.test(candidate));
+      const closing = new RegExp(`^${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
+      const container = indent - relative;
+      const close = lines.findIndex((candidate, j) => j > i && indentOf(candidate) <= container + 3 && closing.test(candidate.trimStart()));
       if (close === -1) return { blocks, unclosed: i };
       blocks.push({ open: i, close, size: close - i - 1 });
       i = close;

@@ -231,9 +231,14 @@ describe('check', () => {
     record('quatro-espacos', `${reference}\n\n    \`\`\`ts\n${code(19, '    ')}\n    \`\`\``);
     record('tres-espacos', `${reference}\n\n   \`\`\`ts\n${code(3, '   ')}\n   \`\`\``);
     record('lista-continua', `- passo ${reference}\n\n    texto que continua o item\n\n    mais texto do mesmo item`);
+    record('fecha-recuado', `${reference}\n\n\`\`\`ts\n${code(2, '')}\n    \`\`\`\n${code(21, '')}`);
+    record('fecha-recuado-lista', `- passo ${reference}\n\n  \`\`\`ts\n${code(2, '  ')}\n      \`\`\`\n${code(21, '  ')}`);
+    record('fecha-ok', `${reference}\n\n\`\`\`ts\n${code(2, '')}\n   \`\`\``);
     assert.deepEqual(rules(local), [
       'learnings/patterns/citacao-longo.md:code-too-long',
       'learnings/patterns/citacao-sem-ref.md:code-without-reference',
+      'learnings/patterns/fecha-recuado-lista.md:code-fence-unclosed',
+      'learnings/patterns/fecha-recuado.md:code-fence-unclosed',
       'learnings/patterns/indent-longo.md:code-too-long',
       'learnings/patterns/indent-sem-ref.md:code-without-reference',
       'learnings/patterns/lista-indent.md:code-too-long',
