@@ -22,7 +22,7 @@ Ela copia do knowledge `local` (`.moiras/knowledge`) para um clone do destino, n
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check .moiras/knowledge
    ```
 
-   Registro com erro (segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência, campo obrigatório do tipo faltando, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte o caminho e a regra, sem repetir o conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados.
+   Registro com erro (segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência (em bloco com ``` ou ~~~, indentado, ou dentro de citação ou lista), campo obrigatório do tipo faltando, data que não existe no calendário, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte o caminho e a regra, sem repetir o conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados.
 3. **Planejar.** Compare o local com o destino:
 
    ```bash
