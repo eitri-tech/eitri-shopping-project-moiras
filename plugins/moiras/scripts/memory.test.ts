@@ -55,10 +55,10 @@ describe('record', () => {
 
   it('compares batch duplicates against earlier entries and the stored file', t => {
     const { dir } = fixture(t);
-    record('clotho', { key: 'A', hash: 'old' }, { dir });
+    record('clotho', { key: 'A', hash: digest('old') }, { dir });
     const result = record('clotho', [
-      { key: 'A', hash: 'new' }, { key: 'A', hash: 'new' },
-      { key: 'B', content: null }, { key: 'A', hash: 'old' },
+      { key: 'A', hash: digest('new') }, { key: 'A', hash: digest('new') },
+      { key: 'B', content: null }, { key: 'A', hash: digest('old') },
     ], { dir });
     assert.deepEqual(result.map(record => record.change), ['changed', 'unchanged', 'new', 'changed']);
     assert.deepEqual(result.map(record => record.key), ['A', 'A', 'B', 'A']);
@@ -76,12 +76,79 @@ describe('record', () => {
     }
   });
 
-  it('tolerates malformed lines and an unterminated last line', t => {
+  it('rejects unknown and cross-stage fields before appending any batch entry', t => {
     const { dir, file } = fixture(t);
-    writeFileSync(file, 'broken\nnull\n{"key":"A","hash":"old"}');
+    record('clotho', { key: 'A', content: 'initial' }, { dir });
+    const before = readFileSync(file, 'utf8');
+    for (const field of ['text', 'description', 'conteudo', 'com_quem', 'solutions']) {
+      assert.throws(() => record('clotho', [
+        { key: 'B', content: 'valid' }, { key: 'C', content: 'raw', [field]: 'raw' },
+      ], { dir }), /Unknown clotho field/);
+      assert.equal(readFileSync(file, 'utf8'), before);
+    }
+    assert.throws(() => record('lachesis', { key: 'A', content: '', source: 'jira' }, { dir }), /Unknown lachesis/);
+    assert.throws(() => record('atropos', { key: 'A', content: '', category: 'bug' }, { dir }), /Unknown atropos/);
+    assert.throws(() => record('clotho', { key: 'A', content: '', with_whom: { text: 'raw' } }, { dir }), /Invalid metadata/);
+    assert.throws(() => record('lachesis', { key: 'A', content: '', repositories: [{ text: 'raw' }] }, { dir }), /Invalid metadata/);
+    assert.throws(() => record('atropos', { key: 'A', content: '', solutions: [{ title: '', description: 'raw' }] }, { dir }), /Invalid metadata/);
+  });
+
+  it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {
+    const { dir, file } = fixture(t);
+    for (const invalid of ['old', '', 'sha256:' + 'a'.repeat(63), 'sha256:' + 'g'.repeat(64), null, 7, {}]) {
+      assert.throws(() => record('clotho', [
+        { key: 'A', content: true }, { key: 'B', hash: invalid },
+      ], { dir }), /Hash must/);
+      assert.equal(existsSync(file), false);
+    }
+    assert.throws(() => record('clotho', { key: 'A', content: '', hash: digest('') }, { dir }), /not both/);
+    const upper = 'sha256:' + 'A'.repeat(64);
+    assert.equal(record('clotho', { key: 'A', hash: upper }, { dir })[0].hash, upper);
+  });
+
+  it('accepts documented metadata for every stage without storing content', t => {
+    const { dir } = fixture(t);
+    const entries = {
+      clotho: { source: 'jira', with_whom: { reporter: 'Fulano' }, updated_at: '2026-10-01' },
+      lachesis: { category: 'bug', component: 'checkout', repositories: ['acme-shop-checkout'],
+        origin: 'app', complex: false, confidence: 0.78, duplicates: ['PROJ-187'] },
+      atropos: { mode: 'interactive', action: 'ready-for-dev',
+        solutions: [{ title: 'Revisar estado', confidence: 70 }], choice: null, id: 'PROJ-123-1' },
+    } as const;
+    for (const stage of ['clotho', 'lachesis', 'atropos'] as const) {
+      record(stage, { key: 'PROJ-123', run_id: 'run-1', content: { text: 'raw' }, ...entries[stage] }, { dir });
+      const stored = query(stage, { dir })[0];
+      assert.equal(stored.hash, hash({ text: 'raw' }));
+      assert.equal(Object.hasOwn(stored, 'content'), false);
+      for (const [field, value] of Object.entries(entries[stage])) assert.deepEqual(stored[field], value);
+    }
+  });
+
+  it('warns and ignores Portuguese-key legacy records without rewriting or deleting them', t => {
+    const { dir, file } = fixture(t);
+    const legacy = JSON.stringify({ chave: 'A', com_quem: { autor: 'Fulano' }, hash: digest('old') });
+    const mixed = JSON.stringify({ chave: 'B', key: 'B', hash: digest('old') });
+    const original = legacy + '\n' + mixed;
+    writeFileSync(file, original);
     const warnings: string[] = [];
     const warn = (message: string): void => { warnings.push(message); };
-    assert.equal(record('clotho', { key: 'A', hash: 'old' }, { dir, warn })[0].change, 'unchanged');
+    assert.deepEqual(query('clotho', { dir, warn }), []);
+    assert.equal(readFileSync(file, 'utf8'), original);
+    assert.equal(warnings.length, 2);
+    assert.ok(warnings.every(message => message.includes('legacy Portuguese-key record')));
+    assert.ok(warnings[0].includes(file + ':1'));
+    assert.ok(warnings[1].includes(file + ':2'));
+    assert.equal(record('clotho', { key: 'A', hash: digest('old') }, { dir, warn })[0].change, 'new');
+    assert.ok(readFileSync(file, 'utf8').startsWith(original + '\n'));
+    assert.equal(query('clotho', { dir, warn: quiet }).length, 1);
+  });
+
+  it('tolerates malformed lines and an unterminated last line', t => {
+    const { dir, file } = fixture(t);
+    writeFileSync(file, 'broken\nnull\n' + JSON.stringify({ key: 'A', hash: digest('old') }));
+    const warnings: string[] = [];
+    const warn = (message: string): void => { warnings.push(message); };
+    assert.equal(record('clotho', { key: 'A', hash: digest('old') }, { dir, warn })[0].change, 'unchanged');
     assert.equal(warnings.length, 2);
     assert.match(warnings[0], /Warning/);
     assert.equal(query('clotho', { dir, warn: quiet }).length, 1);
@@ -94,12 +161,12 @@ describe('query', () => {
     const { dir } = fixture(t);
     assert.deepEqual(query('clotho', { dir }), []);
     record('clotho', [
-      { key: 'A', hash: '1', ts: '2026-02-01T00:00:00Z' },
-      { key: 'B', hash: '2', ts: '2026-03-01T00:00:00Z' },
-      { key: 'A', hash: '3', ts: '2026-01-01T00:00:00Z' },
+      { key: 'A', hash: digest('1'), ts: '2026-02-01T00:00:00Z' },
+      { key: 'B', hash: digest('2'), ts: '2026-03-01T00:00:00Z' },
+      { key: 'A', hash: digest('3'), ts: '2026-01-01T00:00:00Z' },
     ], { dir });
-    assert.deepEqual(query('clotho', { dir }).map(record => record.hash), ['3', '2']);
-    assert.deepEqual(query('clotho', { dir, key: 'A' }).map(record => record.hash), ['3']);
+    assert.deepEqual(query('clotho', { dir }).map(record => record.hash), [digest('3'), digest('2')]);
+    assert.deepEqual(query('clotho', { dir, key: 'A' }).map(record => record.hash), [digest('3')]);
     assert.deepEqual(query('clotho', { dir, since: '2026-03-01T00:00:00Z' }).map(record => record.key), ['B']);
     assert.deepEqual(query('clotho', { dir, key: 'A', since: '2026-02-01T00:00:00Z' }), []);
     assert.throws(() => query('clotho', { dir, since: 'yesterday' }), /Invalid date/);
