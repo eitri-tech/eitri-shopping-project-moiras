@@ -132,6 +132,69 @@ export function records(dir: string, only?: Scope): Entry[] {
     });
 }
 
+/** `YYYY-MM-DD` that exists on the calendar (2026-02-30 and 2026-99-99 do not). */
+function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+interface CodeBlock {
+  open: number; // index of the first line (the opening fence, or the first indented line)
+  close: number; // index of the last line (the closing fence, or the last indented line)
+  size: number; // lines of code, fences excluded
+}
+
+const fenceOpening = /^ {0,3}(`{3,}|~{3,})/;
+const listItem = /^\s*(?:[-*+]|\d+[.)])\s/;
+
+/**
+ * Code blocks from line `from` on, as Markdown reads them: fenced with ``` or ~~~ (closed by a fence of the
+ * same character, at least as long), and indented by 4 spaces or a tab after a blank line. Indented lines that
+ * continue a list item are text, not code. `unclosed` is the line of a fence that never closes.
+ */
+function codeBlocks(lines: string[], from: number): { blocks: CodeBlock[]; unclosed?: number } {
+  const blocks: CodeBlock[] = [];
+  let unclosed: number | undefined;
+  const indented = (line: string) => /^(?: {4}|\t)/.test(line) && line.trim() !== '';
+  for (let i = from; i < lines.length; i++) {
+    const fence = fenceOpening.exec(lines[i]!);
+    if (fence) {
+      const mark = fence[1]!;
+      const closing = new RegExp(`^ {0,3}${mark[0] === '`' ? '`' : '~'}{${mark.length},}\\s*$`);
+      let close = -1;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (closing.test(lines[j]!)) {
+          close = j;
+          break;
+        }
+      }
+      if (close === -1) {
+        unclosed = i;
+        break;
+      }
+      blocks.push({ open: i, close, size: close - i - 1 });
+      i = close;
+      continue;
+    }
+    if (indented(lines[i]!)) {
+      let before = i - 1;
+      while (before >= from && lines[before]!.trim() === '') before--;
+      const afterBlank = i === from || lines[i - 1]!.trim() === '';
+      const afterList = before >= from && (listItem.test(lines[before]!) || indented(lines[before]!));
+      if (afterBlank && !afterList) {
+        let end = i;
+        for (let j = i + 1; j < lines.length && (indented(lines[j]!) || lines[j]!.trim() === ''); j++) if (lines[j]!.trim() !== '') end = j;
+        blocks.push({ open: i, close: end, size: end - i + 1 });
+        i = end;
+      }
+    }
+  }
+  return unclosed === undefined ? { blocks } : { blocks, unclosed };
+}
+
 export function check(dir: string, only?: Scope): { checked: number; findings: Finding[] } {
   const all = records(dir, only);
   const findings: Finding[] = [];
@@ -148,7 +211,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (asText(fields.type) !== kind.type) add('type-mismatch', 'error');
       const date = asText(fields[kind.date]);
       if (!date) add('date-missing', 'error');
-      else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) add('date-invalid', 'error');
+      else if (!isCalendarDate(date)) add('date-invalid', 'error');
       if (Object.values(fields).some(value => /<[^>]*>|AAAA-MM-DD|\s\|\s/.test(asText(value)))) add('placeholder', 'error');
       if (kind.type === 'criterion' && !asText(fields.approved_by)) add('approved-by-missing', 'error');
       for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
@@ -169,22 +232,23 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (values.some(value => absoluteValue.test(value))) add('absolute-path', 'error');
     }
 
+    // Code blocks of the body (fenced with ``` or ~~~, or indented): they are code, not prose, and are limited below.
+    const first = doc ? doc.bodyLine - 1 : 0;
+    const { blocks, unclosed } = codeBlocks(lines, first);
+
     // Template placeholders left in the body (<descrição>, AAAA-MM-DD); code is not prose, so it is skipped.
     if (doc) {
-      let inFence = false;
-      lines.slice(doc.bodyLine - 1).forEach((line, offset) => {
-        if (line.trimStart().startsWith('```')) inFence = !inFence;
-        else if (!inFence && bodyPlaceholder.test(line.replace(/`[^`]*`/g, ''))) add('placeholder', 'error', doc.bodyLine + offset);
+      lines.forEach((line, index) => {
+        if (index < first || blocks.some(block => index >= block.open && index <= block.close)) return;
+        if (bodyPlaceholder.test(line.replace(/`[^`]*`/g, ''))) add('placeholder', 'error', index + 1);
       });
     }
 
     // Snippets: at most one, at most 20 lines, always with a reference (repository/path@commit).
-    const fences = lines.flatMap((line, index) => (line.trimStart().startsWith('```') ? [index] : []));
-    if (fences.length % 2 === 1) add('code-fence-unclosed', 'error', (fences.at(-1) ?? 0) + 1);
-    const blocks = Array.from({ length: Math.floor(fences.length / 2) }, (_, n) => [fences[2 * n]!, fences[2 * n + 1]!] as const);
-    if (blocks.length > 1) add('multiple-snippets', 'error', blocks[1]![0] + 1);
-    for (const [open, close] of blocks) {
-      if (close - open - 1 > maxSnippetLines) add('code-too-long', 'error', open + 1);
+    if (unclosed !== undefined) add('code-fence-unclosed', 'error', unclosed + 1);
+    if (blocks.length > 1) add('multiple-snippets', 'error', blocks[1]!.open + 1);
+    for (const { open, close, size } of blocks) {
+      if (size > maxSnippetLines) add('code-too-long', 'error', open + 1);
       const around = lines.slice(Math.max(0, open - 3), close + 4).join('\n');
       if (!/\S+@[0-9a-f]{7,40}\b/.test(around)) add('code-without-reference', 'error', open + 1);
     }

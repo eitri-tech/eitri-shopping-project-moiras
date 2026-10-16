@@ -208,6 +208,40 @@ describe('check', () => {
     ]);
   });
 
+  it('applies the snippet rules to tilde fences and indented code blocks too', t => {
+    const { local, write } = workspace(t);
+    const record = (name: string, body: string) =>
+      write('local', `learnings/patterns/${name}.md`, patternDoc(name, body));
+    const reference = '`acme-shop-checkout/src/views/checkout/Cart.tsx@a1b2c3d`';
+    const code = (lines: number, indent: string) => Array.from({ length: lines }, (_, n) => `${indent}const x${n} = ${n};`).join('\n');
+    record('til-longo', `${reference}\n\n~~~ts\n${code(21, '')}\n~~~`);
+    record('til-ok', `${reference}\n\n~~~ts\n${code(3, '')}\n~~~`);
+    record('til-aberto', `${reference}\n\n~~~ts\nconst a = 1;`);
+    record('quatro', `${reference}\n\n\`\`\`\`md\n\`\`\`ts\nconst a = 1;\n\`\`\`\n\`\`\`\``);
+    record('indent-longo', `Exemplo em ${reference}:\n\n${code(21, '    ')}`);
+    record('indent-sem-ref', `Exemplo:\n\n${code(3, '\t')}`);
+    record('indent-ok', `Exemplo em ${reference}:\n\n${code(3, '    ')}`);
+    record('lista', `- item\n\n    continua o item da lista\n\n${code(1, '    ')}\n\ntexto`);
+    assert.deepEqual(rules(local), [
+      'learnings/patterns/indent-longo.md:code-too-long',
+      'learnings/patterns/indent-sem-ref.md:code-without-reference',
+      'learnings/patterns/til-aberto.md:code-fence-unclosed',
+      'learnings/patterns/til-longo.md:code-too-long',
+    ]);
+  });
+
+  it('rejects dates that are not on the calendar', t => {
+    const { local, write } = workspace(t);
+    for (const [id, date] of [['maluco', '2026-99-99'], ['fev', '2026-02-30'], ['bissexto', '2028-02-29'], ['comum', '2027-02-29'], ['ok', '2026-10-16']] as const) {
+      write('local', `learnings/patterns/${id}.md`, patternDoc(id, '# P').replace(/created_at: .*/, `created_at: ${date}`));
+    }
+    assert.deepEqual(rules(local), [
+      'learnings/patterns/comum.md:date-invalid',
+      'learnings/patterns/fev.md:date-invalid',
+      'learnings/patterns/maluco.md:date-invalid',
+    ]);
+  });
+
   it('limits the scan with --only', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/sem-front.md', 'x');
