@@ -9,6 +9,8 @@ allowed-tools: Bash(node:*)
 
 Argumentos: `$ARGUMENTS`
 
+Resolva `<local-dir>` pelo `dir` da entrada com `scope: local` em `knowledge` no `.moiras/sources.json`; o padrão é `.moiras/knowledge`. Use esse caminho em toda leitura, escrita e comparação do knowledge local.
+
 Esta skill é a única que escreve em `glossary/`. O glossário é derivado do código: pode ser regenerado a qualquer momento, e a Láquesis só o lê. Ela só roda no modo interativo, porque todo arquivo escrito depende do "sim" do usuário à lista exata.
 
 ## O que ela lê e o que ela escreve
@@ -40,10 +42,10 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. Repositório da lista que não existe em disco vira `missing` no relatório.
 2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge (ver "O que vai em cada campo").
-4. **Calcular `sources_hash`** com o script, passando só o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes):
+4. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> README.md package.json src/views
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
    ```
 
 5. **Comparar** com o arquivo existente: mesmo `sources_hash` é `unchanged` e o arquivo não é tocado (nem o `indexed_at`); hash diferente é `changed`; sem arquivo é `new`.
@@ -52,7 +54,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 8. **Conferir** o que foi gravado e corrigir o que falhar:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check .moiras/knowledge --only glossary
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only glossary
    ```
 
 9. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados e inalterados, o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
