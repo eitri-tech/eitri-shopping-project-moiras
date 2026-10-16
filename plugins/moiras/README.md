@@ -2,11 +2,89 @@
 
 Plugin para Claude que faz triagem de issues do Jira usando um knowledge do time.
 
-O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada um, e cada etapa da triagem leva o nome de uma delas:
+O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada um, e cada etapa da triagem leva o nome de uma delas.
 
-- **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack (hoje as fontes esperadas; outras podem ser adicionadas)
-- **Láquesis** (mede): identifica repositório e componente pelo glossário, classifica e avalia duplicados
-- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado; se a task é gerida por uma agência, oferece um rascunho para repassar a solução a ela
+## Visão geral
+
+Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
+Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
+
+- Cloto (fia): configuração + épico → issues pendentes sem responsável, outras issues do épico e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
+- Láquesis (mede): issue + evidências + outras issues do épico, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
+- Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
+
+As ações são `duplicate`, `blocked`, `ready-for-dev`, `needs-info` e `close`.
+`duplicate` e `close` podem não ter soluções; se faltarem alternativas distintas
+com fonte, a Átropos apresenta as disponíveis e explica a limitação.
+Os contratos e as regras estão nos [stages da triagem](skills/moiras-triage/stages/).
+
+Quando usar cada skill:
+
+- [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
+- [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
+- [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
+- [moiras-sync](skills/moiras-sync/SKILL.md): trazer o que foi mergeado nos knowledges compartilhados, por exemplo antes da triagem.
+- [moiras-publish](skills/moiras-publish/SKILL.md): compartilhar registros locais aprovados por meio de um PR num knowledge privado.
+
+Quem escreve onde:
+
+- `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
+  grava só após o "sim" à lista exata e não apaga registros.
+- `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`
+  após o "sim", sempre no knowledge local e no modo interativo.
+- `moiras-audit` só ajusta `result` e a observação de aprendizados locais e gera
+  critérios locais com aprovação; não cria aprendizado nem edita o glossário.
+- Aprendizados não são apagados nem reescritos além dessas exceções.
+  Critérios mudam por regeneração com `replaces`; a remoção dos antigos locais
+  fica limitada ao escopo aprovado.
+- Só `scripts/memory.ts` acrescenta registros à memória das etapas;
+  `scripts/knowledge.ts` apenas lê para calcular `hash`, validar com `check`
+  e comparar com `plan`: não grava knowledge.
+- A triagem persiste saídas completas e pendências; no `--auto`, também o relatório.
+  Auditoria, publish e sync automático salvam seus relatórios em `runs.dir`
+  (padrão `.moiras/runs/`). Veja também [Memória](#memória).
+- `moiras-sync` só avança clones limpos com `fetch` e `merge --ff-only`;
+  pode clonar com aprovação no modo interativo, sem alterar o knowledge local.
+- Só `moiras-publish` leva registros ao compartilhado: valida a seleção com
+  `knowledge.ts check`, escreve numa seleção e num worktree temporários,
+  envia um branch novo e abre PR; não altera o knowledge local nem o clone principal.
+
+Ciclo do knowledge:
+
+1. Indexar o código para localizar repositórios e componentes.
+2. Triar e registrar escolhas, desfechos e critérios aprovados.
+3. Auditar e aprovar os ajustes locais necessários.
+4. Publicar por PR; a revisão e o merge cabem às pessoas do repositório.
+5. Sincronizar os clones para ler o que foi mergeado na próxima triagem.
+
+Na leitura, o escopo mais específico vence: `local` > `project` > `group` > `global`.
+Sincronizar também pode acontecer antes de triar. Caminhos, estrutura e regras
+de leitura estão em [Knowledge](#knowledge); a configuração fica em [Configuração](#configuração).
+
+Modos de execução:
+
+- Interativo (padrão): permite perguntas, escolhas de soluções e escritas locais aprovadas.
+- `--auto`: triagem sem perguntas, sem gravar aprendizado; processa mudanças de entrada
+  ou knowledge e repete issues sem conclusão comprovada, salvando o relatório.
+  O sync também aceita `--auto`, apenas para clones existentes; index, audit e publish não.
+- `--full`: opção da triagem para reprocessar todas as issues, mesmo inalteradas;
+  não dispensa aprovações. Veja [Execução por cron](#execução-por-cron).
+
+Limites de segurança:
+
+- Jira e Slack só recebem as interações opcionais da Cloto, desligadas por padrão:
+  reação no Slack e comentário curto no Jira, após o "sim" à lista exata.
+  No `--auto`, só `reaction` autorizada em `interactions.auto_types` dispensa esse "sim";
+  comentários nunca são automáticos nem vão para issues com agência ou agência ambígua.
+- Repasse à agência é só rascunho para o usuário enviar; o plugin nunca o envia,
+  nem com aprovação, e não inclui conversas internas nem dados de outros clientes.
+- Knowledge não guarda cópia de código: apenas trechos de até 20 linhas com referência
+  de repositório, caminho e commit; o `check` limita a um trecho por registro.
+  Sem segredos, dados pessoais ou texto bruto de issues e conversas.
+- Memória é local e nunca é publicada: o conteúdo bruto vira hash SHA-256,
+  acompanhado de identificadores e metadados derivados, sem guardar o conteúdo original.
+- Publish sempre usa PR e branch novo: nunca push na branch principal,
+  `force push`, merge ou aprovação de PR; memória e relatórios ficam fora do destino.
 
 ## Estrutura
 
