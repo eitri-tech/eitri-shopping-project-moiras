@@ -5,6 +5,7 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
 ## Sumário
 
 - [Plugin](#plugin)
+- [Outros agentes (desenho)](#outros-agentes-desenho)
 - [Como trabalhar neste projeto](#como-trabalhar-neste-projeto)
   - [1. Preparar o ambiente no Ubuntu](#1-preparar-o-ambiente-no-ubuntu)
   - [2. Alternativa com Nix e direnv](#2-alternativa-com-nix-e-direnv)
@@ -19,6 +20,58 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
 ## Plugin
 
 - [`plugins/moiras`](plugins/moiras): triagem de issues do Jira com base de conhecimento do projeto (Cloto → Láquesis → Átropos), indexação dos repositórios (`moiras-index`), sincronização e publicação do knowledge (`moiras-sync`, `moiras-publish`) e auditoria (`moiras-audit`).
+
+## Outros agentes (desenho)
+
+Proposta para levar o Moiras a outros agentes; o suporte atual continua sendo o plugin do Claude Code.
+Os contratos das três etapas e o knowledge em Markdown são candidatos ao reaproveitamento.
+O núcleo Node (`plugins/moiras/scripts/memory.ts` e `knowledge.ts`) usa apenas a biblioteca padrão, sem dependências externas; depende de Node com execução direta de TypeScript.
+O [AGENTS.md](AGENTS.md) já reúne as instruções do projeto; seu carregamento automático depende do agente.
+Jira e Slack vêm dos conectores do usuário: o Moiras não inclui servidor MCP.
+
+O empacotamento `.claude-plugin/` (manifesto e marketplace), as invocações `/moiras:...`, `$ARGUMENTS` e `${CLAUDE_PLUGIN_ROOT}` são acoplamentos atuais ao Claude.
+A busca em `plugins/` encontrou **11 ocorrências** de `${CLAUDE_PLUGIN_ROOT}`, distribuídas assim (caminhos relativos a `plugins/moiras/`):
+
+| Arquivo | Ocorrências |
+|---|---:|
+| `skills/moiras-audit/SKILL.md` | 1 |
+| `skills/moiras-index/SKILL.md` | 2 |
+| `skills/moiras-publish/SKILL.md` | 2 |
+| `skills/moiras-sync/SKILL.md` | 2 |
+| `skills/moiras-triage/SKILL.md` | 3 |
+| `skills/moiras-triage/stages/clotho.md` | 1 |
+
+**Compatibilidade documentada.** Os estados abaixo se referem aos fatos das fontes oficiais indicadas, não a testes do Moiras nesses agentes.
+
+| Agente | Onde lê skills | Instruções do projeto | Invocação e estado |
+|---|---|---|---|
+| [Codex](https://learn.chatgpt.com/docs/build-skills) | `$CWD/.agents/skills` até `$REPO_ROOT/.agents/skills`; usuário: `$HOME/.agents/skills`; segue symlinks de pastas de skill | Leitura de `AGENTS.md`: **a confirmar** na fonte consultada | `/skills` ou `$`, ou implicitamente pela descrição: **confirmado**; `agents/openai.yaml` opcional |
+| [Cursor / Cursor CLI](https://cursor.com/docs/skills) | Projeto: `.agents/skills/`, `.cursor/skills/`; usuário: `~/.agents/skills/`, `~/.cursor/skills/`; compatibilidade: `.claude/skills/`, `.codex/skills/` e equivalentes em `~` | As páginas de regras tratam `.cursor/rules` e `AGENTS.md`; leitura pela CLI: **a confirmar** | Agent Skills no Cursor: **confirmado**; carregamento e forma de invocação na CLI: **a confirmar** |
+| GitHub Copilot ([documentação oficial](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills), “about agent skills”) | Projeto: `.github/skills`, `.claude/skills`, `.agents/skills`; pessoais: `~/.copilot/skills`, `~/.agents/skills` | `AGENTS.md` e `.github/copilot-instructions.md`: **a confirmar** nas páginas consultadas | Skills em nuvem, code review, CLI, app e modo agente no VS Code/JetBrains: **confirmado**; forma de invocação: **a confirmar** |
+| [opencode](https://opencode.ai/docs/skills) | `.opencode/skills/<nome>/SKILL.md`, `.claude/skills/`, `.agents/skills/`, no projeto e global | [Regras](https://opencode.ai/docs/rules): `AGENTS.md` subindo do diretório atual; global `~/.config/opencode/AGENTS.md`; fallback `CLAUDE.md` se não houver `AGENTS.md` | Descoberta: **confirmado**; forma de invocação: **a confirmar** |
+| Antigravity / agy ([codelab oficial do Google](https://codelabs.developers.google.com/getting-started-with-antigravity-skills), fonte fornecida) | Projeto: `<raiz>/.agent/skills/` (singular); global: `~/.gemini/antigravity/skills/` | Regras sempre ativas; workflows acionados pelo usuário são distintos de skills; `AGENTS.md`: **a confirmar** | Carregamento pela `description`: **confirmado**; invocação explícita: **a confirmar**; agy é a CLI do mesmo produto |
+
+No opencode, `instructions` em `opencode.json` aceita arquivos, globs e URLs; `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` desliga `.claude/skills`.
+O denominador comum confirmado é `.agents/skills/` para Codex, Cursor, Copilot e opencode; Claude Code usa `.claude/skills/` e o plugin, e Antigravity usa `.agent/skills/`.
+
+**PRs futuros, em passos pequenos:**
+
+1. Resolver recursos pela raiz da skill, com caminhos relativos, ou por uma única variável documentada que indique o diretório do Moiras; substituir as 11 referências atuais. Mover/agrupar `scripts/` e preservar acesso à configuração e às etapas, validando cópia e symlink antes de definir o arranjo.
+2. Adequar os frontmatters à [especificação aberta Agent Skills](https://agentskills.io/specification): diretório com `SKILL.md`, `name` de 1–64 caracteres em minúsculas/números/hífens igual ao diretório e `description` de 1–1024. Opcionais: `license`, `compatibility`, `metadata`, `allowed-tools` (experimental); pastas opcionais `scripts/`, `references/`, `assets/`; referências relativas à raiz da skill; recomendado menos de 500 linhas.
+3. Desenhar instalação por cópia/symlink de `plugins/moiras/skills/*` para `.agents/skills/` nos quatro agentes acima e `.agent/skills/` no Antigravity. Um instalador Node seria opcional; suporte a symlinks fora do Codex e integridade dos recursos copiados ficam **a confirmar**.
+4. Manter `AGENTS.md` como fonte única das instruções do projeto, com `CLAUDE.md` apenas apontando para ele; confirmar como cada agente carrega essa referência.
+5. Documentar o contrato mínimo de conectores/MCP de Jira e Slack: consultas e campos exigidos pelos contratos das etapas, estados de falha e interações opcionais aprovadas. Mapear ferramentas equivalentes por agente, sem vincular o núcleo a um fornecedor.
+
+Na inspeção das cinco skills, todos os `name` correspondem ao diretório e cumprem o limite/formato; as descrições têm 421 (`audit`), 412 (`index`), 409 (`publish`), 364 (`sync`) e 549 (`triage`) caracteres. Todas têm menos de 500 linhas (63–126).
+O desvio comum é `argument-hint`, campo extra fora da especificação fornecida; migrar a orientação para o corpo ou metadados em PR futuro. Todas também usam `allowed-tools: Bash(node:*)`: o campo é experimental, e a interpretação desse valor fora do Claude fica **a confirmar**; opencode reconhece apenas `name`, `description`, `license`, `compatibility` e `metadata` entre os campos fornecidos.
+
+**Riscos e confirmações antes de implementar:**
+
+- Não há equivalente estabelecido de `/moiras:...` nos outros agentes: confirmar seleção, nomes sem namespace, colisões e passagem dos argumentos hoje expressos por `$ARGUMENTS`.
+- Confirmar os pontos marcados na tabela: skills/regras na Cursor CLI, leitura de instruções no Codex/Copilot/Antigravity e invocações ainda não documentadas aqui.
+- Permissões de escrita e execução variam por agente: **a confirmar** a aplicação dos limites atuais. Escritas de knowledge continuam exigindo a escolha ou o mesmo “sim” à lista exata; preservar também as exceções existentes para memória, relatórios e reações autorizadas no automático.
+- Confirmar Node compatível, resolução de recursos após instalação, symlinks e disponibilidade/autenticação de Git e `gh`: `moiras-publish` depende de `gh` para verificar destino privado e abrir PR; manter validação, branch novo, aprovação humana e proibição de push na principal.
+- Confirmar conectores equivalentes, campos e permissões de Jira/Slack por agente, incluindo falhas parciais, reação autorizada e comentário sempre aprovado; não assumir que instalar skills instala conectores.
 
 ## Como trabalhar neste projeto
 
