@@ -46,7 +46,7 @@
       }
     ]
   },
-  "audit": { "auditors": ["Fulano", "Beltrana"] },
+  "audit": { "auditors": ["reviewer-01", "reviewer-02"] },
   "memory": { "dir": ".moiras/memory" },
   "runs": { "dir": ".moiras/runs" }
 }

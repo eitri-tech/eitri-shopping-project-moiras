@@ -48,12 +48,14 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Fora a memória e os relatórios, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` e `criteria/` pelas Moiras e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
 - O knowledge nunca tem cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
-- O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time, não do plugin.
+- O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time. Sem critérios aplicáveis, os padrões do plugin são apenas fallback, sempre sinalizado com `criteria-missing`; não são regras do time.
 - Nunca commite tokens nem URLs com segredo (no `.mcp.json` inclusive).
 
 ## Idioma
 
 O que a máquina lê é em inglês: flags, pastas, nomes de arquivo, chaves de configuração e de frontmatter, campos dos contratos e valores fixos (ex.: `action: needs-info`, `change: unchanged`, `result: resolved`). O que pessoas leem é em português: documentação, justificativas, relatórios e descrições.
+
+Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_at`, `created_at`); na coleta e na memória, data e hora com fuso, de preferência em UTC (ex.: `2026-10-06T18:00:00Z` em `run_id`, `ts`, `resolved_at`). A issue tem o seu `created_at` com hora; o do knowledge é só data.
 
 ## Ambiente
 

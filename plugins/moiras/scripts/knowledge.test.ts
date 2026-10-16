@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -375,8 +375,12 @@ describe('sourcesHash', () => {
 
     write('repo', 'src/views/cart/index.tsx', 'b');
     assert.equal(read(), first, 'content inside a directory is not part of the hash');
-    write('repo', 'node_modules/x/index.js', 'x');
-    assert.equal(read(), first);
+    const all = sourcesHash(join(dir, 'repo'), ['.']);
+    for (const name of ['node_modules', '.git', 'dist', 'build', '.next', '.direnv']) {
+      write('repo', `${name}/x/index.js`, 'x');
+      assert.equal(sourcesHash(join(dir, 'repo'), ['.']), all, name);
+      assert.equal(sourcesHash(join(dir, 'repo'), [name]), sourcesHash(join(dir, 'repo'), ['missing']), name);
+    }
 
     write('repo', 'src/views/home/index.tsx', 'a');
     assert.notEqual(read(), first, 'a new file name changes the hash');
@@ -406,5 +410,134 @@ describe('cli', () => {
     assert.match(bad.stderr, /Usage:/);
     assert.throws(() => main(['check', local, '--only', 'x']), /Invalid --only/);
     assert.throws(() => main(['hash', 'README.md']), /Usage:/);
+  });
+});
+
+
+describe('security regressions', () => {
+  it('detects assignments, query secrets, identities and conversation references without leaking values', t => {
+    const { local, write } = workspace(t);
+    const cases = [
+      'DATABASE_URL=postgres://db.internal/app', 'SESSION_ID=abcdefgh12345678',
+      ...['APP_SECRET', 'AUTH_TOKEN', 'PASSWORD', 'PASSWD', 'API_KEY', 'PRIVATE_KEY', 'CREDENTIAL'].map(key => `${key}=abc123`),
+      ...['access_token', 'token', 'key', 'password', 'secret', 'api_key'].map(key => `https://example.com/?${key}=abc123`),
+      'SERVICE_URL=https://user:pass@host', 'fulano@example.com',
+      'https://acme.slack.com/archives/C123/p123',
+    ];
+    cases.forEach((body, index) => write('local', `learnings/patterns/p${index}.md`, patternDoc(`p${index}`, body)));
+    const result = check(local);
+    for (let index = 0; index < cases.length; index++) assert.ok(result.findings.some(f => f.path.endsWith(`/p${index}.md`)), cases[index]);
+    assert.ok(!JSON.stringify(result).includes('abc123'));
+    write('local', 'criteria/c.md', criterion('c').replace('Beltrana', 'Fulano Silva'));
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('pending').replace('chosen_by: Fulano', 'chosen_by: fulano@example.com'));
+    assert.equal(check(local).findings.filter(f => f.rule === 'pseudonym-required').length, 2);
+  });
+
+  it('does not classify fictional secret placeholders or pseudonyms as secrets', t => {
+    const { local, write } = workspace(t);
+    write('local', 'criteria/c.md', criterion('c').replace('Beltrana', 'reviewer-acme-1'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'TOKEN=<token>\nPASSWORD=xxxx\nhttps://example.com/?api_key=xxxx\nhttps://<token>@example.com\nhttps://xxxx:xxxx@example.com'));
+    assert.equal(check(local).findings.filter(f => ['secret', 'url-credentials'].includes(f.rule)).length, 0);
+    assert.equal(check(local).findings.filter(f => f.rule === 'pseudonym-required').length, 0);
+  });
+
+  it('counts tilde fences, indented blocks and aggregate code, and requires complete references', t => {
+    const { local, write } = workspace(t);
+    const ref = '`acme-shop-checkout/src/cart.ts@abcdef0`';
+    const put = (id: string, body: string) => write('local', `learnings/patterns/${id}.md`, patternDoc(id, body));
+    put('tilde', `${ref}\n~~~ts\n${'a\n'.repeat(21)}~~~`);
+    put('spaces', `${ref}\n\n${'    a\n'.repeat(21)}`);
+    put('tabs', `${ref}\n\n${'\ta\n'.repeat(21)}`);
+    put('incomplete', 'x@abcdef0\n```ts\na\n```');
+    put('total', Array.from({ length: 4 }, () => `${ref}\n~~~ts\n${'a\n'.repeat(16)}~~~`).join('\n'));
+    const result = check(local).findings;
+    for (const id of ['tilde', 'spaces', 'tabs']) assert.ok(result.some(f => f.path.endsWith(`/${id}.md`) && f.rule === 'code-too-long'));
+    assert.ok(result.some(f => f.path.endsWith('/incomplete.md') && f.rule === 'code-without-reference'));
+    assert.ok(result.some(f => f.path.endsWith('/total.md') && f.rule === 'code-total-too-long'));
+  });
+
+  it('skips symlinks including cycles, binary and oversized files in hash and plan; check reports them', t => {
+    const { dir, local, shared, write } = workspace(t);
+    write('local', 'criteria/good.md', criterion('good'));
+    write('shared', 'criteria/good.md', criterion('good'));
+    const initial = sourcesHash(local, ['.']);
+    symlinkSync(join(local, 'criteria/good.md'), join(local, 'criteria/link.md'));
+    symlinkSync(local, join(local, 'cycle'));
+    symlinkSync(local, join(local, 'criteria/cycle.md'));
+    write('local', 'criteria/huge.md', 'a'.repeat(1024 * 1024 + 1));
+    write('local', 'criteria/binary.md', '\0binary');
+    assert.equal(sourcesHash(local, ['.']), initial);
+    assert.equal(plan(local, shared).items.length, 1);
+    const result = check(local).findings;
+    assert.equal(result.filter(f => f.rule === 'symlink').length, 2);
+    assert.ok(result.some(f => f.rule === 'file-too-large'));
+    assert.ok(result.some(f => f.rule === 'binary-file'));
+    assert.throws(() => sourcesHash(local, ['../shared']), /escapes base/);
+    assert.equal(sourcesHash(local, ['cycle']), sourcesHash(local, ['missing']));
+    symlinkSync(join(local, 'criteria'), join(dir, 'linked'));
+    assert.ok(check(join(dir, 'linked')).findings.every(f => f.rule === 'symlink' || f.rule === 'missing'));
+    const deep = Array.from({ length: 34 }, () => 'd').join('/');
+    write('local', `${deep}/a.txt`, 'a');
+    assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
+  });
+
+  it('bounds regex scanning of long lines', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'a'.repeat(100000) + '@abcdef0'));
+    assert.ok(check(local).findings.some(f => f.rule === 'line-too-long'));
+  });
+
+  it('resolves shared source replacements and plain ids, never traversal', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('shared', 'criteria/b.md', criterion('b'));
+    write('local', 'criteria/c.md', criterion('c', 'a, knowledge:acme/criteria/b.md, knowledge:acme/criteria/../a.md'));
+    assert.deepEqual(plan(local, shared, 'acme').remove, [
+      { path: 'criteria/a.md', replacedBy: 'criteria/c.md' },
+      { path: 'criteria/b.md', replacedBy: 'criteria/c.md' },
+    ]);
+  });
+
+  it('leaves qualified replacements unresolved for another or unnamed knowledge', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('local', 'criteria/c.md', criterion('c', 'knowledge:group-a/criteria/a.md'));
+    assert.deepEqual(plan(local, shared, 'group-b').remove, []);
+    assert.deepEqual(plan(local, shared).remove, []);
+  });
+
+  it('accepts any configured knowledge name in qualified replacements', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('local', 'criteria/c.md', criterion('c', 'knowledge:group.acme/criteria/a.md'));
+    assert.deepEqual(plan(local, shared, 'group.acme').remove, [{ path: 'criteria/a.md', replacedBy: 'criteria/c.md' }]);
+  });
+
+  it('flags an e-mail inside a URL but not URL userinfo or scp-style git remotes', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'Convite https://example.test/invite?email=real.person@example.com'));
+    assert.ok(check(local).findings.some(f => f.rule === 'personal-data'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'Use git@github.com:org/repo.git e ssh://git@example.com/org/repo.git.'));
+    assert.ok(!check(local).findings.some(f => f.rule === 'personal-data'));
+  });
+
+  it('canonicalizes optional metadata and preserves the hash without metadata', t => {
+    const { dir, write } = workspace(t);
+    write('repo', 'a.txt', 'acme');
+    const base = join(dir, 'repo');
+    const plain = sourcesHash(base, ['a.txt']);
+    // Pin the pre-metadata algorithm, including the explicit-file prefix.
+    const { createHash } = process.getBuiltinModule('node:crypto');
+    const contentHash = createHash('sha256').update('acme').digest('hex');
+    assert.equal(plain, `sha256:${createHash('sha256').update(`file:a.txt:${contentHash}`).digest('hex')}`);
+    assert.equal(main(['hash', '--base', base, 'a.txt']).output, plain);
+    const meta = { owner: 'Fulano', agency: 'Acme', platform: 'vtex', url: 'https://example.com' };
+    const first = sourcesHash(base, ['a.txt'], meta);
+    assert.notEqual(first, plain);
+    assert.equal(main(['hash', '--base', base, '--meta', JSON.stringify(meta), 'a.txt']).output, first);
+    assert.equal(sourcesHash(base, ['a.txt'], { url: meta.url, platform: meta.platform, agency: meta.agency, owner: meta.owner }), first);
+    for (const key of Object.keys(meta)) assert.notEqual(sourcesHash(base, ['a.txt'], { ...meta, [key]: 'changed' }), first);
+    assert.equal(sourcesHash(base, ['a.txt'], { a: { z: 1, b: 2 } }), sourcesHash(base, ['a.txt'], { a: { b: 2, z: 1 } }));
+    assert.throws(() => main(['hash', '--base', base, '--meta', '{', 'a.txt']));
   });
 });

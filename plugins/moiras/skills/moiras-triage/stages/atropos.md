@@ -9,7 +9,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 ```json
 {
   "input": {
-    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15 },
+    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15 },
     "classification": "<saída da Láquesis para esta issue, com os avisos acumulados>",
     "precedents": [
       { "id": "PROJ-187-1", "solution": "", "result": "resolved | not-resolved | pending", "ref": "knowledge:local/learnings/solutions/PROJ-187-1.md" }
@@ -97,7 +97,7 @@ Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo
 
 Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
 
-No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`).
+No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`), recuperando as soluções completas pelo relatório da execução (seção 6).
 
 No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha e as que são geridas por agência.
 
@@ -117,6 +117,10 @@ Registre cada veredito em `record atropos`, inclusive no modo automático:
 }
 ```
 
+O `run_id` é a referência persistente ao relatório completo `<runs.dir>/<run_id>.json`; dentro dele, localize a saída da Átropos pela chave da issue. Persista esse arquivo antes de registrar o veredito: ele deve conter a justificativa e todas as soluções na ordem original, com descrição, passos, riscos, fontes e os demais campos do contrato. Título e confiança da memória são apenas um resumo. Não substitua as soluções originais nem remova relatórios com escolhas pendentes; mantenha o `runs.dir` original acessível se a configuração mudar.
+
+Ao retomar, consulte também os relatórios anteriores: um veredito posterior da mesma issue não encerra uma escolha pendente anterior. Apresente cada conjunto por `(run_id, key)` e registre a escolha com o `run_id` do conjunto exibido, preservando a numeração. Guarde também `choice` (e o `id` do aprendizado, quando houver) no item desse relatório ao registrar a escolha, sem alterar o veredito ou as soluções; ao listar pendências, exclua os conjuntos já escolhidos. Assim a consulta do último registro por issue não perde o estado das outras execuções. Relatório ausente, ilegível ou sem soluções completas gera `pending-report-unavailable:<run_id>:<key>`: não reconstrua a escolha pelo resumo; ofereça nova triagem sem registrar escolha para aquele conjunto.
+
 `choice` é `null` até o usuário escolher. Quando escolher, grave um novo registro da mesma chave com `choice` = número da solução ou `"none"` e, se for uma solução, o `id` do registro criado no aprendizado.
 
 ## 7. Aprendizado
@@ -131,7 +135,7 @@ id: PROJ-123-1
 type: solution
 issue: PROJ-123
 created_at: 2026-10-06
-chosen_by: <usuário>
+chosen_by: <pseudônimo não identificável escolhido pelo usuário>
 agency: Agência Aurora
 repositories: [acme-shop-checkout]
 component: checkout
@@ -177,7 +181,7 @@ Quando o usuário discordar de uma ação, de uma categoria ou da ordem das solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
-approved_by: <usuário>
+approved_by: <pseudônimo não identificável escolhido pelo usuário>
 applies_to: category | origin | action | solutions
 replaces: []
 ---
@@ -189,16 +193,16 @@ replaces: []
 **Por quê:** <o caso que motivou, sem texto bruto da issue>
 ```
 
-Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague os arquivos antigos. Critérios só chegam a um knowledge compartilhado pelo `moiras-publish`, com revisão no PR.
+Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague apenas os arquivos antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; identifique-os em `replaces` pela fonte `knowledge:<name>/<caminho>`. Critérios só chegam a um knowledge compartilhado pelo `moiras-publish`, com revisão no PR.
 
 ## 9. Repasse à agência (opcional)
 
 Só vale para issue com `agency` diferente de `null`. Sem agência, esta seção não existe e nada muda.
 
 - **Quando oferecer:** no modo interativo, logo depois da escolha da solução (ou, quando não há soluções por a ação ser `duplicate` ou `close`, logo depois do veredito), pergunte uma vez: "Quer o repasse para a <agência>?". Se o usuário já pediu o repasse na conversa, não pergunte. No modo automático, não ofereça: só sinalize no relatório as issues geridas por agência.
-- **O que é:** um rascunho em português, que o usuário copia e envia. O plugin não envia, não comenta no Jira nem posta no Slack; qualquer envio é uma ação separada, com aprovação explícita daquela operação (ver `SKILL.md`, Limites).
+- **O que é:** um rascunho em português, que o usuário copia e envia. O plugin nunca envia o repasse à agência, nem com aprovação: não comenta no Jira, não posta no Slack nem usa outro canal para esse envio (ver `SKILL.md`, Limites).
 - **De qual solução:** a escolhida. Se o usuário pedir o repasse sem ter escolhido, use a de maior confiança e diga no rascunho que a escolha ainda não foi confirmada. Sem soluções (`duplicate` ou `close`), o rascunho comunica a ação: qual é a issue duplicada (só a chave) ou o motivo do fechamento, e o que se espera da agência (por exemplo, acompanhar a outra issue ou confirmar o encerramento).
 - **Conteúdo:** chave e resumo da issue; o problema; a causa provável (ou "indeterminada"); a solução (descrição, passos e riscos), quando existir; o que se espera da agência (implementar, validar, responder uma dúvida, acompanhar a issue duplicada ou confirmar o encerramento); e a confiança da solução, quando houver.
-- **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes de outros clientes, segredos nem dados pessoais. Monte o rascunho só com o que a agência consegue ver (a issue do Jira, o código e a solução): não parafraseie fatos que só vieram de conversas internas do Slack. Se o problema, a causa ou a solução dependem de informação assim, deixe essa parte de fora, marque-a como "a confirmar" e avise o usuário para ele decidir o que pode ser compartilhado. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
+- **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes ou quaisquer dados de outros clientes, segredos nem dados pessoais. Monte o rascunho só com o que a agência consegue ver (a issue do Jira, o código e a solução): não parafraseie fatos que só vieram de conversas internas do Slack. Se o problema, a causa ou a solução dependem de informação assim, deixe essa parte de fora, marque-a como "a confirmar" e avise o usuário para ele decidir o que pode ser compartilhado. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
 - **Para onde:** se a agência estiver em `agencies` na configuração e tiver `channel`, sugira esse canal como destino. Agência que não está na lista funciona do mesmo jeito, só sem sugestão de destino.
 - **Depois:** o `agency` fica no registro do aprendizado (seção 7). O repasse em si não é gravado.

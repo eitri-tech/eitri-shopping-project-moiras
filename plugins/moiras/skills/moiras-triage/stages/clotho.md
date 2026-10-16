@@ -21,13 +21,14 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    Em projetos que ainda usam o campo antigo de épico, troque `parent = <EPIC>` por `"Epic Link" = <EPIC>`.
 
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
+   Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
 3. Para cada issue, calcule `buffer_days` = data fim do épico − `duedate` da issue.
    - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
    - `duedate` depois da data fim do épico: aviso `exceeds-epic`.
 
 A ordem final segue a do Jira (prioridade, depois data fim). Issues com `exceeds-epic` sobem dentro da mesma prioridade.
 
-4. Na mesma rodada, busque **todas** as issues do épico, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `parent = <EPIC> ORDER BY key`. Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2.
+4. Na mesma rodada, busque **todas** as issues do épico, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `parent = <EPIC> ORDER BY key`. Exponha a resolução como `resolved_at` (timestamp ISO 8601 com fuso; `null` se não resolvida ou indisponível). Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2.
 
 ### B. Slack
 
@@ -104,6 +105,7 @@ Regras:
         "key": "PROJ-123",
         "summary": "",
         "description": "",
+        "created_at": "2026-10-01T10:00:00Z",
         "priority": "High",
         "status": "To Do",
         "duedate": "2026-11-30",
@@ -114,7 +116,7 @@ Regras:
       }
     ],
     "siblings": [
-      { "key": "PROJ-187", "summary": "", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20" }
+      { "key": "PROJ-187", "summary": "", "status": "Done", "assignee": "Fulano", "resolved_at": "2026-08-20T15:00:00Z" }
     ]
   },
   "slack": {
@@ -166,7 +168,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
     "source": "jira",
     "with_whom": { "reporter": "Fulano", "updated_by": "Beltrana" },
     "updated_at": "2026-10-05T17:40:00-03:00",
-    "content": { "summary": "", "description": "", "priority": "", "status": "", "duedate": "" }
+    "content": { "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "", "status": "", "duedate": "" }
   },
   {
     "key": "slack:C0123456789:1696341120.000100",
@@ -180,18 +182,20 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 ```
 
 - `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
-- Inclua `agency` em `content` das issues só quando houver valor: assim as issues sem agência mantêm o hash de antes, e trocar a agência conta como `changed`.
+- Inclua `agency` em `content` das issues só quando houver valor: trocar a agência conta como `changed`. A inclusão de `created_at` provoca uma única mudança de hash nos registros antigos, mesmo sem agência.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
-- No modo automático (sem `--full`), só issues `new` ou `changed` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
+- No modo automático (sem `--full`), issues `new` ou `changed` seguem para a Láquesis. Uma `unchanged` só pode ser pulada com conclusão comprovada em relatório completo para o mesmo `ticket` (sem `change`), a mesma entrada da Láquesis e o mesmo `knowledge_fingerprint` (ver `SKILL.md`). Sem essa prova, inclusive após falha de contrato ou mudança no knowledge ou em `siblings`, tente novamente e mantenha `change: unchanged`: coleta e conclusão são coisas distintas.
 
 ## Entrada da Láquesis
 
+Antes do filtro incremental descrito acima, a skill resolve os repositórios no glossário atual e recalcula a agência de todas as issues coletadas pela seção 3 da Láquesis, inclusive `unchanged`. Esse passo obrigatório não depende do hash de Jira/Slack nem do cache da classificação. O filtro limita apenas a classificação completa e o veredito; as interações e o relatório sempre usam a agência e os avisos atuais.
+
 Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem do Jira:
 
-- `key`, `summary`, `description`, `priority`, `agency`: do item de `jira.issues`.
+- `key`, `summary`, `description`, `created_at`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
-- `warnings`: os da issue (`no-due-date`, `exceeds-epic`) mais os da coleta (`slack-unavailable`).
+- `warnings`: os da issue (`no-due-date`, `exceeds-epic`, `creation-date-unavailable`) mais os da coleta (`slack-unavailable`).
 
 Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 

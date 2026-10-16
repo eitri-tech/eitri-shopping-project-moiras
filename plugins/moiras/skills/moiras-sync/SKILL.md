@@ -9,9 +9,11 @@ allowed-tools: Bash(node:*)
 
 Argumentos: `$ARGUMENTS`
 
-Os knowledges com `repository` no `.moiras/sources.json` são clones de repositórios git privados, criados a partir do template público de knowledge. A triagem lê esses clones direto (ver `moiras-triage/SKILL.md`, "Knowledge"), então sincronizar é deixar cada clone igual à `main` do repositório dele. **Só traz, nunca envia**: quem publica é o `moiras-publish`.
+Resolva `<local-dir>` pelo `dir` da entrada com `scope: local` em `knowledge` no `.moiras/sources.json`; o padrão é `.moiras/knowledge`. Use esse caminho em toda leitura, escrita e comparação do knowledge local.
 
-A skill nunca toca em `.moiras/knowledge` (escopo `local`), no Jira, no Slack nem nos repositórios de código.
+Os knowledges com `repository` no `.moiras/sources.json` são clones de repositórios git privados, criados a partir do template público de knowledge. A triagem lê esses clones direto (ver `moiras-triage/SKILL.md`, "Knowledge"), então sincronizar é deixar cada clone igual à branch padrão do repositório dele. **Só traz, nunca envia**: quem publica é o `moiras-publish`.
+
+A skill nunca altera `<local-dir>` (escopo `local`), o Jira, o Slack nem os repositórios de código.
 
 ## Modos
 
@@ -31,26 +33,27 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
    - `dir` existe: confira que é um repositório git e que o `origin` é o `repository` declarado (ignore `.git` no fim e a diferença entre ssh e https). Se não for, **pare** nesse knowledge e avise: a pasta pode ser de outro repositório.
 2. **Garantir que o clone está limpo e na branch padrão.** `git status --porcelain` precisa vir vazio, e a branch atual precisa ser a padrão (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`). Se houver alteração local ou outra branch (por exemplo, uma branch de `moiras-publish` ainda aberta), **pare** nesse knowledge, diga o motivo e deixe a decisão com o usuário. Nunca faça `stash`, `checkout`, `reset` nem descarte nada.
 3. **Buscar.** `git fetch origin`.
-4. **Avançar.** `git merge --ff-only origin/<padrão>`. Se não for possível avançar (o clone tem commits locais ou divergiu), **pare** e avise. Nunca faça merge com commit, rebase, `reset` ou `pull --force`.
-5. **Conferir o que chegou.** Compare o commit anterior com o novo: `git log --oneline <antes>..<depois>` e `git diff --name-status <antes> <depois>`. Agrupe por pasta (`glossary/`, `criteria/`, `learnings/`) e por ação (novo, alterado, removido). Não mostre o conteúdo dos arquivos.
-6. **Validar.** Rode a checagem no clone e relate só caminho e regra:
+4. **Conferir o histórico.** Depois do fetch, exija upstream configurado e igual a `origin/<padrão>`. Rode `git rev-list --count @{u}..HEAD`: se falhar, for inconclusivo ou maior que zero, pare e relate commits locais, inclusive divergência. Confirme também `git merge-base --is-ancestor HEAD @{u}`; falha ou resultado inconclusivo interrompe a atualização. Confira novamente que a árvore está limpa. Nunca faça `stash`, `reset`, `checkout` ou `clean`.
+5. **Avançar.** `git merge --ff-only origin/<padrão>`. Se não for possível avançar (o clone tem commits locais ou divergiu), **pare** e avise. Nunca faça merge com commit, rebase, `reset` ou `pull --force`.
+6. **Conferir o que chegou.** Compare o commit anterior com o novo: `git log --oneline <antes>..<depois>` e `git diff --name-status <antes> <depois>`. Agrupe por pasta (`glossary/`, `criteria/`, `learnings/`) e por ação (novo, alterado, removido). Não mostre o conteúdo dos arquivos.
+7. **Validar.** Rode a checagem no clone e relate só caminho e regra:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir>
    ```
 
    Registro fora das regras (segredo, caminho pessoal, código acima de 20 linhas, sem `indexed_at`/`created_at`) é apontado, não corrigido: o clone é um espelho. Quem corrige é o `moiras-audit` num PR, ou o repositório de origem.
-7. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
+8. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local .moiras/knowledge --shared <dir>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir> --shared-name <name>
    ```
 
    Liste-os no relatório como "já no compartilhado". A cópia local **não é apagada** por esta skill (aprendizado não se apaga); na leitura, o `local` já tem precedência sobre o compartilhado.
 
 ## Relatório
 
-Por knowledge: `name`, `scope`, situação (`updated`, `unchanged`, `cloned`, `skipped`, `stopped`), commits trazidos, arquivos por pasta e ação, os achados da validação e os registros já no compartilhado. Quando parar ou pular, o motivo vem em uma frase. Sem texto bruto de issues ou conversas.
+Por knowledge: `name`, `scope`, situação (`updated`, `unchanged`, `cloned`, `skipped`, `stopped`), commit efetivamente lido (`git rev-parse HEAD` depois da atualização, ou ao parar), commits trazidos, arquivos por pasta e ação, os achados da validação e os registros já no compartilhado. Quando parar ou pular, o motivo vem em uma frase. Sem texto bruto de issues ou conversas.
 
 ## Limites
 

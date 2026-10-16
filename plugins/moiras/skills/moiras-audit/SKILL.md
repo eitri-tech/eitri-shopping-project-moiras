@@ -13,8 +13,8 @@ A triagem já deixa o usuário corrigir a Átropos no fim do pipeline: escolher 
 
 ## Quem audita
 
-- Auditor é quem está conversando com a skill. A skill pergunta o nome e o usa em `approved_by` dos critérios que gerar e na observação dos aprendizados que ajustar.
-- Se `audit.auditors` existir em `.moiras/sources.json`, o nome precisa estar na lista; se não estiver, a skill avisa e só permite a leitura (sem ajustes). Sem a chave, qualquer pessoa pode auditar. É uma identificação, não uma autenticação: o plugin roda na máquina de quem o usa.
+- Auditor é quem está conversando com a skill. A skill pede um pseudônimo não identificável escolhido pela pessoa (nunca nome real, e-mail ou identificador de conta) e o usa em `approved_by` dos critérios que gerar e na observação dos aprendizados que ajustar.
+- Se `audit.auditors` existir em `.moiras/sources.json`, o pseudônimo precisa estar na lista (que deve conter apenas esses pseudônimos); se não estiver, a skill avisa e só permite a leitura (sem ajustes). Sem a chave, qualquer pessoa pode auditar. É uma identificação, não uma autenticação: o plugin roda na máquina de quem o usa.
 - A skill só altera o knowledge de escopo `local`. Um registro de knowledge compartilhado (`project`, `group`, `global`) nunca é alterado por aqui, e o que fazer com ele depende do tipo: critério é substituído por um critério local com `replaces`; aprendizado e glossário só são reportados (o aprendizado é ajustado por quem tem o registro no knowledge local ou no repositório compartilhado, e o glossário se resolve com `moiras-index`). Levar um ajuste local ao compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
 ## Escopo
@@ -26,7 +26,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 1. **Ler.** Junte os knowledges declarados em `knowledge` (mesmas regras de leitura e de precedência da triagem) e, dentro do escopo, procure os achados abaixo. O que é mecânico (campos obrigatórios faltando, modelo não preenchido, segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência) sai do script, que só devolve caminho e regra, sem repetir o conteúdo: `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir do knowledge> [--only glossary|criteria|learnings]`.
 2. **Mostrar.** Apresente os achados numerados, do mais grave ao menos grave, cada um com a fonte (`ref` = `knowledge:<name>/<caminho>`), o motivo e o ajuste proposto.
 3. **Decidir.** Para cada achado, o auditor escolhe: aplicar, editar o ajuste, pular ou discordar (ver "Discordância").
-4. **Aplicar.** Só o que o auditor aprovou, e só depois do "sim" à lista exata. Item novo precisa de nova aprovação.
+4. **Aplicar.** Só os registros dentro da pasta e do período selecionados; se um ajuste exigir outro escopo, apresente a ampliação e espere novo "sim" antes de agir. Só o que o auditor aprovou, e só depois do "sim" à lista exata. Item novo precisa de nova aprovação.
 5. **Registrar.** Salve o relatório da auditoria em `<runs.dir>/audit-<audit_id>.md` (`audit_id` = horário de início em ISO 8601 UTC; padrão `.moiras/runs/`): achados, o que foi aplicado, pulado e adiado, e quem auditou. Sem texto bruto de issues ou conversas.
 
 ## O que procurar
@@ -55,7 +55,7 @@ A skill também compara cada critério com os aprendizados recentes: se uma solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
-approved_by: <auditor>
+approved_by: <pseudônimo não identificável do auditor>
 applies_to: category | origin | action | solutions
 replaces: []
 ---
@@ -67,7 +67,7 @@ replaces: []
 **Por quê:** <o caso que motivou, sem texto bruto da issue>
 ```
 
-Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague só os antigos que estão no knowledge local. Os de um knowledge compartilhado (`project`, `group`, `global`) ficam intocados: o critério local os substitui pelo `replaces`, e a remoção deles no repositório compartilhado é com o `moiras-publish`, num PR. Mudar um critério existente é gerar um novo com `replaces` do antigo, nunca reescrever o arquivo.
+Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague só os antigos que estão no mesmo knowledge local e no escopo aprovado. Os de um knowledge compartilhado (`project`, `group`, `global`) ficam intocados: o critério local os substitui pelo `replaces` com a fonte `knowledge:<name>/<caminho>`, e a remoção deles no repositório compartilhado é com o `moiras-publish`, num PR. Mudar um critério existente é gerar um novo com `replaces` do antigo, nunca reescrever o arquivo.
 
 ## Dados sensíveis
 

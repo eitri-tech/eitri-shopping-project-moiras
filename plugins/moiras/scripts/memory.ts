@@ -45,6 +45,14 @@ export const usage = 'Usage: node memory.ts hash | record <clotho|lachesis|atrop
 export const stages: ReadonlySet<string> = new Set<Stage>(['clotho', 'lachesis', 'atropos']);
 export const defaultDir = '.moiras/memory';
 
+const stageFields: Record<Stage, readonly string[]> = {
+  clotho: ['source', 'with_whom', 'updated_at'],
+  lachesis: ['category', 'component', 'repositories', 'origin', 'complex', 'confidence', 'duplicates'],
+  atropos: ['mode', 'action', 'solutions', 'choice', 'id'],
+};
+const commonFields = ['key', 'content', 'hash', 'ts', 'run_id'];
+const hashPattern = /^sha256:[0-9a-fA-F]{64}$/;
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -82,6 +90,10 @@ export function readRecords(
     if (!line.trim()) continue;
     try {
       const record: unknown = JSON.parse(line);
+      if (isObject(record) && Object.hasOwn(record, 'chave')) {
+        warn(`Warning: skipped legacy Portuguese-key record in ${file}:${index + 1}; re-collect with English keys; file left unchanged.`);
+        continue;
+      }
       if (!isObject(record) || typeof record.key !== 'string') throw new Error('invalid record');
       records.push(record as MemoryRecord);
     } catch {
@@ -101,6 +113,45 @@ export function record(
 ): Result[] {
   const batch = (Array.isArray(input) ? input : [input]).map((entry: unknown): MemoryRecord => {
     if (!isObject(entry) || typeof entry.key !== 'string') throw new Error('Every record needs a string key.');
+    const allowed = new Set([...commonFields, ...stageFields[stage]]);
+    for (const field of Object.keys(entry)) {
+      if (!allowed.has(field)) throw new Error(`Unknown ${stage} field: ${field}`);
+    }
+    if (Object.hasOwn(entry, 'hash') &&
+        (typeof entry.hash !== 'string' || !hashPattern.test(entry.hash))) {
+      throw new Error('Hash must be sha256:<64 hex digits>.');
+    }
+    if (Object.hasOwn(entry, 'hash') && Object.hasOwn(entry, 'content')) {
+      throw new Error('Use content or hash, not both.');
+    }
+    // Nested metadata has its own allowlist; raw payload belongs only in content.
+    const nestedFields = stage === 'clotho' ? { with_whom: ['reporter', 'updated_by', 'author', 'channel'] }
+      : stage === 'atropos' ? { solutions: ['title', 'confidence'] } : {};
+    for (const [field, fields] of Object.entries(nestedFields)) {
+      if (!Object.hasOwn(entry, field)) continue;
+      const values = field === 'solutions' ? entry[field] : [entry[field]];
+      if (!Array.isArray(values) || values.some(value => !isObject(value) ||
+          Object.keys(value).some(key => !fields.includes(key)) ||
+          Object.values(value).some(value => typeof value !== 'string' && typeof value !== 'number'))) {
+        throw new Error(`Invalid metadata: ${field}`);
+      }
+    }
+    for (const field of stageFields[stage]) {
+      if (!Object.hasOwn(entry, field) || field === 'with_whom' || field === 'solutions') continue;
+      const value = entry[field];
+      const valid = field === 'repositories' || field === 'duplicates'
+        ? Array.isArray(value) && value.every(item => typeof item === 'string')
+        : field === 'complex' ? typeof value === 'boolean'
+        : field === 'confidence' ? typeof value === 'number' && Number.isFinite(value)
+        : field === 'choice' ? value === null || typeof value === 'number' || value === 'none'
+        : typeof value === 'string';
+      if (!valid) throw new Error(`Invalid metadata: ${field}`);
+    }
+    for (const field of ['ts', 'run_id']) {
+      if (Object.hasOwn(entry, field) && typeof entry[field] !== 'string') {
+        throw new Error(`Invalid metadata: ${field}`);
+      }
+    }
     const { content, ...rest } = entry;
     if (Object.hasOwn(entry, 'content')) rest.hash = hash(content);
     else if (!Object.hasOwn(entry, 'hash')) throw new Error('Record without content or hash.');
