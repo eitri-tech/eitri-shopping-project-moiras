@@ -208,6 +208,59 @@ describe('check', () => {
     ]);
   });
 
+  it('applies the snippet rules to tilde fences and indented code blocks too', t => {
+    const { local, write } = workspace(t);
+    const record = (name: string, body: string) =>
+      write('local', `learnings/patterns/${name}.md`, patternDoc(name, body));
+    const reference = '`acme-shop-checkout/src/views/checkout/Cart.tsx@a1b2c3d`';
+    const code = (lines: number, indent: string) => Array.from({ length: lines }, (_, n) => `${indent}const x${n} = ${n};`).join('\n');
+    record('til-longo', `${reference}\n\n~~~ts\n${code(21, '')}\n~~~`);
+    record('til-ok', `${reference}\n\n~~~ts\n${code(3, '')}\n~~~`);
+    record('til-aberto', `${reference}\n\n~~~ts\nconst a = 1;`);
+    record('quatro', `${reference}\n\n\`\`\`\`md\n\`\`\`ts\nconst a = 1;\n\`\`\`\n\`\`\`\``);
+    record('indent-longo', `Exemplo em ${reference}:\n\n${code(21, '    ')}`);
+    record('indent-sem-ref', `Exemplo:\n\n${code(3, '\t')}`);
+    record('indent-ok', `Exemplo em ${reference}:\n\n${code(3, '    ')}`);
+    record('lista', `- item\n\n    continua o item da lista\n\n${code(1, '    ')}\n\ntexto`);
+    const quote = (lines: string) => lines.split('\n').map(line => `> ${line}`).join('\n');
+    record('citacao-longo', `${reference}\n\n${quote(`~~~ts\n${code(21, '')}\n~~~`)}`);
+    record('citacao-sem-ref', quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``));
+    record('citacao-ok', `${reference}\n\n${quote(`\`\`\`ts\n${code(2, '')}\n\`\`\``)}\n\n> só uma citação, sem código`);
+    record('lista-longo', `- passo\n\n  ${reference}\n\n  \`\`\`ts\n${code(21, '  ')}\n  \`\`\``);
+    record('lista-indent', `- passo ${reference}\n\n${code(21, '      ')}`);
+    record('quatro-espacos', `${reference}\n\n    \`\`\`ts\n${code(19, '    ')}\n    \`\`\``);
+    record('tres-espacos', `${reference}\n\n   \`\`\`ts\n${code(3, '   ')}\n   \`\`\``);
+    record('lista-continua', `- passo ${reference}\n\n    texto que continua o item\n\n    mais texto do mesmo item`);
+    record('fecha-recuado', `${reference}\n\n\`\`\`ts\n${code(2, '')}\n    \`\`\`\n${code(21, '')}`);
+    record('fecha-recuado-lista', `- passo ${reference}\n\n  \`\`\`ts\n${code(2, '  ')}\n      \`\`\`\n${code(21, '  ')}`);
+    record('fecha-ok', `${reference}\n\n\`\`\`ts\n${code(2, '')}\n   \`\`\``);
+    assert.deepEqual(rules(local), [
+      'learnings/patterns/citacao-longo.md:code-too-long',
+      'learnings/patterns/citacao-sem-ref.md:code-without-reference',
+      'learnings/patterns/fecha-recuado-lista.md:code-fence-unclosed',
+      'learnings/patterns/fecha-recuado.md:code-fence-unclosed',
+      'learnings/patterns/indent-longo.md:code-too-long',
+      'learnings/patterns/indent-sem-ref.md:code-without-reference',
+      'learnings/patterns/lista-indent.md:code-too-long',
+      'learnings/patterns/lista-longo.md:code-too-long',
+      'learnings/patterns/quatro-espacos.md:code-too-long',
+      'learnings/patterns/til-aberto.md:code-fence-unclosed',
+      'learnings/patterns/til-longo.md:code-too-long',
+    ]);
+  });
+
+  it('rejects dates that are not on the calendar', t => {
+    const { local, write } = workspace(t);
+    for (const [id, date] of [['maluco', '2026-99-99'], ['fev', '2026-02-30'], ['bissexto', '2028-02-29'], ['comum', '2027-02-29'], ['ok', '2026-10-16']] as const) {
+      write('local', `learnings/patterns/${id}.md`, patternDoc(id, '# P').replace(/created_at: .*/, `created_at: ${date}`));
+    }
+    assert.deepEqual(rules(local), [
+      'learnings/patterns/comum.md:date-invalid',
+      'learnings/patterns/fev.md:date-invalid',
+      'learnings/patterns/maluco.md:date-invalid',
+    ]);
+  });
+
   it('limits the scan with --only', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/sem-front.md', 'x');
@@ -393,8 +446,8 @@ describe('security regressions', () => {
     const ref = '`acme-shop-checkout/src/cart.ts@abcdef0`';
     const put = (id: string, body: string) => write('local', `learnings/patterns/${id}.md`, patternDoc(id, body));
     put('tilde', `${ref}\n~~~ts\n${'a\n'.repeat(21)}~~~`);
-    put('spaces', `${ref}\n${'    a\n'.repeat(21)}`);
-    put('tabs', `${ref}\n${'\ta\n'.repeat(21)}`);
+    put('spaces', `${ref}\n\n${'    a\n'.repeat(21)}`);
+    put('tabs', `${ref}\n\n${'\ta\n'.repeat(21)}`);
     put('incomplete', 'x@abcdef0\n```ts\na\n```');
     put('total', Array.from({ length: 4 }, () => `${ref}\n~~~ts\n${'a\n'.repeat(16)}~~~`).join('\n'));
     const result = check(local).findings;
