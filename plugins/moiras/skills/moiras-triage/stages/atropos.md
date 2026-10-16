@@ -19,6 +19,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
     "key": "PROJ-123",
     "action": "duplicate | blocked | ready-for-dev | needs-info | close",
     "duplicate_of": "PROJ-187 | null",
+    "agency": "Agência Aurora | null",
     "justification": {
       "problem": "O carrinho é recriado quando o usuário troca de seller.",
       "probable_cause": "O carrinho antigo é descartado na troca de seller em vez de ser atualizado.",
@@ -45,7 +46,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 }
 ```
 
-`ticket` é o item completo de `jira.issues` guardado na Cloto.
+`ticket` é o item completo de `jira.issues` guardado na Cloto. `agency` da saída é copiado de `classification.agency` (o da Láquesis, que já considera o Jira e o glossário), sem recalcular.
 
 ## 1. Precedentes
 
@@ -94,9 +95,11 @@ Como calibrar:
 
 Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, folga até o fim do épico, ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas. Em seguida, as sugestões de glossário (`glossary_suggestions`) agrupadas por repositório e as de critérios (`criteria_suggestions`). Por fim, as saídas completas em JSON.
 
+Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
+
 No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`).
 
-No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha.
+No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha e as que são geridas por agência.
 
 ## 6. Memória
 
@@ -129,6 +132,7 @@ type: solution
 issue: PROJ-123
 created_at: 2026-10-06
 chosen_by: <usuário>
+agency: Agência Aurora
 repositories: [acme-shop-checkout]
 component: checkout
 category: bug
@@ -157,6 +161,7 @@ result: pending
 
 - **Idempotência:** se o último registro da issue tem a mesma solução e `result: pending`, a escolha é uma confirmação: não crie outro. Crie `<KEY>-<n+1>` só quando for outra solução ou uma nova tentativa depois de um resultado conhecido.
 - **Edição:** registros não são apagados nem reescritos. A única exceção é `result` (`pending` → `resolved` ou `not-resolved`) e a `Observação`, atualizados pelo `id` quando o usuário contar o desfecho daquela aplicação.
+- `agency` só aparece no registro quando a issue tem agência; sem ela, omita a linha.
 - Escolha `none` não gera registro.
 - Referencie registros pelo `id` (em `precedent`) ou pelo caminho (`knowledge:local/learnings/solutions/PROJ-123-1.md`).
 - Nada de texto bruto da issue ou da conversa, segredos ou código com mais de 20 linhas (ver `SKILL.md`).
@@ -184,3 +189,15 @@ replaces: []
 ```
 
 Se o critério novo conflitar com um existente, una os dois num critério regenerado, liste os antigos em `replaces` e apague os arquivos antigos. Critérios só chegam a um knowledge compartilhado pelo `moiras-publish`, com revisão no PR.
+
+## 9. Repasse à agência (opcional)
+
+Só vale para issue com `agency` diferente de `null`. Sem agência, esta seção não existe e nada muda.
+
+- **Quando oferecer:** no modo interativo, logo depois da escolha da solução, pergunte uma vez: "Quer o repasse para a <agência>?". Se o usuário já pediu o repasse na conversa, não pergunte. No modo automático, não ofereça: só sinalize no relatório as issues geridas por agência.
+- **O que é:** um rascunho em português, que o usuário copia e envia. O plugin não envia, não comenta no Jira nem posta no Slack; qualquer envio é uma ação separada, com aprovação explícita daquela operação (ver `SKILL.md`, Limites).
+- **De qual solução:** a escolhida. Se o usuário pedir o repasse sem ter escolhido, use a de maior confiança e diga no rascunho que a escolha ainda não foi confirmada.
+- **Conteúdo:** chave e resumo da issue; o problema; a causa provável (ou "indeterminada"); a solução (descrição, passos e riscos); o que se espera da agência (implementar, validar ou responder uma dúvida); e a confiança da solução.
+- **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes de outros clientes, segredos nem dados pessoais. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
+- **Para onde:** se a agência estiver em `agencies` na configuração e tiver `channel`, sugira esse canal como destino. Agência que não está na lista funciona do mesmo jeito, só sem sugestão de destino.
+- **Depois:** o `agency` fica no registro do aprendizado (seção 7). O repasse em si não é gravado.

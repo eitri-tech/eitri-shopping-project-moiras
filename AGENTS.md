@@ -35,6 +35,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Cada etapa tem contrato `{input, output}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
 - O glossário é derivado do código (indexação). A Láquesis não o edita: só sugere.
+- Agência é opcional (`jira.agency_field` ou `agency` no glossário). Para issue com agência, a Átropos só oferece um rascunho de repasse, que o usuário envia: nada vai à agência (Jira, Slack ou outro canal) pelo plugin, e o rascunho não leva conversas internas nem dados de outros clientes.
 - Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
 - Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash). Ela é local e nunca vai para um knowledge.
 - Fora a memória e os relatórios, o plugin só escreve no knowledge local (`learnings/` e `criteria/`), no modo interativo e depois da escolha ou do "sim" do usuário. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).

@@ -2,8 +2,12 @@
   "jira": {
     "site": "example.atlassian.net",
     "epic": "PROJ-100",
-    "project_end": "2026-12-15"
+    "project_end": "2026-12-15",
+    "agency_field": "Agency"
   },
+  "agencies": [
+    { "name": "Agência Aurora", "channel": "#proj-agency" }
+  ],
   "slack": {
     "lookback_days": 7,
     "people": [

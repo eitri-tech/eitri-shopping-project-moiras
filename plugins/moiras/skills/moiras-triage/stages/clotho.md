@@ -19,6 +19,8 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    ```
 
    Em projetos que ainda usam o campo antigo de épico, troque `parent = <EPIC>` por `"Epic Link" = <EPIC>`.
+
+   Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
 3. Para cada issue, calcule `buffer_days` = data fim do épico − `duedate` da issue.
    - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
    - `duedate` depois da data fim do épico: aviso `exceeds-epic`.
@@ -82,6 +84,7 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
         "status": "To Do",
         "duedate": "2026-11-30",
         "buffer_days": 15,
+        "agency": "Agência Aurora | null",
         "change": "new | changed | unchanged",
         "warnings": []
       }
@@ -143,6 +146,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 ```
 
 - `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
+- Inclua `agency` em `content` das issues só quando houver valor: assim as issues sem agência mantêm o hash de antes, e trocar a agência conta como `changed`.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
 - No modo automático (sem `--full`), só issues `new` ou `changed` seguem para a Láquesis. As demais aparecem no relatório como "sem mudança".
 
@@ -150,7 +154,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 
 Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem do Jira:
 
-- `key`, `summary`, `description`, `priority`: do item de `jira.issues`.
+- `key`, `summary`, `description`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
 - `warnings`: os da issue (`no-due-date`, `exceeds-epic`) mais os da coleta (`slack-unavailable`).

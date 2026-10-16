@@ -37,6 +37,7 @@ Cloto     : configuração + épico     → issues do Jira + mensagens do Slack
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
 Átropos   : issue + classificação    → justificativa, ação e de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
+                                      → (se houver agência e o usuário pedir) rascunho de repasse
 ```
 
 - Esta skill guarda as saídas de todas as etapas e monta a entrada de cada uma exatamente como o contrato pede.
@@ -56,7 +57,7 @@ Todo knowledge tem a mesma estrutura:
 
 | Pasta | Conteúdo | Quem escreve |
 |---|---|---|
-| `glossary/` | Glossário de repositórios: um arquivo por repositório, com localização e metadados | `moiras-index` (derivado do código, pode ser regenerado) |
+| `glossary/` | Glossário de repositórios: um arquivo por repositório, com localização e metadados (e, opcionalmente, `agency`, a agência que cuida dele) | `moiras-index` (derivado do código, pode ser regenerado) |
 | `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando |
 | `learnings/solutions/` | Soluções escolhidas e o resultado delas | Átropos |
 | `learnings/patterns/` | Padrões de problema recorrentes | Láquesis / Átropos |
@@ -104,6 +105,6 @@ Toda fonte segue este formato:
 
 ## Limites
 
-A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica.
+A skill termina na recomendação. Ela não altera, comenta, atribui nem transiciona issues no Jira e não posta no Slack. Qualquer escrita nesses sistemas é uma ação separada, que exige aprovação explícita do usuário para aquela operação específica. Isso vale para o repasse à agência (ver `stages/atropos.md`, seção 9): a skill só prepara o rascunho, e quem envia é o usuário.
 
 Fora a memória, os relatórios do modo automático e o knowledge local (aprendizado e critérios, como descrito acima), a skill não escreve nada.

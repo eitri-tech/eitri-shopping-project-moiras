@@ -134,7 +134,7 @@ claude --plugin-dir plugins/moiras
 
 Dentro da sessão:
 
-1. Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar e preencha o épico, as pessoas e os canais do Slack (com os IDs `U…` e `C…`) e os knowledges (sem nenhum, vale só `.moiras/knowledge/`).
+1. Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar e preencha o épico, as pessoas e os canais do Slack (com os IDs `U…` e `C…`) e os knowledges (sem nenhum, vale só `.moiras/knowledge/`). Se parte das tasks é gerida por agência, preencha também `jira.agency_field` e `agencies`; é opcional.
 2. Conecte o Jira e o Slack ao Claude (conectores do claude.ai ou servidores MCP). O plugin não traz servidor próprio.
 3. Rode `/moiras:moiras-triage PROJ-100` (interativo) ou `/moiras:moiras-triage PROJ-100 --auto` (sem perguntas, só o que mudou; relatório em `.moiras/runs/`).
 4. Depois de editar arquivos do plugin, rode `/reload-plugins` na sessão.

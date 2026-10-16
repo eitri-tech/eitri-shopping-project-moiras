@@ -6,7 +6,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 
 - **Cloto** (fia): coleta, em paralelo, as issues sem responsável do épico no Jira e as conversas do Slack (hoje as fontes esperadas; outras podem ser adicionadas)
 - **Láquesis** (mede): identifica repositório e componente pelo glossário, classifica e avalia duplicados
-- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
+- **Átropos** (corta): justifica o problema, sugere de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado; se a task é gerida por uma agência, oferece um rascunho para repassar a solução a ela
 
 ## Estrutura
 
@@ -37,7 +37,8 @@ Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,p
 
 Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha:
 
-- `jira`: site, épico e data fim do projeto;
+- `jira`: site, épico e data fim do projeto; opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task;
+- `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
 - `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
 - `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
