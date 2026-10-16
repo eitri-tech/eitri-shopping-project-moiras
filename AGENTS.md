@@ -31,7 +31,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 
 ## Regras do domínio
 
-- O plugin só lê e sugere no Jira e no Slack; nunca escreve sem aprovação humana.
+- O plugin só lê e sugere no Jira e no Slack; nunca escreve sem aprovação humana. A única exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira): desligadas por padrão (`interactions.enabled`), só no modo interativo e aplicadas depois do "sim" do usuário à lista exata. No `--auto` nada é escrito.
 - Cada etapa tem contrato `{input, output}`; saída fora do contrato interrompe a issue em vez de seguir adiante.
 - Toda classificação sai em formato estruturado, com as fontes consultadas.
 - O glossário é derivado do código (indexação). A Láquesis não o edita: só sugere.

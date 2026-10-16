@@ -67,6 +67,27 @@ Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issu
 
 Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver documentada nesta etapa, não a use.
 
+## Interações (opcional)
+
+Além de ler, a Cloto pode sinalizar nas próprias fontes que viu o item e ligar uma fonte à outra, com a menor ação possível. **Está desligada por padrão**: só vale com `interactions.enabled: true` em `.moiras/sources.json`.
+
+Ações permitidas (e só estas):
+
+| Fonte | Tipo | O que faz |
+|---|---|---|
+| Slack | `reaction` | reage com o emoji de `interactions.slack.reaction` (padrão `eyes`) nas mensagens coletadas que citam uma issue a triar: "vista pela triagem" |
+| Jira | `comment` | comenta na issue, uma linha, que ela foi citada no Slack, com o link da mensagem |
+| outra fonte | `reaction` ou `comment` | a ação mínima que a fonte oferece, no mesmo padrão: marcar como vista, ou uma linha com link |
+
+Regras:
+
+1. **Aprovação.** A Cloto nunca escreve sozinha. Depois da coleta e antes de chamar a Láquesis, monte a lista de `interactions` (alvo, tipo, texto, link) e mostre ao usuário. O "sim" aplica exatamente aquela lista; o usuário pode tirar itens, e itens novos precisam de nova aprovação. Sem resposta ou com "não", nada é aplicado.
+2. **Modo automático.** Não escreve nunca: as interações ficam com `status: proposed` e aparecem no relatório.
+3. **Texto.** Uma linha em português, começando com `Moiras:`, por exemplo `Moiras: esta issue foi citada no Slack em 03/10 (<link>)`. Nada de texto bruto de issues ou conversas, segredos ou dados pessoais. Em issue com `agency`, o Jira pode ser visível a externos: comente sem o link do Slack, só com a data.
+4. **Sem repetir.** Antes de propor, consulte `query clotho --key interaction:<source>:<alvo>:<tipo>`; se já existe, pule. Depois de aplicar com sucesso, registre essa chave com `record clotho` (`content` = tipo, texto e link, que vira hash). Esses registros não contam para o `change` das issues.
+5. **Falha.** Conector sem permissão de escrita ou erro da API: marque a interação como `failed`, acrescente o aviso `interaction-failed:<fonte>` e siga a triagem. Não tente de novo na mesma execução.
+6. **Nunca**: editar ou apagar conteúdo, atribuir ou transicionar issue, criar issue, postar mensagem nova no Slack, nem qualquer ação fora da tabela acima.
+
 ## Saída
 
 ```json
@@ -116,6 +137,16 @@ Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiv
     ],
     "without_issue": []
   },
+  "interactions": [
+    {
+      "id": "slack:C0123456789:1696341120.000100:reaction",
+      "source": "slack",
+      "type": "reaction | comment",
+      "target": "<permalink ou chave>",
+      "content": "eyes | Moiras: ...",
+      "status": "proposed | applied | skipped | failed"
+    }
+  ],
   "errors": []
 }
 ```
@@ -163,4 +194,4 @@ Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como cont
 
 O item completo de `jira.issues` (com `description`, `duedate` e `buffer_days`) fica guardado: ele é o `ticket` da entrada da Átropos.
 
-Somente leitura: esta etapa nunca cria, comenta ou atribui issues, nem posta no Slack.
+A coleta é somente leitura. As únicas escritas possíveis são as interações opcionais acima (reação e comentário curto), aprovadas pelo usuário. Esta etapa nunca cria ou atribui issues, nem posta mensagens novas no Slack. Com `interactions` desligado, `interactions` na saída é `[]`.

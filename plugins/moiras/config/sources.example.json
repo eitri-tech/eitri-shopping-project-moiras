@@ -23,6 +23,11 @@
       }
     ]
   },
+  "interactions": {
+    "enabled": false,
+    "slack": { "reaction": "eyes" },
+    "jira": { "comment": true }
+  },
   "knowledge": [
     { "name": "local", "scope": "local", "dir": ".moiras/knowledge" },
     { "name": "acme", "scope": "group", "repository": "git@github.com:<org>/acme-knowledge.git", "dir": "../acme-knowledge" },
