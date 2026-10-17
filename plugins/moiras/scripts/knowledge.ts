@@ -459,8 +459,8 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
  * Fingerprint of what a record was derived from: the content of files, and only the names
  * inside directories. A path that does not exist is ignored, so an optional file does not
  * change the hash until it shows up. Walking a directory leaves out what the `.gitignore` of
- * the base, of the folders above it and of every folder on the way excludes: ignored folders
- * are not even read. A path named explicitly is always read.
+ * the base and of every folder below it excludes, as Git would (never one above the base):
+ * ignored folders are not even read. A path named explicitly is always read.
  */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -492,7 +492,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       visited.add(real);
       let layers = inherited;
       if (explicit) {
-        // A path named on its own still obeys the .gitignore of every folder above it.
+        // A path named on its own still obeys the .gitignore of the folders between it and the base (never above the base).
         const parts = relative(resolve(base), full).split(sep).filter(Boolean);
         layers = [];
         for (let depth = 0; depth < parts.length; depth += 1) {

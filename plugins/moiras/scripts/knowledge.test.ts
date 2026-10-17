@@ -493,10 +493,13 @@ describe('sourcesHash', () => {
     assert.equal(hashOf('src'), nested, 'a nested .gitignore excludes its own subtree');
     write('repo', 'src/keep.log', 'x');
     assert.notEqual(hashOf('src'), nested, 'a deeper rule can re-include a file');
-    assert.equal(hashOf('src/deep'), hashOf('src/deep'), 'a path named on its own still obeys the folders above it');
+    write('repo', 'src/.gitignore', 'generated/\n!keep.log\nskip.txt\n');
     const deep = hashOf('src/deep');
     write('repo', 'src/deep/more.log', 'x');
-    assert.equal(hashOf('src/deep'), deep);
+    write('repo', 'src/deep/skip.txt', 'x');
+    assert.equal(hashOf('src/deep'), deep, 'a path named on its own still obeys the .gitignore of the folders between it and the base');
+    write('repo', 'src/deep/other.txt', 'x');
+    assert.notEqual(hashOf('src/deep'), deep);
   });
 
   it('reads an explicit file even when a .gitignore names it, and skips an unreadable .gitignore', t => {
@@ -512,6 +515,19 @@ describe('sourcesHash', () => {
     const all = sourcesHash(base, ['src']);
     write('repo', 'src/b.txt', 'x');
     assert.notEqual(sourcesHash(base, ['src']), all, 'a binary .gitignore excludes nothing');
+  });
+
+  it('reads .gitignore files from the base down and never above it', t => {
+    const { dir, write } = workspace(t);
+    write('', '.gitignore', 'a.txt\n');
+    write('repo', 'a.txt', 'x');
+    write('repo', 'b.txt', 'x');
+    const base = join(dir, 'repo');
+    const first = sourcesHash(base, ['.']);
+    write('', '.gitignore', 'a.txt\nb.txt\n');
+    assert.equal(sourcesHash(base, ['.']), first, 'a .gitignore above the base does not apply');
+    write('repo', '.gitignore', 'a.txt\n');
+    assert.notEqual(sourcesHash(base, ['.']), first, 'the one in the base does');
   });
 
   it('does not enter an ignored folder', t => {

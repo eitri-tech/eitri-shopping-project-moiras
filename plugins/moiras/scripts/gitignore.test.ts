@@ -37,7 +37,11 @@ describe('parseIgnore', () => {
     assert.equal(ignored('f[!0-9].txt', 'fa.txt'), true);
     assert.equal(ignored('f[]a].txt', 'f].txt'), true);
     assert.equal(ignored('f[].txt', 'f].txt'), false);
-    assert.equal(ignored('f[abc', 'f[abc'), true);
+    assert.equal(ignored('f[abc', 'f[abc'), false, 'an unclosed class is a pattern Git rejects: it never matches');
+    assert.equal(ignored('[[:digit:]].txt', '7.txt'), true);
+    assert.equal(ignored('[[:digit:]].txt', 'a.txt'), false);
+    assert.equal(ignored('[![:upper:]]x', 'ax'), true);
+    assert.equal(ignored('[[:nope:]]', 'a'), false);
   });
 
   it('handles ** as a whole segment', () => {
@@ -58,6 +62,15 @@ describe('parseIgnore', () => {
     assert.equal(ignored('!keep.log\n*.log', 'keep.log'), true);
   });
 
+  it('matches bytes like Git and counts the backslashes before trailing spaces', () => {
+    assert.equal(ignored('?', 'é'), false);
+    assert.equal(ignored('??', 'é'), true);
+    assert.equal(ignored('caf*', 'café'), true);
+    assert.equal(ignored('foo\\\\ ', 'foo\\'), true, 'two backslashes escape each other, so the space is trailing');
+    assert.equal(ignored('foo\\', 'foo\\'), false, 'a lone trailing backslash is rejected');
+    assert.equal(ignored('a//b', 'a/b'), false);
+  });
+
   it('reads escapes, trailing spaces and CRLF', () => {
     assert.equal(ignored('\\#notes', '#notes'), true);
     assert.equal(ignored('\\!bang', '!bang'), true);
@@ -75,11 +88,20 @@ describe('parseIgnore', () => {
     assert.equal(ignored('a.b', 'axb'), false);
   });
 
-  it('skips lines that are too long and survives a hostile pattern', () => {
-    assert.deepEqual(parseIgnore(`${'a'.repeat(2000)}\n`), []);
+  it('excludes nothing from a file that is too big, instead of keeping a truncated part of it', () => {
+    assert.deepEqual(parseIgnore(`*\n!keep\n${'a'.repeat(2000)}\n`), []);
+    const many = `*\n${Array.from({ length: 2500 }, (_, index) => `x${index}`).join('\n')}\n!keep\n`;
+    assert.deepEqual(parseIgnore(many), []);
+    assert.equal(ignored(many, 'keep'), false);
+    assert.deepEqual(parseIgnore(`${Array.from({ length: 150 }, () => 'a'.repeat(100)).join('\n')}\n`).length, 150);
+  });
+
+  it('survives a hostile pattern', () => {
     const started = Date.now();
     ignored(`${'**/'.repeat(30)}x`, `${'a/'.repeat(200)}y`);
-    assert.ok(Date.now() - started < 1000);
+    const wide = `${Array.from({ length: 150 }, () => `${'*a'.repeat(40)}b`).join('\n')}\n`;
+    for (let index = 0; index < 50; index += 1) ignored(wide, 'a'.repeat(255));
+    assert.ok(Date.now() - started < 2000);
   });
 });
 
