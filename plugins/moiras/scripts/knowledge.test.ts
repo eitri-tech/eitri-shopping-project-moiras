@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, issues, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
+import { check, issues, main, parseDoc, plan, provenance, sourcesHash } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -52,13 +52,13 @@ replaces: [${replaces}]
 # Regra ${id}
 `;
 
-const glossary = (indexedAt: string) => `---
+const glossary = (indexedAt: string, sourcesHash = sha, provenance = '') => `---
 id: acme-shop-checkout
 type: repository
 url: https://github.com/acme/acme-shop-checkout
 platform: vtex
 indexed_at: ${indexedAt}
-sources_hash: ${sha}
+${provenance}sources_hash: ${sourcesHash}
 ---
 
 # acme-shop-checkout
@@ -267,6 +267,7 @@ describe('check', () => {
     record('ok', `${reference}\n\n${fence(20)}`);
     record('longo', `${reference}\n\n${fence(21)}`);
     record('sem-ref', fence(3));
+    record('sha256', `\`acme-shop-checkout/src/a.ts@${'a'.repeat(64)}\`\n\n${fence(2)}`);
     record('dois', `${reference}\n\n${fence(2)}\n\n${fence(2)}`);
     record('aberto', `${reference}\n\n\`\`\`ts\nconst a = 1;`);
     assert.deepEqual(rules(local), [
@@ -329,6 +330,24 @@ describe('check', () => {
       'learnings/patterns/fev.md:date-invalid',
       'learnings/patterns/maluco.md:date-invalid',
     ]);
+  });
+
+  it('validates the optional provenance of a glossary record', t => {
+    const { local, write } = workspace(t);
+    const sha40 = 'a'.repeat(40);
+    const withProvenance = (lines: string[]) => glossary('2026-10-06').replace('sources_hash:', `${lines.join('\n')}\nsources_hash:`);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_dirty: false']));
+    assert.deepEqual(check(local, 'glossary').findings, []);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${'A'.repeat(40)}`, 'indexed_commit_date: ontem', 'indexed_dirty: maybe']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule).sort(), ['indexed-commit-date-invalid', 'indexed-commit-invalid', 'indexed-dirty-invalid']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`]));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_dirty: false']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_dirty: false', 'indexed_branch: main', 'indexed_tag: v1']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['indexed-ref-unsupported'], 'branch and tag names are not accepted');
   });
 
   it('limits the scan with --only', t => {
@@ -404,18 +423,57 @@ describe('plan', () => {
   it('updates the glossary only when the local index is newer', t => {
     const { local, shared, write } = workspace(t);
     write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20'));
+    const other = `sha256:${'b'.repeat(64)}`;
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', other));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'update', reason: 'newer-index' },
     ]);
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-09-01'));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-09-01', other));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'shared-is-newer' },
     ]);
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', 'platform: wake'));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', other));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' },
     ]);
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', 'platform: wake'));
+    assert.deepEqual(plan(local, shared).items, [
+      { path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' },
+    ], 'same sources_hash: the rest of the record does not count');
+  });
+
+  it('ignores when and where a glossary record was indexed when the sources are the same', t => {
+    const { local, shared, write } = workspace(t);
+    const at = (commit: string, date: string, dirty = 'false') => `indexed_commit: ${commit.repeat(40)}\nindexed_commit_date: ${date}\nindexed_dirty: ${dirty}\n`;
+    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', sha, at('a', '2026-10-01')));
+    const unchanged = [{ path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' }];
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', sha, at('b', '2026-09-01', 'true')));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'another commit on the same day');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha, at('b', '2026-10-15')));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'a later index of the same sources');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'a record from before the provenance existed');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', `sha256:${'b'.repeat(64)}`, at('a', '2026-10-01')));
+    assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' }], 'other sources on the same day');
+  });
+
+  it('compares glossary records by sources_hash alone', t => {
+    const { local, shared, write } = workspace(t);
+    const withLine = (line: string, hash = sha) => glossary('2026-10-06', hash).replace('platform: vtex', `platform: vtex\n${line}`);
+    const unchanged = [{ path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' }];
+    write('shared', 'glossary/acme-shop-checkout.md', withLine('keywords: [a, b]'));
+    write('local', 'glossary/acme-shop-checkout.md', withLine('keywords: [b, a]\napps: [home]'));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'same sources_hash: other fields do not matter');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20').replace('# acme-shop-checkout', '# acme-shop-checkout\n\nOutro texto.'));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'nor does the body');
+    write('shared', 'glossary/acme-shop-checkout.md', withLine('indexed_branch: main\nindexed_tag: v1').replace(/^indexed_at: .*\n/m, 'indexed_at: 2026-10-01\n'));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'old branch and tag fields do not count');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', `sha256:${'b'.repeat(64)}`));
+    assert.equal(plan(local, shared).items[0]?.reason, 'newer-index', 'another sources_hash follows the date rule');
+    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-01', ''));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', ''));
+    assert.equal(plan(local, shared).items[0]?.reason, 'newer-index', 'an empty hash proves nothing');
   });
 
   it('removes only the shared criteria that a local criterion replaces', t => {
@@ -739,5 +797,248 @@ describe('security regressions', () => {
     for (const key of Object.keys(meta)) assert.notEqual(sourcesHash(base, ['a.txt'], { ...meta, [key]: 'changed' }), first);
     assert.equal(sourcesHash(base, ['a.txt'], { a: { z: 1, b: 2 } }), sourcesHash(base, ['a.txt'], { a: { b: 2, z: 1 } }));
     assert.throws(() => main(['hash', '--base', base, '--meta', '{', 'a.txt']));
+  });
+});
+
+describe('provenance', () => {
+  const run = (cwd: string, ...args: string[]) => {
+    const env = { ...process.env, GIT_AUTHOR_NAME: 'Fulano', GIT_AUTHOR_EMAIL: 'fulano@example.test', GIT_COMMITTER_NAME: 'Fulano', GIT_COMMITTER_EMAIL: 'fulano@example.test', GIT_COMMITTER_DATE: '2026-10-05T23:30:00-03:00', GIT_AUTHOR_DATE: '2026-10-05T23:30:00-03:00' };
+    const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const repository = (t: TestContext) => {
+    const { dir, write } = workspace(t);
+    write('repo', 'README.md', 'acme');
+    const cwd = join(dir, 'repo');
+    run(cwd, 'init', '-q', '-b', 'main');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'init');
+    return cwd;
+  };
+
+  it('reports the commit, its UTC date and a clean tree', t => {
+    const cwd = repository(t);
+    assert.deepEqual(provenance(cwd), { git: true, indexed_commit: run(cwd, 'rev-parse', 'HEAD'), indexed_commit_date: '2026-10-06', indexed_dirty: false });
+  });
+
+  it('flags a dirty tree and never records branch or tag names', t => {
+    const cwd = repository(t);
+    run(cwd, 'tag', 'v1.0.0');
+    run(cwd, 'checkout', '-q', '-b', 'feat/ana@example.com');
+    assert.deepEqual(Object.keys(provenance(cwd)).sort(), ['git', 'indexed_commit', 'indexed_commit_date', 'indexed_dirty']);
+    writeFileSync(join(cwd, 'new.txt'), 'x');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+  });
+
+  it('ignores variables that redirect Git, counts untracked files', t => {
+    const cwd = repository(t);
+    run(cwd, 'config', 'status.showUntrackedFiles', 'no');
+    writeFileSync(join(cwd, 'new.txt'), 'x');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+    const before = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+    t.after(() => { for (const [name, value] of [['GIT_DIR', before.dir], ['GIT_WORK_TREE', before.tree]] as const) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+    process.env.GIT_DIR = join(cwd, '.git');
+    process.env.GIT_WORK_TREE = cwd;
+    const { dir } = workspace(t);
+    mkdirSync(join(dir, 'plain'));
+    assert.deepEqual(provenance(join(dir, 'plain')), { git: false });
+    delete process.env.GIT_DIR;
+    delete process.env.GIT_WORK_TREE;
+  });
+
+  it('still reports a dirty tree when the status output overflows the buffer', t => {
+    const cwd = repository(t);
+    for (let index = 0; index < 20; index++) writeFileSync(join(cwd, `untracked-file-with-a-long-name-${index}.txt`), 'x');
+    assert.equal(provenance(cwd, 100).indexed_dirty, true);
+  });
+
+  it('refuses provenance when the working tree status cannot be read', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, '.git', 'index'), 'not an index');
+    assert.deepEqual(provenance(cwd), { git: false, reason: 'status-unreadable' });
+  });
+
+  it('does not run the clean filters of .gitattributes either', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'filter-ran');
+    const script = join(cwd, '..', 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    writeFileSync(join(cwd, '.gitattributes'), '*.txt filter=probe\n');
+    run(cwd, 'config', 'filter.probe.clean', script);
+    run(cwd, 'config', 'filter.probe.process', script);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'with filter');
+    rmSync(marker, { force: true });
+    writeFileSync(join(cwd, 'a.txt'), 'two');
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
+  });
+
+  it('sees an untracked file next to a tracked one that differs only in case', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, 'Foo'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'Foo');
+    run(cwd, 'config', 'core.ignoreCase', 'true');
+    writeFileSync(join(cwd, 'foo'), 'two');
+    // On a case-insensitive disk the second write just overwrote the first: nothing to hide there.
+    if (readdirSync(cwd).filter(name => name.toLowerCase() === 'foo').length < 2) return;
+    assert.equal(run(cwd, 'status', '--porcelain'), '', 'the setup does hide the file from plain git status');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+  });
+
+  it('gives no provenance, and runs no filter, when the filter listing overflows its buffer', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'filter-ran');
+    const script = join(cwd, '..', 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    writeFileSync(join(cwd, '.gitattributes'), '*.txt filter=zprobe\n');
+    for (let i = 0; i < 40; i++) run(cwd, 'config', `filter.a${String(i).padStart(2, '0')}.clean`, 'cat');
+    run(cwd, 'config', 'filter.zprobe.clean', script);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'with filter');
+    rmSync(marker, { force: true });
+    writeFileSync(join(cwd, 'a.txt'), 'two');
+    assert.deepEqual(provenance(cwd, 256), { git: false, reason: 'filters-unreadable' });
+    assert.equal(existsSync(marker), false);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    assert.equal(provenance(cwd).git, true);
+  });
+
+  it('does not enter submodules, so their filters never run', t => {
+    const { dir, write } = workspace(t);
+    write('sub', 'a.txt', 'one');
+    const sub = join(dir, 'sub');
+    run(sub, 'init', '-q', '-b', 'main');
+    writeFileSync(join(sub, '.gitattributes'), '*.txt filter=probe\n');
+    run(sub, 'add', '.');
+    run(sub, 'commit', '-q', '-m', 'sub');
+    write('sup', 'README.md', 'acme');
+    const sup = join(dir, 'sup');
+    run(sup, 'init', '-q', '-b', 'main');
+    run(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'libs/sub');
+    run(sup, 'add', '.');
+    run(sup, 'commit', '-q', '-m', 'sup');
+    const marker = join(dir, 'filter-ran');
+    const script = join(dir, 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    run(join(sup, 'libs', 'sub'), 'config', 'filter.probe.clean', script);
+    writeFileSync(join(sup, 'libs', 'sub', 'a.txt'), 'two');
+    assert.equal(provenance(sup).indexed_dirty, false);
+    assert.equal(existsSync(marker), false);
+  });
+
+  it('counts hidden index entries as dirty but not sparse-excluded files', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, 'b.txt'), 'b');
+    writeFileSync(join(cwd, 'c.txt'), 'c');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'more');
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    run(cwd, 'update-index', '--skip-worktree', 'c.txt');
+    rmSync(join(cwd, 'c.txt'));
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    writeFileSync(join(cwd, 'c.txt'), 'edited');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+    run(cwd, 'update-index', '--no-skip-worktree', 'c.txt');
+    run(cwd, 'checkout', '--', 'c.txt');
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    run(cwd, 'update-index', '--assume-unchanged', 'b.txt');
+    writeFileSync(join(cwd, 'b.txt'), 'edited');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+  });
+
+  it('counts a staged submodule update as dirty without entering the submodule', t => {
+    const { dir, write } = workspace(t);
+    write('sub', 'a.txt', 'one');
+    const sub = join(dir, 'sub');
+    run(sub, 'init', '-q', '-b', 'main');
+    run(sub, 'add', '.');
+    run(sub, 'commit', '-q', '-m', 'sub');
+    write('sup', 'README.md', 'acme');
+    const sup = join(dir, 'sup');
+    run(sup, 'init', '-q', '-b', 'main');
+    run(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'libs/sub');
+    run(sup, 'add', '.');
+    run(sup, 'commit', '-q', '-m', 'sup');
+    assert.equal(provenance(sup).indexed_dirty, false);
+    const inner = join(sup, 'libs', 'sub');
+    writeFileSync(join(inner, 'a.txt'), 'two');
+    run(inner, 'commit', '-q', '-am', 'advance');
+    run(sup, 'add', 'libs/sub');
+    assert.equal(provenance(sup).indexed_dirty, true);
+  });
+
+  it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'fsmonitor-ran');
+    const hook = join(cwd, '..', 'hook.sh');
+    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    run(cwd, 'config', 'core.fsmonitor', hook);
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
+    mkdirSync(join(cwd, 'src'));
+    assert.deepEqual(provenance(join(cwd, 'src')), { git: false });
+  });
+
+  it('describes HEAD itself when a replacement ref points at another commit', t => {
+    const cwd = repository(t);
+    const head = run(cwd, 'rev-parse', 'HEAD');
+    const tree = run(cwd, 'rev-parse', 'HEAD^{tree}');
+    const other = spawnSync('git', ['-C', cwd, 'commit-tree', tree, '-m', 'other'], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'Fulano', GIT_AUTHOR_EMAIL: 'f@example.test', GIT_COMMITTER_NAME: 'Fulano', GIT_COMMITTER_EMAIL: 'f@example.test', GIT_COMMITTER_DATE: '2026-01-02T12:00:00+00:00', GIT_AUTHOR_DATE: '2026-01-02T12:00:00+00:00' } }).stdout.trim();
+    run(cwd, 'replace', head, other);
+    const result = provenance(cwd);
+    assert.deepEqual([result.indexed_commit, result.indexed_commit_date], [head, '2026-10-06']);
+  });
+
+  it('does not run the signature verifier a repository configures', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'verifier-ran');
+    const verifier = join(cwd, '..', 'verifier.sh');
+    writeFileSync(verifier, `#!/bin/sh\ntouch '${marker}'\nexit 1\n`, { mode: 0o755 });
+    const tree = run(cwd, 'rev-parse', 'HEAD^{tree}');
+    const parent = run(cwd, 'rev-parse', 'HEAD');
+    const raw = `tree ${tree}\nparent ${parent}\nauthor Fulano <f@example.test> 1790000000 +0000\ncommitter Fulano <f@example.test> 1790000000 +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n abc\n -----END PGP SIGNATURE-----\n\nsigned\n`;
+    const made = spawnSync('git', ['-C', cwd, 'hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], { input: raw, encoding: 'utf8' }).stdout.trim();
+    run(cwd, 'update-ref', 'HEAD', made);
+    run(cwd, 'config', 'log.showSignature', 'true');
+    run(cwd, 'config', 'gpg.program', verifier);
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
+    spawnSync('git', ['-C', cwd, 'log', '-1'], { encoding: 'utf8' });
+    assert.equal(existsSync(marker), true, 'the setup does make Git call the verifier');
+  });
+
+  it('sees an edit that keeps size and mtime when the repository only trusts them', t => {
+    const cwd = repository(t);
+    const file = join(cwd, 'README.md');
+    const mtime = new Date('2020-01-01T00:00:00Z');
+    run(cwd, 'config', 'core.checkStat', 'minimal');
+    run(cwd, 'config', 'core.trustctime', 'false');
+    utimesSync(file, mtime, mtime);
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '--amend', '-m', 'init');
+    // Git compares ctime in whole seconds: the edit has to land in a later second than the index entry.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
+    writeFileSync(file, 'acmf');
+    utimesSync(file, mtime, mtime);
+    assert.equal(run(cwd, 'status', '--porcelain'), '', 'the setup does hide the edit from plain git status');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+  });
+
+  it('reports git: false without a repository or a commit and prints through the CLI', t => {
+    const { dir, write } = workspace(t);
+    write('plain', 'a.txt', 'x');
+    assert.deepEqual(provenance(join(dir, 'plain')), { git: false });
+    const empty = join(dir, 'empty');
+    mkdirSync(empty);
+    run(empty, 'init', '-q');
+    assert.deepEqual(provenance(empty), { git: false });
+    assert.deepEqual(JSON.parse(main(['provenance', join(dir, 'plain')]).output), { git: false });
+    assert.throws(() => main(['provenance']), /Usage/);
   });
 });
