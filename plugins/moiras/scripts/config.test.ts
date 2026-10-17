@@ -34,16 +34,18 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: 3 }), ['jira:not-an-object:error']);
     assert.deepEqual(rules({ jira: { site: 'https://example.atlassian.net/x', epic: 'proj-1' } }), ['jira.site:site-invalid:error', 'jira.epic:epic-invalid:error']);
     assert.deepEqual(rules({ jira: { site: 'example.atlassian.net' } }), ['jira:scope-missing:warning']);
+    // The free-form query is gone: a leftover `jql` is refused, never quietly dropped.
+    assert.deepEqual(rules({ jira: { site: 'example.atlassian.net', jql: 'project = PROJ' } }), ['jira.jql:jql-unsupported:error', 'jira:scope-missing:warning']);
+    assert.deepEqual(rules({ jira: { site: 'example.atlassian.net', epics: ['PROJ-100'], jql: 'project = PROJ' } }), ['jira.jql:jql-unsupported:error']);
   });
 
-  it('accepts several epics, categories and a JQL fragment as the scope', () => {
+  it('accepts several epics and categories as the scope', () => {
     const site = 'example.atlassian.net';
     assert.deepEqual(rules({ jira: { site, epics: ['PROJ-100', 'PROJ-101'] } }), []);
     assert.deepEqual(rules({ jira: { site, epic: 'PROJ-100', epics: ['PROJ-101'] } }), []);
     assert.deepEqual(rules({ jira: { site, epic: 'PROJ-100', epics: ['PROJ-100'] } }), []);
     assert.deepEqual(rules({ jira: { site, epics: ['PROJ-100'], categories: [{ field: 'labels', values: ['checkout'] }] } }), []);
     assert.deepEqual(rules({ jira: { site, categories: [{ field: 'labels', values: ['checkout'] }, { field: 'customfield_10020', values: ['Sprint 12'] }, { field: 'Story Points', values: ['3'] }, { field: 'Área responsável', values: ['Pagamentos'] }, { field: 'A\u0301rea responsa\u0301vel', values: ['Pagamentos'] }, { field: 'cf[10021]', values: ['x'] }] } }), []);
-    assert.deepEqual(rules({ jira: { site, jql: 'project = PROJ AND type = Bug' } }), []);
   });
 
   it('rejects a bad scope without echoing values', () => {
@@ -51,9 +53,6 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, epics: [] } }), ['jira.epics:not-a-list:error']);
     assert.deepEqual(rules({ jira: { site, epics: ['PROJ-1', 'proj-2', 'PROJ-1'] } }), ['jira.epics[1]:epic-invalid:error', 'jira.epics[2]:epic-duplicate:error']);
     assert.deepEqual(rules({ jira: { site, epics: ['PROJ-1', 'PROJ-1'] } }), ['jira.epics[1]:epic-duplicate:error']);
-    for (const extra of [{ epic: 'PROJ-1' }, { epics: ['PROJ-1'] }, { categories: [{ field: 'labels', values: ['a'] }] }]) {
-      assert.deepEqual(rules({ jira: { site, ...extra, jql: 'project = PROJ' } }), ['jira.jql:scope-conflict:error']);
-    }
     assert.deepEqual(rules({ jira: { site, categories: [] } }), ['jira.categories:not-a-list:error']);
     assert.deepEqual(rules({ jira: { site, categories: [{ values: ['a'] }, { field: 'la"bels', values: [] }, { field: 'labels', values: ['a"b', 'c\\d', ''] }] } }), [
       'jira.categories[0].field:field-missing:error',
@@ -63,10 +62,6 @@ describe('validate', () => {
       'jira.categories[2].values[1]:value-invalid:error',
       'jira.categories[2].values[2]:value-invalid:error',
     ]);
-    assert.deepEqual(rules({ jira: { site, jql: 3 } }), ['jira.jql:field-invalid:error']);
-    assert.deepEqual(rules({ jira: { site, jql: 'project = PROJ order   by created' } }), ['jira.jql:jql-order-by:error']);
-    assert.deepEqual(rules({ jira: { site, jql: 'a'.repeat(2001) } }), ['jira.jql:jql-too-long:error']);
-    assert.deepEqual(rules({ jira: { site, jql: 'summary ~ "order by date" AND labels = \'order by\'' } }), []);
   });
 
   it('accepts a configuration without Jira for the skills that do not triage', () => {

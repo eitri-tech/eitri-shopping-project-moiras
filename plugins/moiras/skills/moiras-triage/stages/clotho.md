@@ -1,8 +1,8 @@
 # Cloto — coleta
 
-Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do escopo no Jira (um ou vários épicos e categorias, ou uma consulta própria) e as conversas relevantes no Slack.
+Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do escopo no Jira (um ou vários épicos e categorias) e as conversas relevantes no Slack.
 
-**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar na conversa um ou mais épicos, eles substituem os épicos da configuração (`jira.epic` e `jira.epics`); as categorias da configuração continuam valendo. Com `jira.jql` configurada, os épicos informados mudam a execução para o modo épicos (a `jira.jql` é ignorada nela) e a skill avisa isso ao usuário. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
+**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar na conversa um ou mais épicos, eles substituem os épicos da configuração (`jira.epic` e `jira.epics`); as categorias da configuração continuam valendo. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
 
 ## Execução
 
@@ -10,9 +10,9 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
 ### A. Jira
 
-0. Monte o **escopo**. Há dois modos, que **não se misturam**: ou a configuração traz épicos e/ou categorias, ou traz só uma consulta própria (`jira.jql`). Os dois juntos são recusados pelo `config.ts` (`scope-conflict`); se aparecerem mesmo assim, não escolha por conta própria: encerre pedindo ao usuário que deixe um dos modos.
+0. Monte o **escopo**. A configuração traz épicos e/ou categorias; não há consulta livre. Uma `jira.jql` que sobrou no arquivo é recusada pelo `config.ts` (`jql-unsupported`): não a use, avise o usuário e encerre pedindo que a remova.
 
-   **Modo épicos e categorias** (`jira.epics`, `jira.epic`, `jira.categories`): as partes presentes valem juntas (AND), então a categoria estreita os épicos.
+   As partes presentes (`jira.epics`, `jira.epic`, `jira.categories`) valem juntas (AND), então a categoria estreita os épicos.
 
    | Parte | Configuração | Vira |
    |---|---|---|
@@ -21,9 +21,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
    O nome do campo vai sempre entre aspas (`"Story Points"`, `"labels"`). Id de campo no formato REST (`customfield_10020`) vira `cf[10020]`, que é a forma de JQL e **não leva aspas**; `cf[10020]` informado assim vale como está. Em projetos que ainda usam o campo antigo de épico, troque `parent in (...)` por `"Epic Link" in (...)`. Sem épicos, a busca vale para o site todo: inclua `project` em uma categoria (`{ "field": "project", "values": ["PROJ"] }`).
 
-   **Modo consulta própria** (`jira.jql`): o escopo é exatamente `(<jql>)`, entre parênteses, sem épicos nem categorias. A consulta é só leitura (uma busca) e a Cloto é a dona do `ORDER BY`; use-a como veio, sem reescrever. A Cloto já acrescenta `assignee IS EMPTY AND statusCategory != Done` (passo 2): a consulta não precisa repetir esses filtros e não deve contradizê-los (ex.: `assignee = X`), senão a busca volta vazia. Se o Jira recusar a consulta, é falha da fonte (`status: failed`, erro `jql-invalid`): informe o motivo e encerre, sem tentar uma variação. Inclua `project` na consulta; sem ele a busca vale para o site todo.
-
-1. Leia as datas fim dos épicos, numa só chamada (`key in (...)`) quando o conector permitir: `duedate` ou, se vazio, o campo de data alvo do épico. No modo épicos, são os épicos configurados; no modo consulta própria, ou para um épico que uma categoria trouxe sem estar configurado, depende das issues, então leia depois do passo 2, com os épicos distintos que elas citam (já resolvidos como acima) e ainda não foram lidos. Sem data no épico, vale `jira.project_end`. Épico configurado que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; no modo épicos, sem nenhum épico encontrado e sem categorias, é o caso de "épico não encontrado" em **Falhas**. No modo consulta própria, issue sem épico é normal: segue com `epic: null` e `project_end`.
+1. Leia as datas fim dos épicos, numa só chamada (`key in (...)`) quando o conector permitir: `duedate` ou, se vazio, o campo de data alvo do épico. São os épicos configurados; para um épico que uma categoria trouxe sem estar configurado, depende das issues, então leia depois do passo 2, com os épicos distintos que elas citam (já resolvidos como acima) e ainda não foram lidos. Sem data no épico, vale `jira.project_end`. Épico configurado que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; sem nenhum épico encontrado e sem categorias, é o caso de "épico não encontrado" em **Falhas**. Issue sem épico é normal: segue com `epic: null` e `project_end`.
 2. Busque as issues do escopo sem responsável e não concluídas:
 
    ```
@@ -63,7 +61,7 @@ Abra a thread das mensagens que tiverem respostas e guarde cada resposta (autor,
 
 Cada fonte tem um `status`: `ok`, `partial` ou `failed` (conector ausente, sem permissão, erro da API). Não invente dados da fonte que falhou.
 
-- **Jira falhou, modo épicos sem nenhum épico encontrado (e sem categorias), consulta própria recusada ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
+- **Jira falhou, nenhum épico encontrado (e sem categorias) ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
 - **Slack falhou em todos os canais:** siga só com o Jira, com `slack.messages: []`, e acrescente o aviso `slack-unavailable` em todas as issues.
 - **Slack falhou em alguns canais:** `slack.status: partial`; siga com os canais que responderam e acrescente `slack-channel-unavailable:<canal>` em todas as issues, um por canal que falhou.
 
