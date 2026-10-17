@@ -499,7 +499,7 @@ function canonical(value: unknown): string {
 /** The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, a link, too large or not UTF-8 text. */
 function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
   try {
-    const { text } = readSafe(join(resolve(base), dir, '.gitignore'));
+    const { text } = readSafe(join(base, dir, '.gitignore'));
     return text === undefined ? undefined : layerOf(dir.split(sep).join('/'), text);
   } catch {
     return undefined;
@@ -507,21 +507,31 @@ function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
 }
 
 export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
+  // The base is resolved once, so an entry point into the same tree (a symlink such as /tmp on
+  // macOS, or a convenience alias) fingerprints like the real folder. A missing or non-directory
+  // base fails instead of hashing an empty tree.
+  let root: string;
+  try {
+    root = realpathSync(resolve(base));
+  } catch {
+    throw new Error(`Base directory not found: ${base}`);
+  }
+  if (!lstatSync(root).isDirectory()) throw new Error(`${base}: not a base directory`);
   const entries: string[] = [];
   const visited = new Set<string>();
   // Each .gitignore is read and parsed once per call, however many named paths pass through its folder.
   const layerCache = new Map<string, IgnoreLayer | undefined>();
   const cachedLayer = (dir: string) => {
-    if (!layerCache.has(dir)) layerCache.set(dir, ignoreLayer(base, dir));
+    if (!layerCache.has(dir)) layerCache.set(dir, ignoreLayer(root, dir));
     return layerCache.get(dir);
   };
   const toParts = (relDir: string) => (relDir === '' ? [] : relDir.split('/').map(name => Buffer.from(name, 'utf8')));
   // `rel` is the folder relative to the base, `/`-separated; `parts` is the same as bytes, only built once a .gitignore applies.
   const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], rel: string, parts: Buffer[] | undefined) => {
-    const issue = pathIssue(base, path);
+    const issue = pathIssue(root, path);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
-    const full = resolve(base, path);
+    const full = resolve(root, path);
     if (lstatSync(full).isDirectory()) {
       const real = realpathSync(full);
       if (visited.has(real)) return;
@@ -532,7 +542,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       if (explicit) {
         // A path named on its own still obeys the .gitignore of the folders between it and the base (never above the base), and
         // is skipped when one of those folders, or itself, is excluded. A file named on its own is always read.
-        const names = relative(resolve(base), full).split(sep).filter(Boolean);
+        const names = relative(root, full).split(sep).filter(Boolean);
         relDir = names.join('/');
         here = toParts(relDir);
         layers = [];
@@ -545,7 +555,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       const children = readdirSync(full, { withFileTypes: true });
       // Only a folder that holds a .gitignore pays for reading one.
       if (children.some(child => child.name === '.gitignore')) {
-        const own = cachedLayer(relative(resolve(base), full));
+        const own = cachedLayer(relative(root, full));
         if (own) layers = [...layers, own];
       }
       if (layers.length) here ??= toParts(relDir);
@@ -562,10 +572,10 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       const { issue } = readSafe(full);
       if (issue) {
         if (explicit) throw new Error(`${path}: ${issue}`);
-        entries.push(`name:${relative(base, full)}`);
+        entries.push(`name:${relative(root, full)}`);
         return;
       }
-      entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
+      entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(root, full)}`);
     }
   };
   for (const path of paths) walk(path, true, [], '', undefined);
