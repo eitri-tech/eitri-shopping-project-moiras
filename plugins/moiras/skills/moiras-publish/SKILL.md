@@ -1,6 +1,6 @@
 ---
 name: moiras-publish
-description: Leva o que é novo no knowledge local (glossário, critérios e aprendizado) para um repositório de knowledge compartilhado, abrindo um pull request. Confere as regras do knowledge antes, mostra a lista exata de arquivos e só publica com o "sim" do usuário. Nunca faz push na branch principal nem merge. Use quando o usuário quiser compartilhar o que aprendeu (ex.: "publica o aprendizado no knowledge do time").
+description: "Leva o que é novo no knowledge local (glossário, critérios e aprendizado) para um repositório de knowledge compartilhado, abrindo um pull request. Confere as regras do knowledge antes, mostra a lista exata de arquivos e só publica com o \"sim\" do usuário. Nunca faz push na branch principal nem merge. Use quando o usuário quiser compartilhar o que aprendeu (ex.: \"publica o aprendizado no knowledge do time\")."
 argument-hint: "<knowledge>"
 allowed-tools: Bash(node:*)
 ---

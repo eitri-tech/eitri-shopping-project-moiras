@@ -1,6 +1,6 @@
 ---
 name: moiras-index
-description: Indexa os repositórios do projeto e gera ou atualiza o glossário do knowledge local (um arquivo por repositório, com localização, plataforma, apps, palavras-chave e componentes), derivado do código. Use quando o glossário estiver vazio ou velho, quando a triagem citar um repositório fora dele, ou quando o usuário pedir para indexar (ex.: "indexa os repositórios", "atualiza o glossário do acme-shop-checkout").
+description: "Indexa os repositórios do projeto e gera ou atualiza o glossário do knowledge local (um arquivo por repositório, com localização, plataforma, apps, palavras-chave e componentes), derivado do código. Use quando o glossário estiver vazio ou velho, quando a triagem citar um repositório fora dele, ou quando o usuário pedir para indexar (ex.: \"indexa os repositórios\", \"atualiza o glossário do acme-shop-checkout\")."
 argument-hint: "[repositório...] [--all]"
 allowed-tools: Bash(node:*)
 ---

@@ -22,6 +22,15 @@ Cloto (coleta Jira e Slack) → Láquesis (classifica, acha duplicados) → Átr
 /plugin install moiras@moiras
 ```
 
+**Outros agentes** (Codex, Cursor, Copilot, opencode, Antigravity etc.): use o [`npx skills`](https://github.com/vercel-labs/skills), que copia ou liga as skills na pasta de cada agente.
+
+```bash
+npx skills add <owner>/<repo> --list                  # lista as cinco skills
+npx skills add <owner>/<repo> -a codex -s moiras-triage   # instala uma skill num agente
+```
+
+As skills chamam `scripts/memory.ts` e `scripts/knowledge.ts` por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define; fora dele, aponte esse caminho para `plugins/moiras` do clone. Jira e Slack precisam de conectores no agente escolhido.
+
 Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node LTS, sem dependências.
 
 ## Uso
