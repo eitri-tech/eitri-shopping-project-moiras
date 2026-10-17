@@ -29,7 +29,7 @@ npx skills add <owner>/<repo> --list                  # lista as cinco skills
 npx skills add <owner>/<repo> -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
-As skills chamam `scripts/memory.ts` e `scripts/knowledge.ts` por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define; fora dele, aponte esse caminho para `plugins/moiras` do clone. Jira e Slack precisam de conectores no agente escolhido.
+O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts` e `scripts/knowledge.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
 
 Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node LTS, sem dependências.
 
