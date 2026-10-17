@@ -83,6 +83,25 @@ function jqlTokens(jql: string): JqlToken[] | undefined {
 }
 
 // `3` is the id of the Done category, which `statusCategory` accepts in place of the name.
+/**
+ * Whether the fragment keeps its parentheses and quotes closed. The Clotho wraps it as `(<jql>)` and then appends its own filters, so
+ * `project = A) OR (project = B` would step out of the wrapper and leave the appended `assignee IS EMPTY AND statusCategory != Done`
+ * on the second group only.
+ */
+export function jqlBalanced(jql: string): boolean {
+  let depth = 0;
+  for (let index = 0; index < jql.length; index += 1) {
+    const char = jql[index]!;
+    if (char === '"' || char === "'") {
+      index += 1;
+      while (index < jql.length && jql[index] !== char) index += jql[index] === '\\' ? 2 : 1;
+      if (index >= jql.length) return false;
+    } else if (char === '(') depth += 1;
+    else if (char === ')' && --depth < 0) return false;
+  }
+  return depth === 0;
+}
+
 const doneStates = new Set(['done', 'concluído', 'concluido', 'concluída', 'concluida', '3']);
 
 /**
@@ -228,6 +247,7 @@ export function validate(config: unknown): Finding[] {
       else {
         if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
         else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
+        if (jira.jql.length <= 2000 && !jqlBalanced(jira.jql)) add('jira.jql', 'jql-unbalanced');
         if (jira.jql.length <= 2000) {
           const found = jqlContradictions(jira.jql);
           if (found.state) add('jira.jql', 'jql-state-contradicts', 'warning');

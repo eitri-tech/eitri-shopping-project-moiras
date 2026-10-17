@@ -69,6 +69,16 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, jql: 'summary ~ "order by date" AND labels = \'order by\'' } }), []);
   });
 
+  it('refuses a JQL that does not keep its parentheses and quotes closed, since the Clotho wraps it as (<jql>)', () => {
+    const site = 'example.atlassian.net';
+    for (const jql of ['project = A) OR (project = B', 'project = A AND (status = Open', 'project = A)', 'project = A AND summary ~ "x', "project = A AND summary ~ 'x"]) {
+      assert.ok(rules({ jira: { site, jql } }).includes('jira.jql:jql-unbalanced:error'), jql);
+    }
+    for (const jql of ['project = A AND (status = Open OR status = Closed)', 'project = A AND summary ~ "a ) ( b"', 'project = A AND summary ~ "say \\"hi\\" ("', "project = A AND summary ~ 'it)s'"]) {
+      assert.ok(!rules({ jira: { site, jql } }).includes('jira.jql:jql-unbalanced:error'), jql);
+    }
+  });
+
   it('warns when the JQL contradicts the filters the Clotho adds, but not for compatible or undecidable ones', () => {
     const site = 'example.atlassian.net';
     for (const [jql, rule] of [
@@ -118,7 +128,6 @@ describe('validate', () => {
       '(assignee = Fulano) AND project = PROJ',
       'project = PROJ AND (assignee != Fulano OR assignee IS EMPTY)',
       'assignee != Fulano OR assignee IS EMPTY',
-      'project = PROJ AND status = "unterminated',
     ]) {
       assert.deepEqual(rules({ jira: { site, jql } }), [], jql);
     }

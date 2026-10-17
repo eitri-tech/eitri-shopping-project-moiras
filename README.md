@@ -63,7 +63,7 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 }
 ```
 
-O escopo do Jira não precisa ser um épico só, e tem dois modos que não se misturam: **épicos e categorias** (`epics` aceita vários; `categories` filtra por campo, como `{ "field": "labels", "values": ["checkout"] }`; as duas valem juntas, em AND) **ou** uma **consulta própria** (`jql`, do Jira, só leitura, sem `ORDER BY`). Preencher `jql` junto com `epic`, `epics` ou `categories` é erro. `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
+O escopo do Jira não precisa ser um épico só, e tem dois modos que não se misturam: **épicos e categorias** (`epics` aceita vários; `categories` filtra por campo, como `{ "field": "labels", "values": ["checkout"] }`; as duas valem juntas, em AND) **ou** uma **consulta própria** (`jql`, do Jira, só leitura, sem `ORDER BY` e com parênteses e aspas fechados). Preencher `jql` junto com `epic`, `epics` ou `categories` é erro. `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
 
 | Comando | O que faz |
 |---|---|
