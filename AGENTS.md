@@ -8,7 +8,7 @@ Instruções para agentes de código (Claude Code, Codex, Copilot etc.) neste re
 
 A triagem segue três etapas, cada uma com entrada e saída verificáveis:
 
-1. **Cloto**: coleta em paralelo. Do Jira, as issues sem responsável do escopo (um ou vários épicos e categorias, ou uma consulta `jql` própria, só leitura; os dois modos não se misturam), por prioridade e data fim, comparando com o fim do épico da issue ou do projeto. Do Slack, as mensagens de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
+1. **Cloto**: coleta em paralelo. Do Jira, as issues sem responsável do escopo (um ou vários épicos e categorias), por prioridade e data fim, comparando com o fim do épico da issue ou do projeto. Do Slack, as mensagens de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
 2. **Láquesis**: identifica repositório e componente pelo glossário, classifica (categoria, origem, confiança) e avalia duplicados
 3. **Átropos**: justifica o problema, decide a ação (`duplicate`, `blocked`, `ready-for-dev`, `needs-info`, `close`), sugere normalmente de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
 
@@ -39,6 +39,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Sem nomes reais de clientes, repositórios, sites, projetos do Jira, canais ou pessoas, nem URLs internas.
 - Exemplos usam um universo fictício: empresa Acme, repositório `acme-shop-checkout`, issues `PROJ-123`, pessoas Fulano, Beltrana e Sicrano, canal `#proj-squad`.
 - O knowledge real fica fora daqui: local em `.moiras/` (no `.gitignore`) ou em repositórios privados criados a partir do template público de knowledge.
+- A regra vale também fora dos arquivos: título e corpo de PR, mensagens de commit e comentários não levam link, chave de issue nem domínio de tracker da empresa. A convenção de repositórios privados do time (link do Jira no corpo do PR) **não** vale aqui. O GitHub guarda o histórico de edição do texto, então apagar depois não basta: não escreva.
 
 ## Regras do domínio
 

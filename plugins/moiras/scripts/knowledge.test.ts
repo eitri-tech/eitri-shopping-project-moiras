@@ -760,6 +760,29 @@ describe('security regressions', () => {
       remove: [],
     });
   });
+
+  it('never removes a shared criterion that could not be read', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/old.md', 'z'.repeat(1024 * 1024 + 1));
+    write('local', 'criteria/new.md', criterion('new', 'old'));
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/new.md', action: 'add', reason: 'new' },
+        { path: 'criteria/old.md', action: 'conflict', reason: 'shared:file-too-large' },
+      ],
+      remove: [],
+    });
+  });
+
+  it('resolves the base once, so a symlinked base hashes like the real one, and missing or file bases fail', t => {
+    const { dir, local, write } = workspace(t);
+    write('local', 'src/a.ts', 'a');
+    symlinkSync(local, join(dir, 'alias'));
+    assert.equal(sourcesHash(join(dir, 'alias'), ['src']), sourcesHash(local, ['src']));
+    assert.throws(() => sourcesHash(join(dir, 'never-was'), ['src']), /not found/);
+    assert.throws(() => sourcesHash(join(local, 'src/a.ts'), ['src']), /not a base directory/);
+  });
+
   it('bounds regex scanning of long lines', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/patterns/p.md', patternDoc('p', 'a'.repeat(100000) + '@abcdef0'));
