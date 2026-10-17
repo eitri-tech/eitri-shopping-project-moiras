@@ -639,7 +639,7 @@ describe('security regressions', () => {
     assert.ok(result.some(f => f.path.endsWith('/total.md') && f.rule === 'code-total-too-long'));
   });
 
-  it('skips symlinks including cycles, binary and oversized files in hash and plan; check reports them', t => {
+  it('keeps symlinks out of hash and plan, fingerprints unreadable files by name, and reports them in check', t => {
     const { dir, local, shared, write } = workspace(t);
     write('local', 'criteria/good.md', criterion('good'));
     write('shared', 'criteria/good.md', criterion('good'));
@@ -647,9 +647,12 @@ describe('security regressions', () => {
     symlinkSync(join(local, 'criteria/good.md'), join(local, 'criteria/link.md'));
     symlinkSync(local, join(local, 'cycle'));
     symlinkSync(local, join(local, 'criteria/cycle.md'));
+    assert.equal(sourcesHash(local, ['.']), initial, 'symlinks stay outside the fingerprint');
     write('local', 'criteria/huge.md', 'a'.repeat(1024 * 1024 + 1));
     write('local', 'criteria/binary.md', '\0binary');
-    assert.equal(sourcesHash(local, ['.']), initial);
+    assert.notEqual(sourcesHash(local, ['.']), initial, 'unreadable files still change the hash when they appear');
+    assert.throws(() => sourcesHash(local, ['criteria/huge.md']), /file-too-large/);
+    assert.throws(() => sourcesHash(local, ['criteria/binary.md']), /binary-file/);
     assert.equal(plan(local, shared).items.length, 1);
     const result = check(local).findings;
     assert.equal(result.filter(f => f.rule === 'symlink').length, 2);

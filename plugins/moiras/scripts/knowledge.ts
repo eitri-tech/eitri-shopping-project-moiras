@@ -532,7 +532,11 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       }
     } else {
       const { issue } = readSafe(full);
-      if (issue) return;
+      if (issue) {
+        if (explicit) throw new Error(`${path}: ${issue}`);
+        entries.push(`name:${relative(base, full)}`);
+        return;
+      }
       entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
     }
   };
