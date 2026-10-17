@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -962,6 +962,23 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
     spawnSync('git', ['-C', cwd, 'log', '-1'], { encoding: 'utf8' });
     assert.equal(existsSync(marker), true, 'the setup does make Git call the verifier');
+  });
+
+  it('sees an edit that keeps size and mtime when the repository only trusts them', t => {
+    const cwd = repository(t);
+    const file = join(cwd, 'README.md');
+    const mtime = new Date('2020-01-01T00:00:00Z');
+    run(cwd, 'config', 'core.checkStat', 'minimal');
+    run(cwd, 'config', 'core.trustctime', 'false');
+    utimesSync(file, mtime, mtime);
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '--amend', '-m', 'init');
+    // Git compares ctime in whole seconds: the edit has to land in a later second than the index entry.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
+    writeFileSync(file, 'acmf');
+    utimesSync(file, mtime, mtime);
+    assert.equal(run(cwd, 'status', '--porcelain'), '', 'the setup does hide the edit from plain git status');
+    assert.equal(provenance(cwd).indexed_dirty, true);
   });
 
   it('reports git: false without a repository or a commit and prints through the CLI', t => {

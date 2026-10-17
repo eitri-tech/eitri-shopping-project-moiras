@@ -598,7 +598,9 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   // repository must not run its scripts. Filters are emptied one by one; the dirty state may then be reported a little too eagerly
   // (a file whose clean filter changes its content looks modified), never missed.
   // `log.showSignature` would make `git log` run the signature verifier the repository configures.
-  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false'];
+  // `core.checkStat=minimal` with `core.trustctime=false` (and `core.ignoreStat`) make `git status` trust size and mtime alone, so an edit
+  // that keeps both would read as clean; the defaults also compare ctime, which an edit cannot keep.
+  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.checkStat=default', '-c', 'core.trustctime=true', '-c', 'core.ignoreStat=false'];
   const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
   const filters = listed.status === 0 ? listed.stdout.split('\n').filter(Boolean).flatMap(key => ['-c', `${key}=`]) : [];
   const run = (...args: string[]) => spawnSync('git', [...base, ...filters, ...args], { encoding: 'utf8', env, maxBuffer });
