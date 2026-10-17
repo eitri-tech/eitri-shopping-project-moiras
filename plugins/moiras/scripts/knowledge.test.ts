@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -470,6 +470,108 @@ describe('sourcesHash', () => {
     assert.notEqual(read(), second, 'file content changes the hash');
     write('repo', 'package.json', '{}');
     assert.notEqual(read(), second);
+  });
+
+  it('leaves out what the .gitignore of the base and of every folder excludes', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', '.gitignore', '*.log\n/coverage/\ntmp/\n');
+    write('repo', 'src/index.ts', 'a');
+    const hashOf = (...paths: string[]) => sourcesHash(base, paths);
+    const before = hashOf('.');
+    write('repo', 'debug.log', 'x');
+    write('repo', 'src/deep/trace.log', 'x');
+    write('repo', 'coverage/lcov.info', 'x');
+    write('repo', 'src/tmp/cache.bin', 'x');
+    assert.equal(hashOf('.'), before, 'ignored files and folders do not change the hash');
+    write('repo', 'src/coverage/report.txt', 'x');
+    assert.notEqual(hashOf('.'), before, 'an anchored pattern only covers the base folder');
+
+    write('repo', 'src/.gitignore', 'generated/\n!keep.log\n');
+    const nested = hashOf('src');
+    write('repo', 'src/generated/api.ts', 'x');
+    assert.equal(hashOf('src'), nested, 'a nested .gitignore excludes its own subtree');
+    write('repo', 'src/keep.log', 'x');
+    assert.notEqual(hashOf('src'), nested, 'a deeper rule can re-include a file');
+    write('repo', 'src/.gitignore', 'generated/\n!keep.log\nskip.txt\n');
+    const deep = hashOf('src/deep');
+    write('repo', 'src/deep/more.log', 'x');
+    write('repo', 'src/deep/skip.txt', 'x');
+    assert.equal(hashOf('src/deep'), deep, 'a path named on its own still obeys the .gitignore of the folders between it and the base');
+    write('repo', 'src/deep/other.txt', 'x');
+    assert.notEqual(hashOf('src/deep'), deep);
+    write('repo', 'src/generated/ignored.ts', 'x');
+    const generated = hashOf('src/generated');
+    chmodSync(join(base, 'src', 'generated'), 0o000);
+    try {
+      assert.equal(hashOf('src/generated'), hashOf('src/missing'), 'a folder named on its own is skipped when a .gitignore above excludes it');
+    } finally {
+      chmodSync(join(base, 'src', 'generated'), 0o755);
+    }
+    assert.ok(generated);
+  });
+
+  it('reads an explicit file even when a .gitignore names it, and skips an unreadable .gitignore', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', '.gitignore', 'secret.txt\n');
+    write('repo', 'secret.txt', 'one');
+    const first = sourcesHash(base, ['secret.txt']);
+    write('repo', 'secret.txt', 'two');
+    assert.notEqual(sourcesHash(base, ['secret.txt']), first, 'an explicit file is always read');
+    write('repo', 'src/a.txt', 'x');
+    write('repo', 'src/.gitignore', Buffer.from([0xff, 0xfe, 0x00]).toString('latin1'));
+    const all = sourcesHash(base, ['src']);
+    write('repo', 'src/b.txt', 'x');
+    assert.notEqual(sourcesHash(base, ['src']), all, 'a binary .gitignore excludes nothing');
+  });
+
+  it('evaluates anchored rules of a nested .gitignore and skips folders under an ignored ancestor', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/.gitignore', '/ignored.txt\n');
+    write('repo', 'src/keep.ts', 'x');
+    write('repo', 'src/deep/.gitignore', '/local.txt\n');
+    write('repo', 'src/deep/a.ts', 'x');
+    const before = sourcesHash(base, ['.']);
+    write('repo', 'src/ignored.txt', 'x');
+    write('repo', 'src/deep/local.txt', 'x');
+    assert.equal(sourcesHash(base, ['.']), before, 'the first .gitignore found below the base anchors to its own folder');
+    write('repo', 'src/other/ignored.txt', 'x');
+    assert.notEqual(sourcesHash(base, ['.']), before, 'an anchored rule does not reach deeper folders');
+
+    write('repo', '.gitignore', 'foo/\n');
+    write('repo', 'foo/bar/x.ts', 'x');
+    assert.equal(sourcesHash(base, ['foo/bar']), sourcesHash(base, ['missing']), 'a folder under an ignored ancestor is skipped');
+    assert.notEqual(sourcesHash(base, ['foo/bar/x.ts']), sourcesHash(base, ['missing']), 'a file named on its own is still read');
+  });
+
+  it('reads .gitignore files from the base down and never above it', t => {
+    const { dir, write } = workspace(t);
+    write('', '.gitignore', 'a.txt\n');
+    write('repo', 'a.txt', 'x');
+    write('repo', 'b.txt', 'x');
+    const base = join(dir, 'repo');
+    const first = sourcesHash(base, ['.']);
+    write('', '.gitignore', 'a.txt\nb.txt\n');
+    assert.equal(sourcesHash(base, ['.']), first, 'a .gitignore above the base does not apply');
+    write('repo', '.gitignore', 'a.txt\n');
+    assert.notEqual(sourcesHash(base, ['.']), first, 'the one in the base does');
+  });
+
+  it('does not enter an ignored folder', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', '.gitignore', 'vendor/\n');
+    write('repo', 'src/index.ts', 'a');
+    write('repo', 'vendor/pkg/index.js', 'x');
+    const before = sourcesHash(base, ['.']);
+    chmodSync(join(base, 'vendor'), 0o000);
+    try {
+      assert.equal(sourcesHash(base, ['.']), before, 'an unreadable ignored folder is never opened');
+    } finally {
+      chmodSync(join(base, 'vendor'), 0o755);
+    }
   });
 });
 

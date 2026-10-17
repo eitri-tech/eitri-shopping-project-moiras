@@ -29,7 +29,8 @@ Estrutura:
 - `skills/moiras-publish/SKILL.md`: skill que leva o knowledge local a um knowledge compartilhado, por PR
 - `scripts/memory.ts`: grava e consulta a memória de cada etapa (`.moiras/memory/<stage>.jsonl`) com hash SHA-256
 - `scripts/config.ts`: cria (`init`) e valida (`check`) o `.moiras/sources.json`; `init` nunca sobrescreve
-- `scripts/knowledge.ts`: ferramentas só de leitura para o knowledge: `hash` (fingerprint das fontes), `check` (regras dos registros), `issues` (chaves de issue e ids já presentes em `learnings/`) e `plan` (o que o `moiras-publish` levaria)
+- `scripts/gitignore.ts`: leitor de `.gitignore` sem Git (casa por segmento, sem regex); usado pela busca recursiva do `hash`
+- `scripts/knowledge.ts`: ferramentas só de leitura para o knowledge: `hash` (fingerprint das fontes; ao percorrer pastas deixa de fora o que o `.gitignore` de cada pasta exclui; não lê o ignore global do usuário nem o `.git/info/exclude`), `check` (regras dos registros), `issues` (chaves de issue e ids já presentes em `learnings/`) e `plan` (o que o `moiras-publish` levaria)
 
 ## Repositório público
 
