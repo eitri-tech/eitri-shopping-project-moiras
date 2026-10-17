@@ -1,6 +1,7 @@
 /* Usage:
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
+ * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -16,7 +17,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -196,6 +197,44 @@ export function records(dir: string, only?: Scope): Entry[] {
           return { path, kind, text, doc: result.issue ? null : parseDoc(text), issue: result.issue };
         });
     });
+}
+
+/**
+ * Issue keys that `learnings/` already cite (only from records that pass `check`) and every id or file
+ * name in use, over one or more knowledges. A caller uses it to skip known issues and avoid collisions.
+ */
+export function issues(dirs: string | string[]): { issues: Record<string, { solutions: string[]; patterns: string[] }>; ids: string[] } {
+  const ids = new Set<string>();
+  const mentions = new Map<string, { solutions: Set<string>; patterns: Set<string> }>();
+  for (const dir of [dirs].flat()) {
+    const invalid = new Set(check(dir, 'learnings').findings.filter(finding => finding.severity === 'error').map(finding => finding.path));
+    for (const entry of records(dir, 'learnings')) {
+      // A folder that cannot be read (symlink, not a directory) would hide ids and issues: fail instead of a partial index.
+      if (entry.issue && !entry.path.endsWith('.md')) throw new Error(`${dir}: ${entry.path} cannot be indexed (${entry.issue}).`);
+      const stem = entry.path.slice(entry.path.lastIndexOf('/') + 1, -'.md'.length);
+      ids.add(stem);
+      const fields = entry.doc?.fields;
+      if (!fields || entry.issue) continue;
+      if (typeof fields.id === 'string' && fields.id) ids.add(fields.id);
+      // Empty and TODO records are not evidence (see moiras-triage), so they do not cover an issue.
+      if (invalid.has(entry.path) || !entry.doc!.body.trim() || /\bTODO\b/.test(entry.doc!.body)) continue;
+      const id = stem;
+      const raw = entry.kind.type === 'solution' ? fields.issue : entry.kind.type === 'pattern' ? fields.issues : undefined;
+      const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
+      for (const key of keys) {
+        const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
+        group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
+        mentions.set(key, group);
+      }
+    }
+  }
+  return {
+    issues: Object.fromEntries([...mentions.keys()].sort().map(key => {
+      const group = mentions.get(key)!;
+      return [key, { solutions: [...group.solutions].sort(), patterns: [...group.patterns].sort() }];
+    })),
+    ids: [...ids].sort(),
+  };
 }
 
 /** `YYYY-MM-DD` that exists on the calendar (2026-02-30 and 2026-99-99 do not). */
@@ -482,6 +521,10 @@ export function main(argv: string[]): { output: string; code: number } {
     if (rest.length !== 1) throw new Error(usage);
     const result = check(rest[0]!, scopeOf(values.only));
     return { output: JSON.stringify(result), code: result.findings.some(f => f.severity === 'error') ? 1 : 0 };
+  }
+  if (command === 'issues') {
+    if (!rest.length || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(issues(rest)), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);

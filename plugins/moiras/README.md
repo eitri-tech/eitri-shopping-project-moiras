@@ -21,6 +21,7 @@ Os contratos e as regras estão nos [stages da triagem](skills/moiras-triage/sta
 Quando usar cada skill:
 
 - [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
+- [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico, propõe soluções, padrões e decisões e grava só o que você aprovar.
 - [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
@@ -32,6 +33,7 @@ Quem escreve onde:
 - `moiras-init` é a única que cria o `.moiras/sources.json` (e o `.moiras/.gitignore`), pelo `scripts/config.ts`, só após o "sim" ao arquivo inteiro e sem sobrescrever.
 - `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
   grava só após o "sim" à lista exata e não apaga registros.
+- `moiras-learn` grava em `learnings/` do knowledge local, só no modo interativo e após o "sim" à lista exata; marca os registros com `imported_from: history`, só afirma `result: resolved` com evidência (PR ou comentário de fechamento) e nunca copia texto de issue.
 - `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`
   após o "sim", sempre no knowledge local e no modo interativo.
 - `moiras-audit` só ajusta `result` e a observação de aprendizados locais e gera
@@ -40,8 +42,8 @@ Quem escreve onde:
   Critérios mudam por regeneração com `replaces`; a remoção dos antigos locais
   fica limitada ao escopo aprovado.
 - Só `scripts/memory.ts` acrescenta registros à memória das etapas;
-  `scripts/knowledge.ts` apenas lê para calcular `hash`, validar com `check`
-  e comparar com `plan`: não grava knowledge.
+  `scripts/knowledge.ts` apenas lê para calcular `hash`, validar com `check`,
+  listar as issues já citadas com `issues` e comparar com `plan`: não grava knowledge.
 - A triagem persiste saídas completas e pendências; no `--auto`, também o relatório.
   Auditoria, publish e sync automático salvam seus relatórios em `runs.dir`
   (padrão `.moiras/runs/`). Veja também [Memória](#memória).
@@ -95,7 +97,7 @@ moiras/
 ├── .claude-plugin/plugin.json      # manifesto
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
 ├── scripts/config.ts               # cria e valida o .moiras/sources.json
-├── scripts/knowledge.ts            # hash das fontes, checagem e plano de publicação do knowledge
+├── scripts/knowledge.ts            # hash das fontes, checagem, issues já citadas e plano de publicação do knowledge
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
     ├── moiras-triage/
@@ -108,6 +110,8 @@ moiras/
     │   └── SKILL.md                # cria o .moiras/sources.json conversando
     ├── moiras-index/
     │   └── SKILL.md                # glossário derivado do código
+    ├── moiras-learn/
+    │   └── SKILL.md                # aprendizado a partir das issues já concluídas
     ├── moiras-sync/
     │   └── SKILL.md                # traz o que foi mergeado nos knowledges compartilhados
     ├── moiras-publish/
@@ -159,7 +163,7 @@ No modo `--auto` a skill não faz perguntas, processa o que mudou (incluindo o k
 
 Liste em `--allowedTools` as ferramentas dos conectores de Jira e Slack que a coleta usa; sem isso a execução sem terminal fica bloqueada esperando permissão.
 
-Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto` antes (ela só avança clones que já existem) e libere em `--allowedTools` os comandos `git status`, `git fetch`, `git merge --ff-only` e os de leitura que ela usa. `moiras-index`, `moiras-publish` e `moiras-audit` não rodam em `--auto`.
+Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto` antes (ela só avança clones que já existem) e libere em `--allowedTools` os comandos `git status`, `git fetch`, `git merge --ff-only` e os de leitura que ela usa. `moiras-index`, `moiras-learn`, `moiras-publish` e `moiras-audit` não rodam em `--auto`.
 
 ## Memória
 

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
+import { check, issues, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -77,6 +77,70 @@ describe('parseDoc', () => {
     assert.equal(doc?.bodyLine, 7);
     assert.equal(parseDoc('# no frontmatter'), null);
     assert.equal(parseDoc('---\nid: a\n'), null);
+  });
+});
+
+describe('issues', () => {
+  it('indexes learning mentions and ids in a stable order without bodies', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved'));
+    write('local', 'learnings/solutions/a.md', solution('resolved').replace('id: PROJ-1-1', 'id: a'));
+    write('local', 'learnings/patterns/z.md', patternDoc('z', 'Corpo privado').replace('issues: [PROJ-1]', 'issues: [PROJ-2, PROJ-1, PROJ-1]'));
+    write('local', 'learnings/patterns/b.md', patternDoc('b', '# P'));
+    write('local', 'learnings/decisions/decision.md', '---\ntype: decision\nissue: PROJ-3\nissues: [PROJ-3]\n---\nCorpo privado');
+    write('local', 'criteria/ignored.md', criterion('ignored'));
+    const expected = {
+      issues: {
+        'PROJ-1': { solutions: ['PROJ-1-1', 'a'], patterns: ['b', 'z'] },
+        'PROJ-2': { solutions: [], patterns: ['z'] },
+      },
+      ids: ['PROJ-1-1', 'a', 'b', 'decision', 'z'],
+    };
+    assert.deepEqual(issues(local), expected);
+    assert.deepEqual(main(['issues', local]), { output: JSON.stringify(expected), code: 0 });
+  });
+
+  it('returns empty collections for an empty directory and skips unreadable or unparsed records', t => {
+    const { dir, local, write } = workspace(t);
+    assert.deepEqual(issues(dir), { issues: {}, ids: [] });
+    write('local', 'learnings/solutions/no-frontmatter.md', '# Invalid');
+    write('local', 'learnings/solutions/unclosed.md', '---\nid: invalid');
+    write('local', 'learnings/solutions/binary.md', '\0');
+    write('local', 'learnings/solutions/large.md', 'x'.repeat(2 * 1024 * 1024));
+    symlinkSync(dir, join(local, 'learnings/solutions/link.md'));
+    assert.deepEqual(issues(local), { issues: {}, ids: ['binary', 'large', 'link', 'no-frontmatter', 'unclosed'] });
+  });
+
+  it('ignores records that fail check, reserves their names, accepts a scalar issues and merges knowledges', t => {
+    const { local, shared, write } = workspace(t);
+    write('local', 'learnings/solutions/PROJ-2-1.md', solution('resolved').replace('id: PROJ-1-1', 'id: PROJ-9-1').replace('issue: PROJ-1', 'issue: PROJ-2'));
+    write('local', 'learnings/solutions/broken.md', '---\nid: broken\ntype: pattern\nissue: PROJ-4\n---\n');
+    write('local', 'learnings/patterns/empty.md', `${patternHead('empty').join('\n')}\n`);
+    write('local', 'learnings/patterns/todo.md', patternDoc('todo', 'TODO'));
+    write('local', 'learnings/patterns/scalar.md', patternDoc('scalar', '# P').replace('issues: [PROJ-1]', 'issues: PROJ-5'));
+    write('shared', 'learnings/patterns/team.md', patternDoc('team', '# P').replace('issues: [PROJ-1]', 'issues: [PROJ-6]'));
+    assert.deepEqual(issues([local, shared]), {
+      issues: { 'PROJ-5': { solutions: [], patterns: ['scalar'] }, 'PROJ-6': { solutions: [], patterns: ['team'] } },
+      ids: ['PROJ-2-1', 'PROJ-9-1', 'broken', 'empty', 'scalar', 'team', 'todo'],
+    });
+  });
+
+  it('fails instead of returning a partial index when a learnings folder cannot be read', t => {
+    const { dir, local, write } = workspace(t);
+    write('local', 'learnings/patterns/ok.md', patternDoc('ok', '# P'));
+    symlinkSync(dir, join(local, 'learnings/solutions'));
+    assert.throws(() => issues(local), /learnings\/solutions cannot be indexed \(symlink\)/);
+    rmSync(join(local, 'learnings/solutions'));
+    write('local', 'learnings/decisions', 'not a folder');
+    assert.throws(() => issues(local), /learnings\/decisions cannot be indexed \(not-directory\)/);
+  });
+
+  it('uses the CLI success and usage error paths', t => {
+    const { dir } = workspace(t);
+    assert.deepEqual(main(['issues', dir]), { output: '{"issues":{},"ids":[]}', code: 0 });
+    for (const args of [['issues'], ['issues', dir, '--only', 'learnings']]) {
+      assert.throws(() => main(args), /Usage:/);
+    }
   });
 });
 
