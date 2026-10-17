@@ -844,6 +844,24 @@ describe('provenance', () => {
     assert.deepEqual(provenance(join(cwd, 'src')), { git: false });
   });
 
+  it('does not run a configured fsmonitor while hashing and fails closed when Git cannot answer for a repository', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'fsmonitor-ran-hash');
+    const hook = join(cwd, '..', 'hook-hash.sh');
+    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    writeFileSync(join(cwd, '.gitignore'), 'config.json\n');
+    mkdirSync(join(cwd, 'src'));
+    writeFileSync(join(cwd, 'src', 'index.ts'), 'x');
+    writeFileSync(join(cwd, 'config.json'), '{}');
+    run(cwd, 'config', 'core.fsmonitor', hook);
+    assert.equal(typeof main(['hash', '--base', cwd, 'README.md']).output, 'string');
+    assert.equal(typeof main(['hash', '--base', cwd, 'src']).output, 'string');
+    assert.equal(existsSync(marker), false);
+    writeFileSync(join(cwd, '.git', 'config'), '[core\n\tbroken\n');
+    assert.throws(() => main(['hash', '--base', cwd, 'README.md', 'config.json']), /Could not read the Git ignore rules/);
+    assert.throws(() => main(['hash', '--base', cwd, 'src']), /Could not read the Git ignore rules/);
+  });
+
   it('reports git: false without a repository or a commit and prints through the CLI', t => {
     const { dir, write } = workspace(t);
     write('plain', 'a.txt', 'x');

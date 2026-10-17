@@ -526,7 +526,19 @@ function gitEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-const insideWorkTree = (base: string, env: NodeJS.ProcessEnv) => spawnSync('git', ['-C', base, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', env }).stdout.trim() === 'true';
+/** Reading a repository must not run its scripts: `core.fsmonitor` is an executable Git would call for these queries. */
+const NO_HOOKS = ['-c', 'core.fsmonitor=false'];
+
+/**
+ * Whether `base` is inside a Git work tree. A folder that is simply not a repository is `false`; a repository that Git cannot answer
+ * for (a malformed config, say) throws, so callers never go on without its ignore rules.
+ */
+function insideWorkTree(base: string, env: NodeJS.ProcessEnv): boolean {
+  const result = spawnSync('git', ['-C', base, ...NO_HOOKS, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', env: { ...env, LC_ALL: 'C' } });
+  if (result.status === 0) return result.stdout.trim() === 'true';
+  if (/not a git repository/i.test(result.stderr ?? '')) return false;
+  throw new Error('Could not read the Git ignore rules');
+}
 
 /**
  * The explicit source files that Git ignores (and does not track): a `.gitignore`d file is not part of the recorded commit and may
@@ -537,7 +549,7 @@ export function ignoredSources(base: string, paths: string[]): string[] {
   if (!insideWorkTree(base, env)) return [];
   return paths.filter(path => {
     try { if (!lstatSync(resolve(base, path)).isFile()) return false; } catch { return false; }
-    const status = spawnSync('git', ['-C', base, 'check-ignore', '-q', '--', path], { env }).status;
+    const status = spawnSync('git', ['-C', base, ...NO_HOOKS, 'check-ignore', '-q', '--', path], { env }).status;
     // 0 ignored, 1 not ignored; anything else means the rules could not be read, and hashing must not go on without them.
     if (status !== 0 && status !== 1) throw new Error('Could not read the Git ignore rules');
     return status === 0;
@@ -551,7 +563,7 @@ export function ignoredSources(base: string, paths: string[]): string[] {
 export function ignoredMatcher(base: string): ((relativePath: string) => boolean) | undefined {
   const env = gitEnv();
   if (!insideWorkTree(base, env)) return undefined;
-  const listed = spawnSync('git', ['-C', base, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  const listed = spawnSync('git', ['-C', base, ...NO_HOOKS, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
   // Inside a repository whose ignore rules cannot be read (a corrupt index, an output too large): fail closed, never hash without them.
   if (listed.status !== 0) throw new Error('Could not read the Git ignore rules');
   const entries = listed.stdout.split('\0').filter(Boolean);
