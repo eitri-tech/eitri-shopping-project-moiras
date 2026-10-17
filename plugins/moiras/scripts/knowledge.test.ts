@@ -798,6 +798,19 @@ describe('provenance', () => {
     assert.notEqual(hashOf(), before);
   });
 
+  it('stops at nested repositories and fails closed when the ignore rules cannot be read', t => {
+    const cwd = repository(t);
+    mkdirSync(join(cwd, 'libs', 'vendor'), { recursive: true });
+    writeFileSync(join(cwd, 'libs', 'vendor', '.git'), 'gitdir: ../../.git/modules/vendor\n');
+    writeFileSync(join(cwd, 'libs', 'keep.ts'), 'k');
+    const hashOf = () => main(['hash', '--base', cwd, 'libs']).output;
+    const before = hashOf();
+    writeFileSync(join(cwd, 'libs', 'vendor', 'inside.ts'), 'x');
+    assert.equal(hashOf(), before);
+    writeFileSync(join(cwd, '.git', 'index'), 'not an index');
+    assert.throws(() => hashOf(), /Could not read the Git ignore rules/);
+  });
+
   it('counts a staged submodule update as dirty without entering the submodule', t => {
     const { dir, write } = workspace(t);
     write('sub', 'a.txt', 'one');

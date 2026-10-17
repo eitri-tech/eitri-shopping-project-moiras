@@ -494,6 +494,8 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown, ignor
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
     const full = resolve(base, path);
+    // A folder with its own `.git` (a submodule or a nested repository) is another repository: its content is not read.
+    if (full !== resolve(base) && existsSync(join(full, '.git'))) return;
     if (ignored && (!explicit || lstatSync(full).isDirectory()) && ignored(relative(base, full).split(sep).join('/'))) return;
     if (lstatSync(full).isDirectory()) {
       const real = realpathSync(full);
@@ -524,15 +526,21 @@ function gitEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+const insideWorkTree = (base: string, env: NodeJS.ProcessEnv) => spawnSync('git', ['-C', base, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', env }).stdout.trim() === 'true';
+
 /**
  * The explicit source files that Git ignores (and does not track): a `.gitignore`d file is not part of the recorded commit and may
  * hold what the repository chose to keep out of it, so it must not become evidence. Folders are only listed by name and not checked.
  */
 export function ignoredSources(base: string, paths: string[]): string[] {
   const env = gitEnv();
+  if (!insideWorkTree(base, env)) return [];
   return paths.filter(path => {
     try { if (!lstatSync(resolve(base, path)).isFile()) return false; } catch { return false; }
-    return spawnSync('git', ['-C', base, 'check-ignore', '-q', '--', path], { env }).status === 0;
+    const status = spawnSync('git', ['-C', base, 'check-ignore', '-q', '--', path], { env }).status;
+    // 0 ignored, 1 not ignored; anything else means the rules could not be read, and hashing must not go on without them.
+    if (status !== 0 && status !== 1) throw new Error('Could not read the Git ignore rules');
+    return status === 0;
   });
 }
 
@@ -541,8 +549,11 @@ export function ignoredSources(base: string, paths: string[]): string[] {
  * `dir/`), so folder hashes can leave out ignored descendants. `undefined` outside a Git work tree.
  */
 export function ignoredMatcher(base: string): ((relativePath: string) => boolean) | undefined {
-  const listed = spawnSync('git', ['-C', base, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env: gitEnv(), maxBuffer: 64 * 1024 * 1024 });
-  if (listed.status !== 0) return undefined;
+  const env = gitEnv();
+  if (!insideWorkTree(base, env)) return undefined;
+  const listed = spawnSync('git', ['-C', base, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  // Inside a repository whose ignore rules cannot be read (a corrupt index, an output too large): fail closed, never hash without them.
+  if (listed.status !== 0) throw new Error('Could not read the Git ignore rules');
   const entries = listed.stdout.split('\0').filter(Boolean);
   return path => entries.some(entry => (entry.endsWith('/') ? path === entry.slice(0, -1) || path.startsWith(entry) : path === entry));
 }
