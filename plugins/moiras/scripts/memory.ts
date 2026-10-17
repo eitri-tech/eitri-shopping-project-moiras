@@ -113,6 +113,11 @@ export function record(
 ): Result[] {
   const batch = (Array.isArray(input) ? input : [input]).map((entry: unknown): MemoryRecord => {
     if (!isObject(entry) || typeof entry.key !== 'string') throw new Error('Every record needs a string key.');
+    // A collected interaction must stay identifiable by the `interaction:<id>` shape the
+    // memory contract relies on; a typo'd prefix would never match later deduplication.
+    if (stage === 'clotho' && /^interact/i.test(entry.key) && !/^interaction:\S+$/.test(entry.key)) {
+      throw new Error('Interaction records must use the interaction:<id> key shape.');
+    }
     const allowed = new Set([...commonFields, ...stageFields[stage]]);
     for (const field of Object.keys(entry)) {
       if (!allowed.has(field)) throw new Error(`Unknown ${stage} field: ${field}`);

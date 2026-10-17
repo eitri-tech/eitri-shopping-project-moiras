@@ -93,6 +93,17 @@ describe('record', () => {
     assert.throws(() => record('atropos', { key: 'A', content: '', solutions: [{ title: '', description: 'raw' }] }, { dir }), /Invalid metadata/);
   });
 
+  it('accepts only the documented interaction key shape', t => {
+    const { dir } = fixture(t);
+    const id = 'slack:C0123456789:1696341120.000100:reaction';
+    assert.doesNotThrow(() => record('clotho', { key: `interaction:${id}`, content: 'reaction' }, { dir }));
+    for (const typo of ['interactions:<id>', 'Interaction:<id>', 'INTERACTION:<id>']) {
+      assert.throws(() => record('clotho', { key: typo, content: 'reaction' }, { dir }), /interaction:<id>/);
+    }
+    assert.throws(() => record('clotho', { key: 'interaction:   ', content: 'reaction' }, { dir }), /interaction:<id>/);
+    assert.doesNotThrow(() => record('lachesis', { key: 'interactions', content: 'not-clotho' }, { dir }));
+  });
+
   it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {
     const { dir, file } = fixture(t);
     for (const invalid of ['old', '', 'sha256:' + 'a'.repeat(63), 'sha256:' + 'g'.repeat(64), null, 7, {}]) {
