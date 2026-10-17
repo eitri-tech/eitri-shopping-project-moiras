@@ -55,14 +55,19 @@ export function validate(config: unknown): Finding[] {
     else if (isObject(value)) for (const [key, item] of Object.entries(value)) scan(item, path ? `${path}.${key}` : key);
   };
   scan(config, '');
-  // Any string under a key that names a credential (token, password...), at any depth, is a secret even when it looks harmless.
+  // Any string or number under a key that names a credential (token, password...), at any depth, is a secret even when it
+  // looks harmless (only an empty string, null or a `<placeholder>` passes). Booleans carry no secret, and numbers under
+  // a counter such as `max_tokens` or `token_budget` are not credentials either.
   const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
-  const scanKeys = (value: unknown, path: string, underCredential = false) => {
+  const counterKey = /(?:tokens|tokenizer|token[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
+  const scanKeys = (value: unknown, path: string, underCredential = false, counter = false) => {
     if (typeof value === 'string') {
       if (underCredential && value.trim() !== '' && !placeholder(value.trim())) add(path, 'secret');
-    } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential));
+    } else if (typeof value === 'number') {
+      if (underCredential && !counter) add(path, 'secret');
+    } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential, counter));
     else if (isObject(value)) {
-      for (const [key, item] of Object.entries(value)) scanKeys(item, path ? `${path}.${key}` : key, underCredential || credentialKey.test(key));
+      for (const [key, item] of Object.entries(value)) scanKeys(item, path ? `${path}.${key}` : key, underCredential || credentialKey.test(key), counter || counterKey.test(key));
     }
   };
   scanKeys(config, '');
@@ -180,7 +185,8 @@ const hasErrors = (findings: Finding[]) => findings.some(finding => finding.seve
 
 /** True when a `*` rule is not re-included by a later negation such as `!sources.json`. */
 function ignoresEverything(rules: string): boolean {
-  const lines = rules.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  // Git drops only unescaped trailing spaces: leading spaces and tabs belong to the pattern, so ` *` and `*\t` do not ignore everything.
+  const lines = rules.split(/\r?\n/).map(line => line.replace(/ +$/, '')).filter(line => line && !line.startsWith('#'));
   const last = lines.lastIndexOf('*');
   return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
 }
@@ -197,13 +203,15 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   if (existsSync(file)) throw new Error(`${file} already exists; edit it by hand or remove it first.`);
   if (dryRun) return { created: [], findings };
   mkdirSync(dir, { recursive: true });
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
-  const created = [file];
-  // The folder ignores itself, so nothing in it (IDs, knowledge, memory, reports) is committed by accident.
+  // The folder ignores itself, so nothing in it (IDs, knowledge, memory, reports) is committed by accident;
+  // the ignore file goes first so the configuration is never on disk unprotected.
+  const created: string[] = [];
   if (!existsSync(ignore)) {
     writeFileSync(ignore, '*\n', { flag: 'wx' });
     created.push(ignore);
   }
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
+  created.push(file);
   return { created, findings };
 }
 
