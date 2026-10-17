@@ -55,7 +55,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
    ```
 
-6. **Comparar** com o arquivo existente: mesmo `sources_hash` **e** mesma proveniência é `unchanged`, e o arquivo não é tocado (nem o `indexed_at`); mesmo `sources_hash` com commit ou `indexed_dirty` diferente (ou um registro antigo sem proveniência) é `refreshed`: só os campos de proveniência e o `indexed_at` mudam, o resto do arquivo fica como está; hash diferente é `changed` (todos os campos são refeitos); sem arquivo é `new`.
+6. **Comparar** com o arquivo existente: mesmo `sources_hash` **e** mesma proveniência é `unchanged`, e o arquivo não é tocado (nem o `indexed_at`); mesmo `sources_hash` com qualquer diferença nos cinco campos de proveniência (commit, data do commit, branch, tag ou `indexed_dirty`, inclusive um campo que passou a faltar ou a existir, como num registro antigo sem proveniência) é `refreshed`: só os campos de proveniência e o `indexed_at` mudam, o resto do arquivo fica como está; hash diferente é `changed` (todos os campos são refeitos); sem arquivo é `new`.
 7. **Mostrar** a lista numerada (`new`, `changed`, `refreshed`, `unchanged`, `missing`), com o caminho de cada `glossary/<id>.md`.
 8. **Gravar** só o que o usuário aprovou, depois do "sim" à lista exata. Item que surgir depois precisa de novo "sim".
 9. **Conferir** o que foi gravado e corrigir o que falhar:

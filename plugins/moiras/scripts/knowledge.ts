@@ -530,8 +530,11 @@ export interface Provenance {
  * on one, and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
  */
 export function provenance(repository: string): Provenance {
+  // Variables that point Git at another repository, work tree or index would make the answer describe something else.
+  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
+  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
   const git = (...args: string[]) => {
-    const result = spawnSync('git', ['-C', repository, ...args], { encoding: 'utf8', env: { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' } });
+    const result = spawnSync('git', ['-C', repository, ...args], { encoding: 'utf8', env });
     return result.status === 0 ? result.stdout.trim() : undefined;
   };
   const commit = git('rev-parse', '--verify', '-q', 'HEAD');
@@ -542,10 +545,10 @@ export function provenance(repository: string): Provenance {
   const omitted: string[] = [];
   for (const [field, value] of [['indexed_branch', git('symbolic-ref', '--short', '-q', 'HEAD')], ['indexed_tag', git('describe', '--tags', '--exact-match', 'HEAD')]] as const) {
     if (!value) continue;
-    if (refName.test(value) && !hasSecret(value) && !email.test(value)) result[field] = value;
+    if (refName.test(value) && !hasSecret(value) && !email.test(value) && !patterns.some(({ test }) => test.test(value))) result[field] = value;
     else omitted.push(field);
   }
-  const status = git('status', '--porcelain');
+  const status = git('status', '--porcelain', '--untracked-files=normal');
   if (status !== undefined) result.indexed_dirty = status !== '';
   if (omitted.length) result.omitted = omitted;
   return result;

@@ -676,6 +676,24 @@ describe('provenance', () => {
     assert.deepEqual([result.indexed_branch, result.omitted], [undefined, ['indexed_branch']]);
   });
 
+  it('ignores variables that redirect Git, counts untracked files and omits secret-looking refs', t => {
+    const cwd = repository(t);
+    run(cwd, 'config', 'status.showUntrackedFiles', 'no');
+    writeFileSync(join(cwd, 'new.txt'), 'x');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+    const before = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+    t.after(() => { for (const [name, value] of [['GIT_DIR', before.dir], ['GIT_WORK_TREE', before.tree]] as const) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+    process.env.GIT_DIR = join(cwd, '.git');
+    process.env.GIT_WORK_TREE = cwd;
+    const { dir } = workspace(t);
+    mkdirSync(join(dir, 'plain'));
+    assert.deepEqual(provenance(join(dir, 'plain')), { git: false });
+    delete process.env.GIT_DIR;
+    delete process.env.GIT_WORK_TREE;
+    run(cwd, 'checkout', '-q', '-b', `ghp_${'a'.repeat(30)}`);
+    assert.deepEqual(provenance(cwd).omitted, ['indexed_branch']);
+  });
+
   it('reports git: false without a repository or a commit and prints through the CLI', t => {
     const { dir, write } = workspace(t);
     write('plain', 'a.txt', 'x');
