@@ -32,7 +32,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
    ORDER BY resolved DESC
    ```
 
-   (`"Epic Link" in (...)` nos projetos que ainda usam o campo antigo.) Com `jira.jql`, a consulta entra como veio, então um filtro de estado dela (`status`, `statusCategory`, `resolution`) contradiz o `statusCategory = Done` acima e a busca volta vazia. Se a `jira.jql` tiver um filtro assim, **avise e peça** ao usuário uma consulta de histórico para esta rodada (a mesma sem o filtro de estado); nunca tire o filtro por conta própria, e um resultado vazio nunca é relatado em silêncio. Peça resumo, tipo, resolução, `resolved_at` e `agency` (quando configurado). Para cada issue, leia o comentário de fechamento e os PRs ligados (repositório e número). Issue sem PR **e** sem comentário de fechamento fica de fora com o motivo `no-evidence`.
+   (`"Epic Link" in (...)` nos projetos que ainda usam o campo antigo.) Com `jira.jql`, a consulta entra como veio, então um filtro de estado dela (`status`, `statusCategory`, `resolution`) pode contradizer o `statusCategory = Done` acima (ex.: `statusCategory != Done`) e a busca voltar vazia. Filtro compatível (ex.: `statusCategory = Done`) segue como está. Se houver contradição **ou dúvida**, **avise e peça** ao usuário uma consulta de histórico para esta rodada; nunca tire o filtro por conta própria, e um resultado vazio nunca é relatado em silêncio. Peça resumo, tipo, resolução, `resolved_at` e `agency` (quando configurado). Para cada issue, leia o comentário de fechamento e os PRs ligados (repositório e número). Issue sem PR **e** sem comentário de fechamento fica de fora com o motivo `no-evidence`.
 3. **Pular o que o knowledge já cobre.** Rode:
 
    ```bash

@@ -31,7 +31,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    ORDER BY priority DESC, duedate ASC
    ```
 
-   Peça também o pai de cada issue (`parent` ou, nos projetos antigos, `"Epic Link"`) com o tipo dele. O `epic` da issue é o pai **só quando o tipo do pai é Epic**; numa subtarefa o pai é a tarefa ou história, então use o épico dela (o pai do pai) ou, se o conector não o der, `null`. Issue sem épico tem `epic: null`.
+   Peça também o pai de cada issue (`parent` ou, nos projetos antigos, `"Epic Link"`) com o tipo dele. O `epic` da issue é o pai **só quando o tipo do pai é Epic**; numa subtarefa o pai é a tarefa ou história, então use o pai dela, também só se o tipo for Epic, ou, se o conector não o der ou o tipo for outro, `null`. Issue sem épico tem `epic: null`.
 
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
    Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
