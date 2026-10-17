@@ -47,8 +47,10 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
    - **Decisão** (`learnings/decisions/<id>.md`): só quando duas ou mais soluções resolveram do mesmo jeito (`source` com os ids delas).
    Cada item mostra: tipo, id, caminho, repositório, componente, categoria, confiança, evidência (chave da issue e `PR` como `repositório#número`) e a síntese em uma frase. Issue de agência entra normalmente, com o registro técnico descrito em "O que vai em cada registro". Mostre também as que ficaram de fora (`no-evidence`, `already-known`, `repository-unknown`) para o usuário conferir.
 6. **Aprovar.** O usuário diz "sim" à lista exata, ou tira e ajusta itens. Peça um pseudônimo (`reviewer-01`, `user-7`; ver "Regras de escrita" em `moiras-triage/SKILL.md`) para `chosen_by`: é quem aprovou a importação, **não** quem corrigiu a issue. Item que surgir depois precisa de novo "sim".
+
+   Ao tirar ou ajustar itens, **recalcule o que depende deles** antes de gravar: padrão que cite a issue ou o id de uma solução removida (em `issues` ou em `Soluções que funcionaram`) e decisão cujo `source` cite esse id. Solução ajustada também obriga a rever a síntese, o agrupamento e as evidências dos dependentes. Padrão que ficar com menos de duas issues e decisão que ficar com menos de duas soluções saem da lista; nos que sobrarem, as referências citam só ids que serão gravados (ou que já existem no knowledge). Depois peça um **novo "sim" à lista revisada**: só o que ela traz é gravado.
 7. **Gravar** só o aprovado, usando os modelos `_templates/` do knowledge, e marcar cada registro com `imported_from: history` no frontmatter e, na `Observação`, a frase "Importado do histórico; confira antes de publicar." `created_at` é a data de hoje. Um arquivo por registro, nunca sobrescreve um existente.
-8. **Conferir** e corrigir o que falhar:
+8. **Conferir** e corrigir o que falhar. O `check` não confere se os ids citados em `source`, `issues` e `Soluções que funcionaram` existem: ele **não** pega referência pendurada, então confira por conta própria que todo id citado por padrão e decisão foi gravado (ou já existe) antes de relatar. Correção que mude o conteúdo de um registro volta ao usuário para um novo "sim":
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only learnings
