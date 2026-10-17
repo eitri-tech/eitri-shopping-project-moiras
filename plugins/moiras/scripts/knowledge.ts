@@ -481,6 +481,12 @@ function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
 export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
   const entries: string[] = [];
   const visited = new Set<string>();
+  // Each .gitignore is read and parsed once per call, however many named paths pass through its folder.
+  const layerCache = new Map<string, IgnoreLayer | undefined>();
+  const cachedLayer = (dir: string) => {
+    if (!layerCache.has(dir)) layerCache.set(dir, ignoreLayer(base, dir));
+    return layerCache.get(dir);
+  };
   const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], parts: Buffer[]) => {
     const issue = pathIssue(base, path);
     if (issue) return;
@@ -498,7 +504,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
         here = names.map(name => Buffer.from(name, 'utf8'));
         layers = [];
         for (let depth = 0; depth < names.length; depth += 1) {
-          const above = ignoreLayer(base, names.slice(0, depth).join(sep));
+          const above = cachedLayer(names.slice(0, depth).join(sep));
           if (above) layers.push(above);
         }
         // A directory named on its own is skipped when a .gitignore above it excludes it; a file named on its own is always read.
@@ -507,7 +513,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       const children = readdirSync(full, { withFileTypes: true });
       // Only a folder that holds a .gitignore pays for reading one.
       if (children.some(child => child.name === '.gitignore')) {
-        const own = ignoreLayer(base, relative(resolve(base), full));
+        const own = cachedLayer(relative(resolve(base), full));
         if (own) layers = [...layers, own];
       }
       for (const child of children.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
