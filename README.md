@@ -75,7 +75,13 @@ O escopo do Jira não precisa ser um épico só, e tem dois modos que não se mi
 | `/moiras:moiras-sync <nome>` | Traz o que foi mergeado nos knowledges compartilhados |
 | `/moiras:moiras-publish <nome>` | Abre um PR com o que é novo no knowledge local |
 
-**Primeira vez**, nesta ordem: `/moiras:moiras-init` (uma vez), `/moiras:moiras-index`, `/moiras:moiras-learn`, e por fim `/moiras:moiras-triage` (o `moiras-learn` é opcional: só compensa se houver issues concluídas no histórico do escopo). Com knowledge compartilhado (`repository` em `knowledge`), rode `/moiras:moiras-sync <nome>` antes da primeira triagem.
+**Primeira vez**, nesta ordem:
+
+1. `/moiras:moiras-init` (uma vez).
+2. `/moiras:moiras-sync <nome>`, só se houver knowledge compartilhado (`repository` em `knowledge`). Rode antes do `moiras-learn`: ele só vê os knowledges que já estão no disco ao pular issues conhecidas e reservar ids.
+3. `/moiras:moiras-index`.
+4. `/moiras:moiras-learn`, opcional: só compensa se houver issues concluídas no histórico do escopo.
+5. `/moiras:moiras-triage`.
 
 O desfecho de uma solução escolhida também passa pela triagem: quando você informa o `result` na análise seguinte, só ele e a observação do registro mudam — a solução nunca é apagada nem reescrita.
 
