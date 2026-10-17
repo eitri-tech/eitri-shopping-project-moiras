@@ -95,7 +95,7 @@ export function validate(config: unknown): Finding[] {
   else if (!isObject(jira)) add('jira', 'not-an-object');
   else {
     if (!isText(jira.site) || !host.test(jira.site)) add('jira.site', 'site-invalid');
-    // The scope of the triage is either epics and/or categories (field + values, ANDed by the Clotho) or one JQL fragment, never both.
+    // The scope of the triage is epics and/or categories (field + values, ANDed by the Clotho).
     // `epic` stays as the single-epic shorthand.
     if (jira.epic !== undefined && (typeof jira.epic !== 'string' || !jiraKey.test(jira.epic))) add('jira.epic', 'epic-invalid');
     if (jira.epics !== undefined) {
@@ -117,14 +117,7 @@ export function validate(config: unknown): Finding[] {
         });
       });
     }
-    // The fragment is read-only by nature (a search), but the Clotho owns the ORDER BY, so a second one would break the query (words inside quoted text do not count).
-    if (jira.jql !== undefined) {
-      if (!isText(jira.jql)) add('jira.jql', 'field-invalid');
-      else if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
-      else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
-    }
-    if (jira.jql !== undefined && [jira.epic, jira.epics, jira.categories].some(part => part !== undefined)) add('jira.jql', 'scope-conflict');
-    if ([jira.epic, jira.epics, jira.categories, jira.jql].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
+    if ([jira.epic, jira.epics, jira.categories].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');
     if (jira.agency_field !== undefined && !isText(jira.agency_field)) add('jira.agency_field', 'field-invalid');
   }
