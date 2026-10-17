@@ -69,16 +69,18 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, jql: 'summary ~ "order by date" AND labels = \'order by\'' } }), []);
   });
 
-  it('warns when the JQL contradicts the filters the Clotho adds, but not for compatible ones', () => {
+  it('warns when the JQL contradicts the filters the Clotho adds, but not for compatible or undecidable ones', () => {
     const site = 'example.atlassian.net';
     for (const [jql, rule] of [
       ['project = PROJ AND status = Done', 'jql-state-contradicts'],
       ['project = PROJ and statuscategory="Done"', 'jql-state-contradicts'],
       ['project = PROJ AND status = "Concluído"', 'jql-state-contradicts'],
-      ['project = PROJ AND resolution != EMPTY', 'jql-state-contradicts'],
-      ['project = PROJ AND resolution is not EMPTY', 'jql-state-contradicts'],
-      ['project = PROJ AND resolution = Fixed', 'jql-state-contradicts'],
+      ['project = PROJ AND status IN (Done, "Concluído")', 'jql-state-contradicts'],
       ['project = PROJ AND assignee = Fulano', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee = currentUser()', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee != Fulano', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee IN (Fulano, Beltrana)', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee NOT IN (Fulano)', 'jql-assignee-contradicts'],
       ['project = PROJ AND assignee != EMPTY', 'jql-assignee-contradicts'],
       ['project = PROJ AND assignee is not empty', 'jql-assignee-contradicts'],
     ] as [string, string][]) {
@@ -89,10 +91,23 @@ describe('validate', () => {
       'project = PROJ AND status != Done AND statusCategory != Done',
       'project = PROJ AND status IN ("Done", "To Do")',
       'project = PROJ AND status = "Aprovado"',
+      'project = PROJ AND resolution != EMPTY',
       'project = PROJ AND resolution = EMPTY',
       'project = PROJ AND assignee IS EMPTY',
+      'project = PROJ AND assignee = EMPTY',
+      'project = PROJ AND assignee IN (EMPTY, Fulano)',
       'project = PROJ AND labels = "Done" AND summary ~ "status report about Done"',
       'project = PROJ AND "Story Points" = "Done asks"',
+      'project = PROJ AND summary ~ "assignee=Fulano"',
+      "project = PROJ AND summary ~ 'status = Done'",
+      // A condition that sits in an OR, a NOT or a group is not a plain filter: no warning rather than a wrong one.
+      'project = PROJ AND (status = Done OR statusCategory != Done)',
+      'project = PROJ AND NOT (statusCategory = Done)',
+      'project = PROJ AND NOT statusCategory = Done',
+      '(assignee = Fulano) AND project = PROJ',
+      'project = PROJ AND (assignee != Fulano OR assignee IS EMPTY)',
+      'assignee != Fulano OR assignee IS EMPTY',
+      'project = PROJ AND status = "unterminated',
     ]) {
       assert.deepEqual(rules({ jira: { site, jql } }), [], jql);
     }

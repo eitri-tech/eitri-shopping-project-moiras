@@ -42,6 +42,108 @@ const isText = (value: unknown): value is string => typeof value === 'string' &&
 /** Names become file names (`glossary/<name>.md`) and `knowledge:<name>/...` references: no separators, no `.`/`..`. */
 const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 
+interface JqlToken {
+  kind: 'text' | 'word' | 'op' | 'open' | 'close' | 'comma';
+  value: string;
+}
+
+/** Words, quoted texts, operators and punctuation of a JQL fragment; `undefined` when a quote is left open. */
+function jqlTokens(jql: string): JqlToken[] | undefined {
+  const tokens: JqlToken[] = [];
+  const operators = ['!=', '!~', '<=', '>=', '=', '~', '<', '>'];
+  for (let index = 0; index < jql.length;) {
+    const char = jql[index]!;
+    if (/\s/.test(char)) {
+      index += 1;
+    } else if (char === '"' || char === "'") {
+      let value = '';
+      let end = index + 1;
+      while (end < jql.length && jql[end] !== char) {
+        if (jql[end] === '\\' && end + 1 < jql.length) end += 1;
+        value += jql[end];
+        end += 1;
+      }
+      if (end >= jql.length) return undefined;
+      tokens.push({ kind: 'text', value });
+      index = end + 1;
+    } else if (operators.some(operator => jql.startsWith(operator, index))) {
+      const operator = operators.find(candidate => jql.startsWith(candidate, index))!;
+      tokens.push({ kind: 'op', value: operator });
+      index += operator.length;
+    } else if (char === '(' || char === ')' || char === ',') {
+      tokens.push({ kind: char === '(' ? 'open' : char === ')' ? 'close' : 'comma', value: char });
+      index += 1;
+    } else {
+      const value = /^[^\s=!~<>(),"']+|^!/.exec(jql.slice(index))![0];
+      tokens.push({ kind: 'word', value });
+      index += value.length;
+    }
+  }
+  return tokens;
+}
+
+const doneStates = new Set(['done', 'concluído', 'concluido', 'concluída', 'concluida']);
+
+/**
+ * Filters of a `jira.jql` that cannot coexist with what the Clotho appends (`assignee IS EMPTY AND statusCategory != Done`).
+ * Conservative on purpose: only a plain chain of `AND` clauses is read. `OR`, `NOT`, grouping parentheses, `&`/`|`, an open quote or
+ * anything it does not recognise leave the query alone, because a wrong warning is worse than a missing one. Jira leaves out issues
+ * with no value for `=`, `!=`, `IN` and `NOT IN`, so those on the assignee can never meet `assignee IS EMPTY`.
+ */
+export function jqlContradictions(jql: string): { assignee: boolean; state: boolean } {
+  const none = { assignee: false, state: false };
+  const tokens = jqlTokens(jql);
+  if (!tokens) return none;
+  const word = (token: JqlToken | undefined) => (token?.kind === 'word' ? token.value.toLowerCase() : undefined);
+  const clauses: JqlToken[][] = [[]];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    const name = word(token);
+    if (name === 'order') break;
+    if (name === 'or' || name === '!' || (token.kind === 'word' && /[&|]/.test(token.value))) return none;
+    if (name === 'not' && word(tokens[index - 1]) !== 'is' && word(tokens[index + 1]) !== 'in') return none;
+    if (token.kind === 'open') {
+      const before = word(tokens[index - 1]);
+      if (depth > 0 || before === undefined || before === 'and' || before === 'not') return none;
+      depth += 1;
+    } else if (token.kind === 'close') {
+      depth -= 1;
+      if (depth < 0) return none;
+    }
+    if (name === 'and' && depth === 0) clauses.push([]);
+    else clauses.at(-1)!.push(token);
+  }
+  if (depth !== 0) return none;
+  const emptyValue = (token: JqlToken) => token.kind !== 'op' && ['empty', 'null'].includes(token.value.toLowerCase());
+  const doneValue = (token: JqlToken) => token.kind !== 'op' && doneStates.has(token.value.toLowerCase());
+  const result = { ...none };
+  for (const [field, ...rest] of clauses) {
+    const target = field !== undefined && (field.kind === 'word' || field.kind === 'text') ? field.value.toLowerCase() : undefined;
+    if (target !== 'assignee' && target !== 'status' && target !== 'statuscategory') continue;
+    const first = rest[0];
+    let negated = word(first) === 'not';
+    const inList = word(rest[negated ? 1 : 0]) === 'in';
+    if (inList) {
+      const values = rest.slice(negated ? 2 : 1).filter(token => token.kind === 'text' || token.kind === 'word');
+      if (target === 'assignee' && (negated || (values.length > 0 && !values.some(emptyValue)))) result.assignee = true;
+      if (target !== 'assignee' && !negated && values.length > 0 && values.every(doneValue)) result.state = true;
+      continue;
+    }
+    if (first?.kind === 'op' && (first.value === '=' || first.value === '!=')) {
+      const value = rest[1];
+      if (value === undefined || value.kind === 'op') continue;
+      if (target === 'assignee' && (first.value === '!=' || !emptyValue(value))) result.assignee = true;
+      if (target !== 'assignee' && first.value === '=' && doneValue(value)) result.state = true;
+    } else if (word(first) === 'is' && target === 'assignee') {
+      negated = word(rest[1]) === 'not';
+      const value = rest[negated ? 2 : 1];
+      if (negated && value !== undefined && emptyValue(value)) result.assignee = true;
+    }
+  }
+  return result;
+}
+
 /** Rule-by-rule check of a parsed configuration. */
 export function validate(config: unknown): Finding[] {
   const findings: Finding[] = [];
@@ -123,11 +225,11 @@ export function validate(config: unknown): Finding[] {
       else {
         if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
         else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
-        // The Clotho adds `assignee IS EMPTY AND statusCategory != Done`; a query pinning Done, a resolvable
-        // state or an assignee would always return nothing (multi-word quoted text is out of the scan).
-        const searchable = jira.jql.replace(/"(?:[^"\\]*\s[^"\\]*)"/g, '""').replace(/'(?:[^'\\]*\s[^'\\]*)'/g, "''");
-        if (/\bstatus(?:Category)?\s*=\s*["']?\s*(?:done|conclu[íi]d[oa])\b/i.test(searchable) || /\bresolution\s*(?:=\s*(?![\s"']*(?:empty|null)\b)|(?:!=|is\s+not)\s*["']?\s*empty\b)/i.test(searchable)) add('jira.jql', 'jql-state-contradicts', 'warning');
-        if (/\bassignee\s*(?:=\s*(?![\s"']*(?:empty|null)\b)\S|(?:!=|is\s+not)\s*["']?\s*empty\b)/i.test(searchable)) add('jira.jql', 'jql-assignee-contradicts', 'warning');
+        if (jira.jql.length <= 2000) {
+          const found = jqlContradictions(jira.jql);
+          if (found.state) add('jira.jql', 'jql-state-contradicts', 'warning');
+          if (found.assignee) add('jira.jql', 'jql-assignee-contradicts', 'warning');
+        }
       }
     }
     if (jira.jql !== undefined && [jira.epic, jira.epics, jira.categories].some(part => part !== undefined)) add('jira.jql', 'scope-conflict');
