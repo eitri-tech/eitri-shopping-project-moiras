@@ -49,7 +49,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 6. **Aprovar.** O usuário diz "sim" à lista exata, ou tira e ajusta itens. Peça um pseudônimo (`reviewer-01`, `user-7`; ver "Regras de escrita" em `moiras-triage/SKILL.md`) para `chosen_by`: é quem aprovou a importação, **não** quem corrigiu a issue. Item que surgir depois precisa de novo "sim".
 
    Ao tirar ou ajustar itens, **recalcule o que depende deles** antes de gravar: padrão que cite a issue ou o id de uma solução removida (em `issues` ou em `Soluções que funcionaram`) e decisão cujo `source` cite esse id. Solução ajustada também obriga a rever a síntese, o agrupamento e as evidências dos dependentes. Padrão que ficar com menos de duas issues e decisão que ficar com menos de duas soluções saem da lista; nos que sobrarem, as referências citam só ids que serão gravados (ou que já existem no knowledge). Depois peça um **novo "sim" à lista revisada**: só o que ela traz é gravado.
-7. **Gravar** só o aprovado, usando os modelos `_templates/` do knowledge, e marcar cada registro com `imported_from: history` no frontmatter e, na `Observação`, a frase "Importado do histórico; confira antes de publicar." `created_at` é a data de hoje. Um arquivo por registro, nunca sobrescreve um existente.
+7. **Gravar** só o aprovado, usando os modelos `_templates/` do knowledge (sem `_templates/`, como num knowledge recém-criado, os "Modelos de reserva" abaixo), e marcar cada registro com `imported_from: history` no frontmatter e, na `Observação` da solução (padrão e decisão não têm esse campo; neles vale o `imported_from`), a frase "Importado do histórico; confira antes de publicar." `created_at` é a data de hoje. Um arquivo por registro, nunca sobrescreve um existente.
 8. **Conferir** e corrigir o que falhar. O `check` não confere se os ids citados em `source`, `issues` e `Soluções que funcionaram` existem: ele **não** pega referência pendurada, então confira por conta própria que todo id citado por padrão e decisão foi gravado (ou já existe) antes de relatar. Correção que mude o conteúdo de um registro volta ao usuário para um novo "sim":
 
    ```bash
@@ -58,9 +58,88 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 9. **Relatar**, sem texto de issue: quantos registros por tipo, o que ficou de fora e por quê, os avisos (`criteria-missing`, `knowledge-stale`) e a sugestão de `moiras-audit learnings` e, se o knowledge tem `repository`, de `moiras-publish`.
 
+## Modelos de reserva
+
+Use o `_templates/` do knowledge quando existir; senão, estes modelos, com os mesmos campos e corpo. Os valores abaixo são fictícios: troque todos pelos dados reais (a data é a de hoje, no formato `AAAA-MM-DD`). O `confidence` da solução é um inteiro de 0 a 100.
+
+Solução, em `learnings/solutions/PROJ-123-1.md`:
+
+```markdown
+---
+id: PROJ-123-1
+type: solution
+issue: PROJ-123
+created_at: 2026-01-15
+chosen_by: reviewer-01
+agency:
+repositories: [acme-shop-checkout]
+component: checkout
+category: bug
+confidence: 70
+result: resolved
+imported_from: history
+---
+
+# Manter o orderFormId na troca de seller
+
+**Problema:** o carrinho é recriado quando o usuário troca de seller.
+
+**Causa provável:** o orderForm antigo é descartado em vez de atualizado.
+
+**Solução:** reaproveitar o `orderFormId` ao trocar de seller.
+
+**Riscos:** itens de sellers diferentes no mesmo carrinho.
+
+**Alternativas descartadas:** recriar o carrinho e reaplicar os itens (45).
+
+**Fontes:** PROJ-123, `acme-shop-checkout#42`.
+
+**Observação:** Importado do histórico; confira antes de publicar.
+```
+
+Padrão, em `learnings/patterns/cart-loses-items-seller-switch.md`:
+
+```markdown
+---
+id: cart-loses-items-seller-switch
+type: pattern
+created_at: 2026-01-15
+repositories: [acme-shop-checkout]
+component: checkout
+issues: [PROJ-123, PROJ-187]
+imported_from: history
+---
+
+# Carrinho perde itens ao trocar de seller
+
+**Sintoma:** itens somem do carrinho depois da troca de seller.
+
+**Onde olhar:** `acme-shop-checkout/src/views/checkout/`.
+
+**Soluções que funcionaram:** PROJ-123-1, PROJ-187-1.
+```
+
+Decisão, em `learnings/decisions/single-orderform-per-session.md`:
+
+```markdown
+---
+id: single-orderform-per-session
+type: decision
+created_at: 2026-01-15
+source: [PROJ-123-1, PROJ-187-1]
+imported_from: history
+---
+
+# Um orderForm por sessão
+
+**Decisão:** o app mantém um único `orderFormId` por sessão, mesmo trocando de seller.
+
+**Por quê:** as soluções PROJ-123-1 e PROJ-187-1 resolveram o mesmo problema assim.
+```
+
 ## O que vai em cada registro
 
-- Siga o modelo do tipo em `_templates/`. O corpo é uma **síntese curta em português**, escrita por você; nunca cole título, descrição, comentário ou mensagem da issue.
+- Siga o modelo do tipo em `_templates/` ou, sem ele, nos "Modelos de reserva". O corpo é uma **síntese curta em português**, escrita por você; nunca cole título, descrição, comentário ou mensagem da issue.
 - `Fontes` leva a chave da issue e o PR (`repositório#número`) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
 - `agency` do registro segue a seção 3 de `stages/lachesis.md`: o campo configurado (`jira.agency_field`) e, sem ele, o `agency` do glossário quando todos os repositórios concordam; ambíguo ou vazio fica `null`. De issue de agência ficam a síntese técnica e a chave; nada da conversa com a agência nem de outros clientes.
 - `confidence` reflete a evidência: PR mergeado e ligado, mais alta; só o comentário de fechamento, mais baixa. Sem critérios aplicáveis, vale o limite do fallback e o aviso `criteria-missing`.
