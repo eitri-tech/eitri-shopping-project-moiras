@@ -154,6 +154,12 @@ describe('check', () => {
     ]);
   });
 
+  it('rejects replaces that is not a list', t => {
+    const { local, write } = workspace(t);
+    write('local', 'criteria/c.md', criterion('c').replace('replaces: []', 'replaces: a'));
+    assert.deepEqual([...new Set(rules(local))], ['criteria/c.md:replaces-invalid']);
+  });
+
   it('requires the fields of each record type', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/solutions/PROJ-9-1.md', '---\nid: PROJ-9-1\ntype: solution\ncreated_at: 2026-10-01\nresult: resolved\n---\n');
@@ -359,6 +365,17 @@ describe('plan', () => {
         { path: 'criteria/a.md', replacedBy: 'criteria/c.md' },
         { path: 'criteria/b.md', replacedBy: 'criteria/c.md' },
       ],
+    });
+  });
+
+  it('does not offer removals when the replacing criterion is a conflict', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/a.md', criterion('a'));
+    write('shared', 'criteria/c.md', criterion('c').replace('category', 'origin'));
+    write('local', 'criteria/c.md', criterion('c', 'a'));
+    assert.deepEqual(plan(local, shared), {
+      items: [{ path: 'criteria/c.md', action: 'conflict', reason: 'change-by-replaces' }],
+      remove: [],
     });
   });
 });

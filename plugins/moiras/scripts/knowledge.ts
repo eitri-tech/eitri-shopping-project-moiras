@@ -303,6 +303,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (value && !value.includes('<') && !/^(?:Fulano|Beltrana|Sicrano|(?:person|user|reviewer|pseudonym|pessoa|usuario|revisor)[-_][a-z0-9_-]+)$/i.test(value)) add('pseudonym-required', 'error');
       }
       for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
+      if (kind.type === 'criterion' && fields.replaces !== undefined && !Array.isArray(fields.replaces)) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
@@ -394,7 +395,8 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       else item('skip', 'shared-is-newer');
     } else item('conflict', kind.type === 'criterion' ? 'change-by-replaces' : 'append-only');
 
-    if (kind.type === 'criterion' && doc) {
+    // A substitute that is not going to be published (conflict) must not remove anything.
+    if (kind.type === 'criterion' && doc && items[items.length - 1]!.action !== 'conflict') {
       const replaces = Array.isArray(doc.fields.replaces) ? doc.fields.replaces : [];
       for (const id of replaces) {
         // A qualified reference only counts for the knowledge it names; without --shared-name it stays unresolved.
