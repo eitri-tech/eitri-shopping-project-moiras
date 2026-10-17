@@ -142,6 +142,8 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), github: { retries: 3, max_tokens: 4096, token_budget: 1000, tokenizer: { enabled: true } } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { token_budget: { password: 123456, limit: 5 }, tokenizer: { token: 1 } } }), ['github.token_budget.password:secret:error', 'github.tokenizer.token:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { tokens: [123456], password_tokens: 123456, password: { max_tokens: 123456 } } }), ['github.tokens[0]:secret:error', 'github.password_tokens:secret:error', 'github.password.max_tokens:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { auth: 'Basic cGxhaW4tc2VjcmV0LXZhbHVl', headers: { Authorization: 'Bearer plain-value', 'x-auth': 'plain-value' }, cookie: 'sid=plain-value' } }), ['github.auth:secret:error', 'github.headers.Authorization:secret:error', 'github.headers.x-auth:secret:error', 'github.cookie:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { author: 'Fulano', authors: ['Beltrana'], auth: '<token>' } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { tokens: ['plain-value'] } }), ['github.tokens[0]:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
@@ -193,6 +195,19 @@ describe('init', () => {
     writeFileSync(join(target, '.gitignore'), '*  \r\n');
     rmSync(join(target, 'sources.json'), { force: true });
     assert.deepEqual(init(minimal(), target).created, [join(target, 'sources.json')]);
+  });
+
+  it('refuses to recreate a configuration that Git still tracks', t => {
+    const { dir, target } = workspace(t);
+    const git = (...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    if (git('init', '-q').status !== 0) return t.skip('git is not available');
+    init(minimal(), target);
+    assert.equal(git('add', '-f', '.moiras/sources.json').status, 0);
+    rmSync(join(target, 'sources.json'));
+    const result = init(minimal(), target);
+    assert.deepEqual(result.created, []);
+    assert.deepEqual(result.findings.map(finding => `${finding.rule}:${finding.severity}`), ['sources-tracked:error']);
+    assert.ok(!existsSync(join(target, 'sources.json')));
   });
 
   it('writes nothing when there are errors or on a dry run', t => {

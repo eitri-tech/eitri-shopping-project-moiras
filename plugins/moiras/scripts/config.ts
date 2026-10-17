@@ -8,8 +8,9 @@
  *
  * Findings carry the path of the field and the rule, never the value.
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern } from './knowledge.ts';
 
@@ -58,7 +59,8 @@ export function validate(config: unknown): Finding[] {
   // Any string or number under a key that names a credential (token, password...), at any depth, is a secret even when it
   // looks harmless (only an empty string, null or a `<placeholder>` passes). Booleans carry no secret, and numbers under
   // a counter such as `max_tokens` or `token_budget` are not credentials either.
-  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
+  // `auth` only as a whole word (auth, auth_token, x-auth): `author` is not a credential.
+  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential|authorization|bearer|cookie|(?:^|[_-])auth(?:$|[_-]))/i;
   const counterKey = /^(?:(?:max|min|total|input|output|prompt|completion)[_-]?tokens|tokens?[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
   // The counter exemption applies from the key down, never below a credential key, and a credential key inside it clears it.
   const scanKeys = (value: unknown, path: string, underCredential = false, counter = false) => {
@@ -200,6 +202,14 @@ function ignoresEverything(rules: string): boolean {
   return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
 }
 
+/** True when Git tracks the path: ignore rules do not apply to tracked files. No Git, or outside a repository, means no. */
+function isTracked(file: string): boolean {
+  let base = dirname(resolve(file));
+  while (!existsSync(base) && dirname(base) !== base) base = dirname(base);
+  const result = spawnSync('git', ['-C', base, 'ls-files', '--error-unmatch', '--', resolve(file)], { stdio: 'ignore' });
+  return result.status === 0;
+}
+
 /** Creates the configuration folder and file; refuses to touch an existing file. */
 export function init(config: unknown, dir = defaultDir, dryRun = false): { created: string[]; findings: Finding[] } {
   const findings = validate(config);
@@ -207,8 +217,10 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   // An existing ignore file that does not cover the folder would leave IDs and names open to an accidental commit:
   // refuse before writing anything (the dry run reports it too).
   if (existsSync(ignore) && !ignoresEverything(readFileSync(ignore, 'utf8'))) findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'error' });
-  if (hasErrors(findings)) return { created: [], findings };
   const file = join(dir, 'sources.json');
+  // A tracked path keeps showing up as modified even when the folder is ignored: refuse to recreate it.
+  if (!existsSync(file) && isTracked(file)) findings.push({ path: file, rule: 'sources-tracked', severity: 'error' });
+  if (hasErrors(findings)) return { created: [], findings };
   if (existsSync(file)) throw new Error(`${file} already exists; edit it by hand or remove it first.`);
   if (dryRun) return { created: [], findings };
   mkdirSync(dir, { recursive: true });
