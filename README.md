@@ -17,7 +17,28 @@ Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou serv
 
 ## Uso
 
-Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar e preencha o épico, as pessoas e os canais do Slack (IDs `U…` e `C…`) e os knowledges. Depois:
+Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar. Um exemplo enxuto, com os endereços (os caminhos são relativos à pasta que contém `.moiras/`):
+
+```json
+{
+  "jira": { "site": "example.atlassian.net", "epic": "PROJ-100", "project_end": "2026-12-15" },
+  "slack": {
+    "people": [{ "name": "Fulano", "id": "U0123456789" }],
+    "channels": [{ "name": "#proj-squad", "id": "C0123456789" }]
+  },
+  "knowledge": [
+    { "name": "local", "scope": "local", "dir": ".moiras/knowledge" },
+    { "name": "team", "scope": "group", "repository": "git@github.com:<org>/team-knowledge.git", "dir": "../team-knowledge" }
+  ],
+  "index": {
+    "repositories": [
+      { "name": "acme-shop-checkout", "path": "../acme-shop-checkout", "url": "https://github.com/<org>/acme-shop-checkout", "owner": "Squad Checkout" }
+    ]
+  }
+}
+```
+
+`repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
 
 | Comando | O que faz |
 |---|---|
