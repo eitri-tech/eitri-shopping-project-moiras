@@ -152,6 +152,27 @@ export function record(
         throw new Error(`Invalid metadata: ${field}`);
       }
     }
+    // Atropos records must agree internally: action and mode use the documented values,
+    // a chosen solution is numbered against the summary list, and a learning id only
+    // coexists with that choice.
+    if (stage === 'atropos') {
+      const action = entry.action;
+      if (action !== undefined && !['duplicate', 'blocked', 'ready-for-dev', 'needs-info', 'close'].includes(action as string)) {
+        throw new Error('Invalid metadata: action');
+      }
+      if (entry.mode !== undefined && entry.mode !== 'interactive' && entry.mode !== 'auto') {
+        throw new Error('Invalid metadata: mode');
+      }
+      if (Object.hasOwn(entry, 'choice') && typeof entry.choice === 'number') {
+        const solutions = Array.isArray(entry.solutions) ? entry.solutions : [];
+        if (solutions.length === 0 || (entry.choice as number) < 1 || (entry.choice as number) > solutions.length) {
+          throw new Error('Invalid metadata: choice');
+        }
+      }
+      if (Object.hasOwn(entry, 'id') && !(typeof entry.choice === 'number' && (entry.choice as number) >= 1)) {
+        throw new Error('Invalid metadata: id');
+      }
+    }
     const { content, ...rest } = entry;
     if (Object.hasOwn(entry, 'content')) rest.hash = hash(content);
     else if (!Object.hasOwn(entry, 'hash')) throw new Error('Record without content or hash.');

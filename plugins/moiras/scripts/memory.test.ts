@@ -93,6 +93,30 @@ describe('record', () => {
     assert.throws(() => record('atropos', { key: 'A', content: '', solutions: [{ title: '', description: 'raw' }] }, { dir }), /Invalid metadata/);
   });
 
+  it('keeps atropos records internally coherent', t => {
+    const { dir } = fixture(t);
+    const base = { key: 'A', content: '', mode: 'interactive', action: 'ready-for-dev', solutions: [{ title: 'Reuse orderFormId', confidence: 70 }] };
+    for (const action of ['duplicate', 'blocked', 'ready-for-dev', 'needs-info', 'close']) {
+      assert.doesNotThrow(() => record('atropos', { ...base, action }, { dir }));
+    }
+    for (const invalid of ['merge', 'close-it', '', 7]) {
+      assert.throws(() => record('atropos', { key: 'B', content: '', action: invalid }, { dir }), /Invalid metadata: action/);
+      assert.throws(() => record('atropos', { key: 'B', content: '', mode: invalid }, { dir }), /Invalid metadata: mode/);
+    }
+    assert.doesNotThrow(() => record('atropos', { ...base, choice: 1 }, { dir }));
+    assert.doesNotThrow(() => record('atropos', { ...base, solutions: [] }, { dir }));
+    assert.doesNotThrow(() => record('atropos', { key: 'C', content: '', solutions: [] }, { dir }));
+    for (const choice of [0, 2, -1, 1.5]) {
+      assert.throws(() => record('atropos', { ...base, choice }, { dir }), /Invalid metadata: choice/);
+      assert.throws(() => record('atropos', { ...base, solutions: [] , choice }, { dir }), /Invalid metadata: choice/);
+      assert.throws(() => record('atropos', { key: 'C', content: '', choice }, { dir }), /Invalid metadata: choice/);
+    }
+    assert.doesNotThrow(() => record('atropos', { ...base, choice: 1, id: 'PROJ-123-1' }, { dir }));
+    assert.throws(() => record('atropos', { ...base, choice: 'none', id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
+    assert.throws(() => record('atropos', { ...base, choice: null, id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
+    assert.throws(() => record('atropos', { key: 'D', content: '', id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
+  });
+
   it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {
     const { dir, file } = fixture(t);
     for (const invalid of ['old', '', 'sha256:' + 'a'.repeat(63), 'sha256:' + 'g'.repeat(64), null, 7, {}]) {
@@ -113,7 +137,7 @@ describe('record', () => {
       lachesis: { category: 'bug', component: 'checkout', repositories: ['acme-shop-checkout'],
         origin: 'app', complex: false, confidence: 0.78, duplicates: ['PROJ-187'] },
       atropos: { mode: 'interactive', action: 'ready-for-dev',
-        solutions: [{ title: 'Revisar estado', confidence: 70 }], choice: null, id: 'PROJ-123-1' },
+        solutions: [{ title: 'Revisar estado', confidence: 70 }], choice: null },
     } as const;
     for (const stage of ['clotho', 'lachesis', 'atropos'] as const) {
       record(stage, { key: 'PROJ-123', run_id: 'run-1', content: { text: 'raw' }, ...entries[stage] }, { dir });
