@@ -55,8 +55,8 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
    ```
 
-6. **Comparar** com o arquivo existente: mesmo `sources_hash` **e** mesma proveniência é `unchanged`, e o arquivo não é tocado (nem o `indexed_at`); mesmo `sources_hash` com qualquer diferença nos cinco campos de proveniência (commit, data do commit, branch, tag ou `indexed_dirty`, inclusive um campo que passou a faltar ou a existir, como num registro antigo sem proveniência) é `refreshed`: só os campos de proveniência e o `indexed_at` mudam, o resto do arquivo fica como está; hash diferente é `changed` (todos os campos são refeitos); sem arquivo é `new`.
-7. **Mostrar** a lista numerada (`new`, `changed`, `refreshed`, `unchanged`, `missing`), com o caminho de cada `glossary/<id>.md`.
+6. **Comparar** com o arquivo existente: mesmo `sources_hash` é `unchanged` e o arquivo não é tocado (nem o `indexed_at` nem a proveniência); hash diferente é `changed`; sem arquivo é `new`. A proveniência não decide nada: só a leitura gravada leva os campos. Num `unchanged`, se o commit do passo 4 for outro que o registrado, diga no relatório (commit registrado e atual, com as datas) sem gravar.
+7. **Mostrar** a lista numerada (`new`, `changed`, `unchanged`, `missing`), com o caminho de cada `glossary/<id>.md`.
 8. **Gravar** só o que o usuário aprovou, depois do "sim" à lista exata. Item que surgir depois precisa de novo "sim".
 9. **Conferir** o que foi gravado e corrigir o que falhar:
 
@@ -64,7 +64,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only glossary
    ```
 
-10. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados, só com a proveniência renovada e inalterados, o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
+10. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados e inalterados (nos inalterados, o commit atual quando for outro que o registrado), o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
 
 ## Modelo de reserva
 
