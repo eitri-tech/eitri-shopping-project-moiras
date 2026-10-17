@@ -82,7 +82,8 @@ function jqlTokens(jql: string): JqlToken[] | undefined {
   return tokens;
 }
 
-const doneStates = new Set(['done', 'concluído', 'concluido', 'concluída', 'concluida']);
+// `3` is the id of the Done category, which `statusCategory` accepts in place of the name.
+const doneStates = new Set(['done', 'concluído', 'concluido', 'concluída', 'concluida', '3']);
 
 /**
  * Filters of a `jira.jql` that cannot coexist with what the Clotho appends (`assignee IS EMPTY AND statusCategory != Done`).
@@ -106,7 +107,8 @@ export function jqlContradictions(jql: string): { assignee: boolean; state: bool
     if (name === 'not' && word(tokens[index - 1]) !== 'is' && word(tokens[index + 1]) !== 'in') return none;
     if (token.kind === 'open') {
       const before = word(tokens[index - 1]);
-      if (depth > 0 || before === undefined || before === 'and' || before === 'not') return none;
+      // A parenthesis right after a word is a list (`IN (...)`) or a function call (`membersOf(...)`, also inside a list); any other is grouping.
+      if (before === undefined || before === 'and' || before === 'not') return none;
       depth += 1;
     } else if (token.kind === 'close') {
       depth -= 1;
