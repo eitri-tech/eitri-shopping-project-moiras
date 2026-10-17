@@ -15,6 +15,7 @@ Uma chamada por issue, na ordem da Cloto.
     "summary": "Carrinho zera ao trocar de seller",
     "description": "...",
     "created_at": "2026-10-01T10:00:00Z",
+    "epic": "PROJ-100",
     "priority": "High",
     "agency": "Agência Aurora | null",
     "evidence": [
@@ -51,7 +52,7 @@ Uma chamada por issue, na ordem da Cloto.
 }
 ```
 
-`siblings` são todas as outras issues do épico, de qualquer status e responsável, usadas na busca de duplicados. `warnings` da saída são os recebidos mais os desta etapa.
+`siblings` são todas as outras issues do escopo (de um ou vários épicos), de qualquer status e responsável, usadas na busca de duplicados. `warnings` da saída são os recebidos mais os desta etapa.
 
 ## 1. Repositório e componente
 
@@ -77,7 +78,7 @@ Sem nenhum critério nem glossário no knowledge, use `confidence` ≤ 0.3 e o a
 
 Procure, nesta ordem:
 
-1. **No épico:** compare com `siblings` (todas, inclusive atribuídas e concluídas, sem limite de data).
+1. **No escopo:** compare com `siblings` (todas, inclusive atribuídas e concluídas, sem limite de data).
 2. **No Jira:** busque issues parecidas no mesmo projeto, incluindo as já concluídas (um duplicado resolvido também conta):
 
    ```

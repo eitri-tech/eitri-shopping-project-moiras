@@ -1,11 +1,11 @@
 ---
 name: moiras-triage
-description: "Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro)."
-argument-hint: "[EPIC] [--auto] [--full]"
+description: "Faz a triagem das issues sem responsável do escopo do Jira (um ou vários épicos e categorias, ou uma consulta própria). Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se nem o pedido nem .moiras/sources.json trouxerem épico, categoria ou consulta (jira.jql), pergunte (no modo --auto, encerre com erro)."
+argument-hint: "[EPIC...] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
 
-# Triagem do épico
+# Triagem do escopo
 
 Argumentos: `$ARGUMENTS`
 
@@ -14,7 +14,7 @@ Argumentos: `$ARGUMENTS`
 | Modo | Como | Comportamento |
 |---|---|---|
 | Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e registra o aprendizado |
-| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem épico, encerra com erro no relatório; processa issues novas, alteradas ou sem conclusão comprovada para a entrada e o knowledge atuais; não registra aprendizado; aplica só as interações de baixo impacto autorizadas na configuração (reações) e lista as demais; salva o relatório em arquivo |
+| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem escopo (épico, categoria ou consulta), encerra com erro no relatório; processa issues novas, alteradas ou sem conclusão comprovada para a entrada e o knowledge atuais; não registra aprendizado; aplica só as interações de baixo impacto autorizadas na configuração (reações) e lista as demais; salva o relatório em arquivo |
 
 `--full` reprocessa todas as issues, mesmo as que não mudaram.
 
@@ -35,7 +35,7 @@ Antes da seleção de issues, calcule o fingerprint do knowledge descrito abaixo
 Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
 
 ```
-Cloto     : configuração + épico     → issues do Jira + mensagens do Slack
+Cloto     : configuração + escopo    → issues do Jira + mensagens do Slack
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
 Átropos   : issue + classificação    → justificativa, ação e normalmente de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
