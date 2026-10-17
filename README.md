@@ -87,7 +87,6 @@ Sem glossário nem critérios, a Láquesis usa categorias padrão (ou `unknown`)
 ## Documentação
 
 - [`plugins/moiras`](plugins/moiras): fluxo, knowledge, configuração, execução por cron e memória.
-- [`AGENTS.md`](AGENTS.md): regras do domínio, idioma e convenções do projeto.
 
 ## Desenvolvimento
 
@@ -130,7 +129,7 @@ Onde mexer:
 | Criação e validação da configuração | `plugins/moiras/scripts/config.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |
 
-Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`Add ...`, `Fix ...`) e PR com título curto e descrição curta em português (o que muda e como testar). Não use dados reais da empresa em nenhum arquivo: os exemplos são fictícios (ver o `AGENTS.md`).
+Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`Add ...`, `Fix ...`) e PR com título curto e descrição curta em português (o que muda e como testar). Não use dados reais da empresa em nenhum arquivo: os exemplos são fictícios (empresa Acme, `acme-shop-checkout`, `PROJ-123`).
 
 ## Teste real das skills de knowledge
 
