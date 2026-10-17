@@ -529,13 +529,14 @@ export interface Provenance {
  * Where an indexed repository was when it was read: HEAD, the date of that commit (UTC), the branch, the tag when HEAD is exactly
  * on one, and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
  */
-export function provenance(repository: string): Provenance {
+export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Provenance {
   // Variables that point Git at another repository, work tree or index would make the answer describe something else.
   const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
+  // core.fsmonitor can name an executable that `git status` would run: reading a repository must not run its scripts.
+  const run = (...args: string[]) => spawnSync('git', ['-C', repository, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env, maxBuffer });
   const git = (...args: string[]) => {
-    // core.fsmonitor can name an executable that `git status` would run: reading a repository must not run its scripts.
-    const result = spawnSync('git', ['-C', repository, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env });
+    const result = run(...args);
     return result.status === 0 ? result.stdout.trim() : undefined;
   };
   // A folder that only sits inside another work tree would answer with the parent's HEAD: the path must be the repository's own root.
@@ -553,8 +554,10 @@ export function provenance(repository: string): Provenance {
     if (refName.test(value) && !hasSecret(value) && !email.test(value) && !patterns.some(({ test }) => test.test(value))) result[field] = value;
     else omitted.push(field);
   }
-  const status = git('status', '--porcelain', '--untracked-files=normal');
-  if (status !== undefined) result.indexed_dirty = status !== '';
+  const status = run('status', '--porcelain', '--untracked-files=normal');
+  if (status.status === 0) result.indexed_dirty = status.stdout.trim() !== '';
+  // So many changes that the output overflowed the buffer: whatever arrived already proves the tree is not clean.
+  else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;
   if (omitted.length) result.omitted = omitted;
   return result;
 }

@@ -694,6 +694,12 @@ describe('provenance', () => {
     assert.deepEqual(provenance(cwd).omitted, ['indexed_branch']);
   });
 
+  it('still reports a dirty tree when the status output overflows the buffer', t => {
+    const cwd = repository(t);
+    for (let index = 0; index < 20; index++) writeFileSync(join(cwd, `untracked-file-with-a-long-name-${index}.txt`), 'x');
+    assert.equal(provenance(cwd, 100).indexed_dirty, true);
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');
