@@ -59,7 +59,8 @@ export function validate(config: unknown): Finding[] {
   // looks harmless (only an empty string, null or a `<placeholder>` passes). Booleans carry no secret, and numbers under
   // a counter such as `max_tokens` or `token_budget` are not credentials either.
   const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
-  const counterKey = /(?:tokens|tokenizer|token[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
+  const counterKey = /^(?:(?:max|min|total|input|output|prompt|completion)[_-]?tokens|tokens?[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
+  // The counter exemption applies from the key down, never below a credential key, and a credential key inside it clears it.
   const scanKeys = (value: unknown, path: string, underCredential = false, counter = false) => {
     if (typeof value === 'string') {
       if (underCredential && value.trim() !== '' && !placeholder(value.trim())) add(path, 'secret');
@@ -67,7 +68,11 @@ export function validate(config: unknown): Finding[] {
       if (underCredential && !counter) add(path, 'secret');
     } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential, counter));
     else if (isObject(value)) {
-      for (const [key, item] of Object.entries(value)) scanKeys(item, path ? `${path}.${key}` : key, underCredential || credentialKey.test(key), counter || counterKey.test(key));
+      for (const [key, item] of Object.entries(value)) {
+        const isCounter = counterKey.test(key);
+        const isCredential = credentialKey.test(key);
+        scanKeys(item, path ? `${path}.${key}` : key, underCredential || isCredential, isCredential && !isCounter ? false : counter || (isCounter && !underCredential));
+      }
     }
   };
   scanKeys(config, '');
@@ -153,10 +158,14 @@ export function validate(config: unknown): Finding[] {
     if (!isObject(index)) add('index', 'not-an-object');
     else {
       if (index.roots !== undefined && (!Array.isArray(index.roots) || index.roots.some(root => !isText(root)))) add('index.roots', 'not-a-list');
+      // Each name is a file (`glossary/<name>.md`): two repositories with one name (any case) would overwrite each other.
+      const repositoryNames = new Set<string>();
       list(index.repositories, 'index.repositories').forEach((repository, position) => {
         const path = `index.repositories[${position}]`;
         for (const field of ['name', 'path']) if (!isText(repository[field])) add(`${path}.${field}`, 'field-missing');
         if (isText(repository.name) && !safeName.test(repository.name)) add(`${path}.name`, 'name-invalid');
+        else if (isText(repository.name) && repositoryNames.has(repository.name.toLowerCase())) add(`${path}.name`, 'name-duplicate');
+        else if (isText(repository.name)) repositoryNames.add(repository.name.toLowerCase());
         for (const field of ['url', 'owner', 'agency', 'platform']) if (repository[field] !== undefined && !isText(repository[field])) add(`${path}.${field}`, 'field-invalid');
       });
     }

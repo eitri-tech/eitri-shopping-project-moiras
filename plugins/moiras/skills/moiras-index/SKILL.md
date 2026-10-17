@@ -39,7 +39,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 
 ## Passos
 
-1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. Repositório da lista que não existe em disco vira `missing` no relatório.
+1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
 2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge (ver "O que vai em cada campo").
 4. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:

@@ -76,6 +76,11 @@ describe('validate', () => {
     ]);
   });
 
+  it('rejects repositories that would share a glossary file', () => {
+    const config = { ...minimal(), index: { repositories: [{ name: 'acme-shop-checkout', path: '../a' }, { name: 'Acme-Shop-Checkout', path: '../b' }, { name: 'acme-shop-cart', path: '../c' }] } };
+    assert.deepEqual(rules(config), ['index.repositories[1].name:name-duplicate:error']);
+  });
+
   it('checks the knowledge list', () => {
     const config = {
       ...minimal(),
@@ -134,7 +139,9 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), github: { api_keys: ['plain-value'], credentials: { value: 'plain-value', list: [{ k: 'x' }] } } }), ['github.api_keys[0]:secret:error', 'github.credentials.value:secret:error', 'github.credentials.list[0].k:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { credentials: { value: '<token>' } } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { token: 123456, api_keys: [123456], credentials: { value: 123456, flag: true, none: null } } }), ['github.token:secret:error', 'github.api_keys[0]:secret:error', 'github.credentials.value:secret:error']);
-    assert.deepEqual(rules({ ...minimal(), github: { retries: 3, max_tokens: 4096, token_budget: 1000, tokenizer: { enabled: true, limit: 5 } } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { retries: 3, max_tokens: 4096, token_budget: 1000, tokenizer: { enabled: true } } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { token_budget: { password: 123456, limit: 5 }, tokenizer: { token: 1 } } }), ['github.token_budget.password:secret:error', 'github.tokenizer.token:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { tokens: [123456], password_tokens: 123456, password: { max_tokens: 123456 } } }), ['github.tokens[0]:secret:error', 'github.password_tokens:secret:error', 'github.password.max_tokens:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { tokens: ['plain-value'] } }), ['github.tokens[0]:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
