@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -142,8 +142,8 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), github: { retries: 3, max_tokens: 4096, token_budget: 1000, tokenizer: { enabled: true } } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { token_budget: { password: 123456, limit: 5 }, tokenizer: { token: 1 } } }), ['github.token_budget.password:secret:error', 'github.tokenizer.token:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { tokens: [123456], password_tokens: 123456, password: { max_tokens: 123456 } } }), ['github.tokens[0]:secret:error', 'github.password_tokens:secret:error', 'github.password.max_tokens:secret:error']);
-    assert.deepEqual(rules({ ...minimal(), github: { auth: 'Basic cGxhaW4tc2VjcmV0LXZhbHVl', headers: { Authorization: 'Bearer plain-value', 'x-auth': 'plain-value' }, cookie: 'sid=plain-value' } }), ['github.auth:secret:error', 'github.headers.Authorization:secret:error', 'github.headers.x-auth:secret:error', 'github.cookie:secret:error']);
-    assert.deepEqual(rules({ ...minimal(), github: { author: 'Fulano', authors: ['Beltrana'], auth: '<token>' } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { auth: 'Basic cGxhaW4tc2VjcmV0LXZhbHVl', headers: { Authorization: 'Bearer plain-value', 'x-auth': 'plain-value' }, cookie: 'sid=plain-value', session_id: 'plain-value', sessionId: 'plain-value' } }), ['github.auth:secret:error', 'github.headers.Authorization:secret:error', 'github.headers.x-auth:secret:error', 'github.cookie:secret:error', 'github.session_id:secret:error', 'github.sessionId:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { author: 'Fulano', authors: ['Beltrana'], auth: '<token>', session: { timeout: 30 } } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { tokens: ['plain-value'] } }), ['github.tokens[0]:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
@@ -207,6 +207,33 @@ describe('init', () => {
     const result = init(minimal(), target);
     assert.deepEqual(result.created, []);
     assert.deepEqual(result.findings.map(finding => `${finding.rule}:${finding.severity}`), ['sources-tracked:error']);
+    assert.ok(!existsSync(join(target, 'sources.json')));
+  });
+
+  it('refuses a symlinked folder or file instead of writing through it', t => {
+    const { dir, target } = workspace(t);
+    const outside = join(dir, 'outside');
+    mkdirSync(outside);
+    symlinkSync(outside, target);
+    for (const dryRun of [false, true]) {
+      const result = init(minimal(), target, dryRun);
+      assert.deepEqual(result.created, []);
+      assert.deepEqual(result.findings.map(finding => `${finding.rule}:${finding.severity}`), ['symlink-refused:error']);
+    }
+    assert.deepEqual(readdirSync(outside), []);
+    rmSync(target);
+    // A link above the folder is refused too when it lives under the working directory.
+    const nested = join(process.cwd(), `.moiras-link-test-${process.pid}`);
+    t.after(() => rmSync(nested, { force: true }));
+    symlinkSync(outside, nested);
+    const through = init(minimal(), join(nested, '.moiras'));
+    assert.deepEqual(through.created, []);
+    assert.ok(through.findings.some(finding => finding.rule === 'symlink-refused'));
+    assert.deepEqual(readdirSync(outside), []);
+    mkdirSync(target);
+    writeFileSync(join(dir, 'real'), '');
+    symlinkSync(join(dir, 'real'), join(target, '.gitignore'));
+    assert.ok(init(minimal(), target).findings.some(finding => finding.rule === 'symlink-refused'));
     assert.ok(!existsSync(join(target, 'sources.json')));
   });
 

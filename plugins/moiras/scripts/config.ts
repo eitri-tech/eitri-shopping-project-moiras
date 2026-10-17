@@ -9,8 +9,8 @@
  * Findings carry the path of the field and the rule, never the value.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern } from './knowledge.ts';
 
@@ -60,7 +60,7 @@ export function validate(config: unknown): Finding[] {
   // looks harmless (only an empty string, null or a `<placeholder>` passes). Booleans carry no secret, and numbers under
   // a counter such as `max_tokens` or `token_budget` are not credentials either.
   // `auth` only as a whole word (auth, auth_token, x-auth): `author` is not a credential.
-  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential|authorization|bearer|cookie|(?:^|[_-])auth(?:$|[_-]))/i;
+  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential|authorization|bearer|cookie|session[_-]?id|(?:^|[_-])auth(?:$|[_-]))/i;
   const counterKey = /^(?:(?:max|min|total|input|output|prompt|completion)[_-]?tokens|tokens?[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
   // The counter exemption applies from the key down, never below a credential key, and a credential key inside it clears it.
   const scanKeys = (value: unknown, path: string, underCredential = false, counter = false) => {
@@ -210,6 +210,17 @@ function isTracked(file: string): boolean {
   return result.status === 0;
 }
 
+/** The folder and every component between the working directory and it (all of it when outside); system links above stay allowed. */
+function symlinkScope(dir: string): string[] {
+  const root = resolve('.');
+  const scope: string[] = [];
+  for (let current = resolve(dir); ; current = dirname(current)) {
+    scope.push(current);
+    if (dirname(current) === current || dirname(current) === root || !current.startsWith(`${root}${sep}`)) break;
+  }
+  return scope;
+}
+
 /** Creates the configuration folder and file; refuses to touch an existing file. */
 export function init(config: unknown, dir = defaultDir, dryRun = false): { created: string[]; findings: Finding[] } {
   const findings = validate(config);
@@ -218,6 +229,10 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   // refuse before writing anything (the dry run reports it too).
   if (existsSync(ignore) && !ignoresEverything(readFileSync(ignore, 'utf8'))) findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'error' });
   const file = join(dir, 'sources.json');
+  // Writes must land where the user approved: a symlinked folder or file would send them (and a `*` ignore file) elsewhere.
+  for (const target of [...symlinkScope(dir), ignore, file]) {
+    if (lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) findings.push({ path: target, rule: 'symlink-refused', severity: 'error' });
+  }
   // A tracked path keeps showing up as modified even when the folder is ignored: refuse to recreate it.
   if (!existsSync(file) && isTracked(file)) findings.push({ path: file, rule: 'sources-tracked', severity: 'error' });
   if (hasErrors(findings)) return { created: [], findings };
