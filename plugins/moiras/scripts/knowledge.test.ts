@@ -751,6 +751,26 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
   });
 
+  it('counts hidden index entries as dirty but not sparse-excluded files', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, 'b.txt'), 'b');
+    writeFileSync(join(cwd, 'c.txt'), 'c');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'more');
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    run(cwd, 'update-index', '--skip-worktree', 'c.txt');
+    rmSync(join(cwd, 'c.txt'));
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    writeFileSync(join(cwd, 'c.txt'), 'edited');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+    run(cwd, 'update-index', '--no-skip-worktree', 'c.txt');
+    run(cwd, 'checkout', '--', 'c.txt');
+    assert.equal(provenance(cwd).indexed_dirty, false);
+    run(cwd, 'update-index', '--assume-unchanged', 'b.txt');
+    writeFileSync(join(cwd, 'b.txt'), 'edited');
+    assert.equal(provenance(cwd).indexed_dirty, true);
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');

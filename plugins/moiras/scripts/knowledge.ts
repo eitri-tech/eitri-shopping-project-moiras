@@ -14,7 +14,7 @@
 import { isUtf8 } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import { hash as digest } from 'node:crypto';
-import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
@@ -571,6 +571,15 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;
   // Any other failure (a corrupt index, say): without the dirty state the commit does not say what was read, so no provenance at all.
   else return { git: false, reason: 'status-unreadable' };
+  // `assume-unchanged` and `skip-worktree` entries hide edits from `git status`. `ls-files -v` marks them (lowercase tag, or `S`)
+  // without comparing content, so no filter runs. A skip-worktree file that is not on disk (sparse checkout) is not read by the indexer.
+  if (result.indexed_dirty === false) {
+    const flags = run('ls-files', '-v', '-z');
+    const overflow = (flags.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
+    if (flags.status !== 0 && !overflow) return { git: false, reason: 'index-unreadable' };
+    const hidden = flags.stdout.split('\0').some(entry => /^[a-z] /.test(entry) || (entry.startsWith('S ') && existsSync(join(repository, entry.slice(2)))));
+    if (hidden || overflow) result.indexed_dirty = true;
+  }
   if (omitted.length) result.omitted = omitted;
   return result;
 }
