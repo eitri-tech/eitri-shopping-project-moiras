@@ -15,6 +15,7 @@ Uma chamada por issue, na ordem da Cloto.
     "summary": "Carrinho zera ao trocar de seller",
     "description": "...",
     "created_at": "2026-10-01T10:00:00Z",
+    "epic": "PROJ-100",
     "priority": "High",
     "agency": "Agência Aurora | null",
     "evidence": [

@@ -63,12 +63,12 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 }
 ```
 
-O escopo do Jira não precisa ser um épico só: `epics` aceita vários, `categories` filtra por campo (`{ "field": "labels", "values": ["checkout"] }`) e `jql` aceita uma consulta própria do Jira (só leitura, sem `ORDER BY`); o que estiver presente vale junto (AND). `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
+O escopo do Jira não precisa ser um épico só, e tem dois modos que não se misturam: **épicos e categorias** (`epics` aceita vários; `categories` filtra por campo, como `{ "field": "labels", "values": ["checkout"] }`; as duas valem juntas, em AND) **ou** uma **consulta própria** (`jql`, do Jira, só leitura, sem `ORDER BY`). Preencher `jql` junto com `epic`, `epics` ou `categories` é erro. `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
 
 | Comando | O que faz |
 |---|---|
 | `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
-| `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias e `jql`). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
+| `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias ou `jql`). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-learn [PROJ-100] [--since AAAA-MM-DD]` | Aprende com as issues já concluídas do escopo: propõe soluções, padrões e decisões e grava no knowledge local só o que você aprovar |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios; grava no knowledge local depois do seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |

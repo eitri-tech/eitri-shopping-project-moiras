@@ -1,6 +1,6 @@
 ---
 name: moiras-learn
-description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos, categorias, consulta) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
+description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e categorias, ou uma consulta) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
 argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N]"
 allowed-tools: Bash(node:*)
 ---
@@ -24,7 +24,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 ## Passos
 
-1. **Período e escopo.** O escopo vem dos argumentos (um ou mais épicos, que substituem os da configuração) ou de `jira`: `epic`, `epics`, `categories` e `jql`, montados como na Cloto (`stages/clotho.md`, passo 0). `--since` limita pela data de resolução; sem ele, **pergunte** o recorte (sugestão: os últimos 90 dias) e quantas issues no máximo (`--limit`, sugestão 30 por rodada). Não leia o épico inteiro sem o usuário pedir.
+1. **Período e escopo.** O escopo vem dos argumentos (um ou mais épicos, que substituem os da configuração) ou de `jira` (`epic`, `epics` e `categories`, ou então só `jql`), montados como na Cloto (`stages/clotho.md`, passo 0). `--since` limita pela data de resolução; sem ele, **pergunte** o recorte (sugestão: os últimos 90 dias) e quantas issues no máximo (`--limit`, sugestão 30 por rodada). Não leia o épico inteiro sem o usuário pedir.
 2. **Coletar (Cloto, só leitura).** Busque as issues concluídas do escopo, da mais recente para a mais antiga:
 
    ```

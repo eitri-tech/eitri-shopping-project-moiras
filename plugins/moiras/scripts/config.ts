@@ -26,8 +26,8 @@ export const defaultDir = '.moiras';
 const scopes = new Set(['local', 'project', 'group', 'global']);
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
 const host = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
-/** Field name or id for a category (`labels`, `component`, `customfield_10020`, `Team`): quoted by the Clotho, so no quotes or control characters. */
-const jiraField = /^[A-Za-z0-9_][A-Za-z0-9 _.-]{0,63}$/;
+/** Field for a category: a name (`labels`, `Story Points`, `Área responsável`), a REST id (`customfield_10020`) or the JQL id `cf[10020]`. The Clotho quotes names, so no quotes or control characters. */
+const jiraField = /^(?:cf\[\d+\]|[\p{L}\p{N}_][\p{L}\p{N} _.-]{0,63})$/u;
 /** Category value (a label, component or option name): quoted by the Clotho, so no double quote, backslash or control character. */
 const jiraValue = /^[^"\\\u0000-\u001f]{1,128}$/;
 const slackUser = /^[UW][A-Z0-9]{8,}$/;
@@ -95,15 +95,14 @@ export function validate(config: unknown): Finding[] {
   else if (!isObject(jira)) add('jira', 'not-an-object');
   else {
     if (!isText(jira.site) || !host.test(jira.site)) add('jira.site', 'site-invalid');
-    // The scope of the triage: epics, categories (field + values) and a JQL fragment, ANDed by the Clotho. `epic` stays as the single-epic shorthand.
+    // The scope of the triage is either epics and/or categories (field + values, ANDed by the Clotho) or one JQL fragment, never both.
+    // `epic` stays as the single-epic shorthand.
     if (jira.epic !== undefined && (typeof jira.epic !== 'string' || !jiraKey.test(jira.epic))) add('jira.epic', 'epic-invalid');
-    const epics = new Set<string>(typeof jira.epic === 'string' && jiraKey.test(jira.epic) ? [jira.epic] : []);
     if (jira.epics !== undefined) {
       if (!Array.isArray(jira.epics) || jira.epics.length === 0) add('jira.epics', 'not-a-list');
-      else jira.epics.forEach((epic, index) => {
+      else (jira.epics as unknown[]).forEach((epic, index, all) => {
         if (typeof epic !== 'string' || !jiraKey.test(epic)) add(`jira.epics[${index}]`, 'epic-invalid');
-        else if (epics.has(epic)) add(`jira.epics[${index}]`, 'epic-duplicate');
-        else epics.add(epic);
+        else if (all.indexOf(epic) !== index) add(`jira.epics[${index}]`, 'epic-duplicate'); // `epic` repeated in `epics` is fine: the Clotho unions them
       });
     }
     if (jira.categories !== undefined) {
@@ -124,6 +123,7 @@ export function validate(config: unknown): Finding[] {
       else if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
       else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
     }
+    if (jira.jql !== undefined && [jira.epic, jira.epics, jira.categories].some(part => part !== undefined)) add('jira.jql', 'scope-conflict');
     if ([jira.epic, jira.epics, jira.categories, jira.jql].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');
     if (jira.agency_field !== undefined && !isText(jira.agency_field)) add('jira.agency_field', 'field-invalid');

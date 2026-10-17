@@ -1,8 +1,8 @@
 # Cloto — coleta
 
-Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do escopo no Jira (um ou vários épicos, categorias, uma consulta própria) e as conversas relevantes no Slack.
+Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do escopo no Jira (um ou vários épicos e categorias, ou uma consulta própria) e as conversas relevantes no Slack.
 
-**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar na conversa um ou mais épicos, eles substituem os épicos da configuração (`jira.epic` e `jira.epics`); categorias e `jira.jql` continuam valendo. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
+**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar na conversa um ou mais épicos, eles substituem os épicos da configuração (`jira.epic` e `jira.epics`); as categorias da configuração continuam valendo. Com `jira.jql` configurada, os épicos informados mudam a execução para o modo épicos (a `jira.jql` é ignorada nela) e a skill avisa isso ao usuário. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
 
 ## Execução
 
@@ -10,19 +10,20 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
 ### A. Jira
 
-0. Monte o **escopo** com o que a configuração traz, juntando as partes presentes com `AND` (ao menos uma é obrigatória):
+0. Monte o **escopo**. Há dois modos, que **não se misturam**: ou a configuração traz épicos e/ou categorias, ou traz só uma consulta própria (`jira.jql`). Os dois juntos são recusados pelo `config.ts` (`scope-conflict`); se aparecerem mesmo assim, não escolha por conta própria: encerre pedindo ao usuário que deixe um dos modos.
+
+   **Modo épicos e categorias** (`jira.epics`, `jira.epic`, `jira.categories`): as partes presentes valem juntas (AND), então a categoria estreita os épicos.
 
    | Parte | Configuração | Vira |
    |---|---|---|
    | Épicos | `jira.epics` (lista) e `jira.epic` (um só), unidos sem repetir | `parent in (<EPIC1>, <EPIC2>)` |
-   | Categorias | `jira.categories`, cada item com `field` (nome ou id do campo: `labels`, `component`, `issuetype`, `customfield_10020`...) e `values` | uma cláusula por item: `<field> in ("<v1>", "<v2>")`; os valores de um item são alternativas (OR) e os itens entre si são AND |
-   | Consulta própria | `jira.jql` | `(<jql>)`, entre parênteses |
+   | Categorias | `jira.categories`, cada item com `field` e `values` | uma cláusula por item: `"<field>" in ("<v1>", "<v2>")`; os valores de um item são alternativas (OR) e os itens entre si são AND |
 
-   Em projetos que ainda usam o campo antigo de épico, troque `parent in (...)` por `"Epic Link" in (...)`. Sem épicos, a busca vale para o site todo: inclua `project` em uma categoria (`{ "field": "project", "values": ["PROJ"] }`) ou no `jira.jql`.
+   O nome do campo vai sempre entre aspas (`"Story Points"`, `"labels"`). Id de campo no formato REST (`customfield_10020`) vira `cf[10020]`, que é a forma de JQL e **não leva aspas**; `cf[10020]` informado assim vale como está. Em projetos que ainda usam o campo antigo de épico, troque `parent in (...)` por `"Epic Link" in (...)`. Sem épicos, a busca vale para o site todo: inclua `project` em uma categoria (`{ "field": "project", "values": ["PROJ"] }`).
 
-   A consulta própria é só leitura (uma busca) e a Cloto é a dona do `ORDER BY`; use-a como veio, sem reescrever. Se o Jira recusar a consulta, é falha da fonte (`status: failed`, erro `jql-invalid`): informe o motivo e encerre, sem tentar uma variação.
+   **Modo consulta própria** (`jira.jql`): o escopo é exatamente `(<jql>)`, entre parênteses, sem épicos nem categorias. A consulta é só leitura (uma busca) e a Cloto é a dona do `ORDER BY`; use-a como veio, sem reescrever. Se o Jira recusar a consulta, é falha da fonte (`status: failed`, erro `jql-invalid`): informe o motivo e encerre, sem tentar uma variação. Inclua `project` na consulta; sem ele a busca vale para o site todo.
 
-1. Leia **cada** épico do escopo, numa só chamada (`key in (...)`) quando o conector permitir, e guarde a data fim de cada um: `duedate` ou, se vazio, o campo de data alvo do épico. Se um épico não tiver data, use `jira.project_end` da configuração. Épico que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; sem nenhum épico encontrado e sem categorias nem `jira.jql`, é o caso de "épico não encontrado" em **Falhas**.
+1. Leia as datas fim dos épicos, numa só chamada (`key in (...)`) quando o conector permitir: `duedate` ou, se vazio, o campo de data alvo do épico. No modo épicos, são os épicos configurados; no modo consulta própria, ou para um épico que uma categoria trouxe sem estar configurado, depende das issues, então leia depois do passo 2, com os épicos distintos que elas citam e ainda não foram lidos. Sem data no épico, vale `jira.project_end`. Épico configurado que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; sem nenhum épico encontrado e sem categorias, é o caso de "épico não encontrado" em **Falhas**.
 2. Busque as issues do escopo sem responsável e não concluídas:
 
    ```
@@ -34,7 +35,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
    Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
-3. Para cada issue, calcule `buffer_days` = data fim − `duedate` da issue. A data fim é a do **épico da própria issue** (`epic`); issue sem épico, ou de um épico fora da lista lida, usa `jira.project_end`. Sem nenhuma das duas, `buffer_days = null` e o aviso `no-end-date`.
+3. Para cada issue, calcule `buffer_days` = data fim − `duedate` da issue. A data fim é a do **épico da própria issue** (`epic`), lida no passo 1; issue sem épico, ou cujo épico não pôde ser lido, usa `jira.project_end`. Sem nenhuma das duas, `buffer_days = null` e o aviso `no-end-date`.
    - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
    - `duedate` depois da data fim: aviso `exceeds-epic` (o nome fica, mesmo quando a data fim é a do projeto).
 
@@ -62,7 +63,7 @@ Abra a thread das mensagens que tiverem respostas e guarde cada resposta (autor,
 
 Cada fonte tem um `status`: `ok`, `partial` ou `failed` (conector ausente, sem permissão, erro da API). Não invente dados da fonte que falhou.
 
-- **Jira falhou, escopo sem nenhum épico encontrado (e sem categorias nem `jira.jql`), consulta recusada ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
+- **Jira falhou, escopo sem nenhum épico encontrado (e sem categorias), consulta própria recusada ou nenhuma issue a triar:** encerre a triagem aqui e informe o motivo. Não há o que passar para a Láquesis.
 - **Slack falhou em todos os canais:** siga só com o Jira, com `slack.messages: []`, e acrescente o aviso `slack-unavailable` em todas as issues.
 - **Slack falhou em alguns canais:** `slack.status: partial`; siga com os canais que responderam e acrescente `slack-channel-unavailable:<canal>` em todas as issues, um por canal que falhou.
 
@@ -111,7 +112,7 @@ Regras:
   "collected_at": "2026-10-06T18:00:00-03:00",
   "jira": {
     "status": "ok | failed",
-    "scope": ["epics", "categories", "jql"],
+    "scope": ["epics", "categories"],
     "epics": [
       { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15", "end_date_source": "duedate | target | project_end" }
     ],
