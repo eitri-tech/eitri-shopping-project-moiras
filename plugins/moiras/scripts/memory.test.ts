@@ -102,6 +102,11 @@ describe('record', () => {
     }
     assert.throws(() => record('clotho', { key: 'interaction:   ', content: 'reaction' }, { dir }), /interaction:<id>/);
     assert.doesNotThrow(() => record('lachesis', { key: 'interactions', content: 'not-clotho' }, { dir }));
+    for (const typo of ['interactions:<id>', 'Interaction:<id>', 'interaction:   ']) {
+      assert.throws(() => query('clotho', { key: typo, dir }), /interaction:<id>/);
+    }
+    assert.deepEqual(query('clotho', { key: `interaction:${id}`, dir }).map(entry => entry.key), [`interaction:${id}`]);
+    assert.doesNotThrow(() => query('lachesis', { key: 'interactions', dir }));
   });
 
   it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {

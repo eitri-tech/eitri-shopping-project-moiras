@@ -106,6 +106,15 @@ export function readRecords(
 const latestByKey = (records: MemoryRecord[]): Map<string, MemoryRecord> =>
   new Map(records.map(record => [record.key, record]));
 
+// A collected interaction must stay identifiable by the `interaction:<id>` shape the
+// memory contract relies on; a typo'd prefix would never match later deduplication, in
+// `record` or in the lookup that precedes it.
+function assertInteractionKey(stage: Stage, key: string): void {
+  if (stage === 'clotho' && /^interact/i.test(key) && !/^interaction:\S+$/.test(key)) {
+    throw new Error('Interaction keys must use the interaction:<id> shape.');
+  }
+}
+
 export function record(
   stage: Stage,
   input: unknown,
@@ -113,11 +122,7 @@ export function record(
 ): Result[] {
   const batch = (Array.isArray(input) ? input : [input]).map((entry: unknown): MemoryRecord => {
     if (!isObject(entry) || typeof entry.key !== 'string') throw new Error('Every record needs a string key.');
-    // A collected interaction must stay identifiable by the `interaction:<id>` shape the
-    // memory contract relies on; a typo'd prefix would never match later deduplication.
-    if (stage === 'clotho' && /^interact/i.test(entry.key) && !/^interaction:\S+$/.test(entry.key)) {
-      throw new Error('Interaction records must use the interaction:<id> key shape.');
-    }
+    assertInteractionKey(stage, entry.key);
     const allowed = new Set([...commonFields, ...stageFields[stage]]);
     for (const field of Object.keys(entry)) {
       if (!allowed.has(field)) throw new Error(`Unknown ${stage} field: ${field}`);
@@ -185,6 +190,7 @@ export function query(
   stage: Stage,
   { dir = defaultDir, key, since, warn }: Options & { key?: string; since?: string } = {},
 ): MemoryRecord[] {
+  if (key !== undefined) assertInteractionKey(stage, key);
   const sinceTime = since === undefined ? null : Date.parse(since);
   if (sinceTime !== null && Number.isNaN(sinceTime)) throw new Error(`Invalid date. ${usage}`);
   const { records } = readRecords(join(dir, `${stage}.jsonl`), warn);
