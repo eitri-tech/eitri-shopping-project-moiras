@@ -637,6 +637,13 @@ describe('suggestIdentifier', () => {
     assert.ok(!JSON.stringify(result).includes('@') && !JSON.stringify(result).includes('example'));
   });
 
+  it('reads GitHub noreply addresses as the user name and never as the account id', () => {
+    assert.deepEqual(suggestIdentifier('', '123456+ana-silva@users.noreply.github.com'), { suggestion: 'user-ana-silva', source: 'git-email' });
+    assert.deepEqual(suggestIdentifier('', 'ana-silva@users.noreply.github.com'), { suggestion: 'user-ana-silva', source: 'git-email' });
+    assert.deepEqual(suggestIdentifier('', '123456@users.noreply.github.com'), { suggestion: null, source: null });
+    assert.deepEqual(suggestIdentifier('', '123456+work@example.test'), { suggestion: null, source: null });
+  });
+
   it('caps the length and returns null when nothing usable is left', () => {
     const long = suggestIdentifier('a'.repeat(80)).suggestion!;
     assert.ok(long.length <= 'user-'.length + 32 && accepted(long));

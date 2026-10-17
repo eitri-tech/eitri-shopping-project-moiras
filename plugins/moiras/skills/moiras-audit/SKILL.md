@@ -41,7 +41,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 | Critério sem `approved_by` ou sem `created_at` | `criteria/` | regenerar o critério com `replaces`, completando os campos com o auditor |
 | Aprendizado sem `created_at` | `learnings/` | só sinalizar no relatório: o registro não é editado e segue sem valer como fonte |
 | Glossário sem `indexed_at` | `glossary/` | só sugerir `moiras-index`; sem a data ele não é evidência |
-| Código com mais de 20 linhas, sem referência (repositório, caminho, commit), segredo, dado pessoal ou texto bruto de issue ou conversa | qualquer pasta | critério: regenerar sem o trecho (`replaces`); glossário e aprendizado: só reportar; ver "Dados sensíveis" |
+| Código com mais de 20 linhas, sem referência (repositório, caminho, commit), segredo, dado pessoal (o identificador de `chosen_by`, `approved_by` e da observação, escolhido pela pessoa, não conta) ou texto bruto de issue ou conversa | qualquer pasta | critério: regenerar sem o trecho (`replaces`); glossário e aprendizado: só reportar; ver "Dados sensíveis" |
 | Registro duplicado | `learnings/` | indicar o registro a manter; não apague (ver "Limites") |
 
 A skill também compara cada critério com os aprendizados recentes: se uma solução resolvida contraria o critério, é um achado.
@@ -71,7 +71,7 @@ Se o critério novo conflitar com um existente, una os dois num critério regene
 
 ## Dados sensíveis
 
-Ao achar segredo, token, dado pessoal ou texto bruto num registro, o relatório da auditoria diz o caminho e o tipo do achado, **sem repetir o conteúdo**. O que a skill pode fazer depende do tipo do registro:
+Ao achar segredo, token, dado pessoal (menos o identificador escolhido e confirmado pela pessoa em `chosen_by`, `approved_by` ou na observação da auditoria, que é esperado e não é achado) ou texto bruto num registro, o relatório da auditoria diz o caminho e o tipo do achado, **sem repetir o conteúdo**. O que a skill pode fazer depende do tipo do registro:
 
 - **Critério:** regenerar o critério sem o trecho, com `replaces` do antigo e o "sim" do auditor.
 - **Glossário:** só reportar e sugerir a reindexação com `moiras-index`; a skill não o edita.

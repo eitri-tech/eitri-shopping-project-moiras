@@ -506,8 +506,13 @@ const slug = (text: string) => text.normalize('NFKD').replace(/\p{M}/gu, '').toL
 export function suggestIdentifier(name?: string, email?: string): { suggestion: string | null; source: 'git-name' | 'git-email' | null } {
   const fromName = slug(name ?? '');
   if (fromName) return { suggestion: `user-${fromName}`, source: 'git-name' };
-  const fromEmail = slug((email ?? '').split('@')[0]!.split('+')[0]!);
-  if (fromEmail) return { suggestion: `user-${fromEmail}`, source: 'git-email' };
+  // `ana+work@host` is a plus-tag (keep `ana`); GitHub's `123456+ana@users.noreply.github.com` is `<account id>+<user name>` (keep `ana`).
+  // A result made only of digits is an account id, never a suggestion.
+  const [local = '', domain = ''] = (email ?? '').split('@');
+  const noreply = /(?:^|\.)noreply\.github\.com$/i.test(domain);
+  const parts = local.split('+');
+  const fromEmail = slug(noreply ? parts[parts.length - 1]! : parts[0]!);
+  if (fromEmail && !/^\d+$/.test(fromEmail)) return { suggestion: `user-${fromEmail}`, source: 'git-email' };
   return { suggestion: null, source: null };
 }
 
