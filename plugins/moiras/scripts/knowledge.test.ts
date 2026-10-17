@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync, utimesSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -858,6 +858,19 @@ describe('provenance', () => {
     writeFileSync(join(cwd, 'a.txt'), 'one');
     assert.equal(provenance(cwd).git, true);
     assert.equal(existsSync(marker), false);
+  });
+
+  it('sees an untracked file next to a tracked one that differs only in case', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, 'Foo'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'Foo');
+    run(cwd, 'config', 'core.ignoreCase', 'true');
+    writeFileSync(join(cwd, 'foo'), 'two');
+    // On a case-insensitive disk the second write just overwrote the first: nothing to hide there.
+    if (readdirSync(cwd).filter(name => name.toLowerCase() === 'foo').length < 2) return;
+    assert.equal(run(cwd, 'status', '--porcelain'), '', 'the setup does hide the file from plain git status');
+    assert.equal(provenance(cwd).indexed_dirty, true);
   });
 
   it('gives no provenance, and runs no filter, when the filter listing overflows its buffer', t => {

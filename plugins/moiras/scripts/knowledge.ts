@@ -599,8 +599,9 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   // (a file whose clean filter changes its content looks modified), never missed.
   // `log.showSignature` would make `git log` run the signature verifier the repository configures.
   // `core.checkStat=minimal` with `core.trustctime=false` (and `core.ignoreStat`) make `git status` trust size and mtime alone, so an edit
-  // that keeps both would read as clean; the defaults also compare ctime, which an edit cannot keep.
-  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.checkStat=default', '-c', 'core.trustctime=true', '-c', 'core.ignoreStat=false'];
+  // that keeps both would read as clean; the defaults also compare ctime, which an edit cannot keep. `core.ignoreCase=true` on a
+  // case-sensitive disk folds `foo` into a tracked `Foo`, so the untracked file would not show up.
+  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.checkStat=default', '-c', 'core.trustctime=true', '-c', 'core.ignoreStat=false', '-c', 'core.ignoreCase=false'];
   const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
   // Exit 1 is "no filter configured". A listing that was cut short (buffer overflow, which still reports exit 0, or a killed process) is
   // only part of the filters: going on would let `git status` run the ones that are missing, so the answer is no provenance. A missing
