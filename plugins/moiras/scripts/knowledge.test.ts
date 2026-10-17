@@ -725,7 +725,13 @@ describe('security regressions', () => {
     assert.notEqual(sourcesHash(local, ['.']), initial, 'unreadable files still change the hash when they appear');
     assert.throws(() => sourcesHash(local, ['criteria/huge.md']), /file-too-large/);
     assert.throws(() => sourcesHash(local, ['criteria/binary.md']), /binary-file/);
-    assert.equal(plan(local, shared).items.length, 1);
+    assert.deepEqual(plan(local, shared).items, [
+      { path: 'criteria/binary.md', action: 'conflict', reason: 'binary-file' },
+      { path: 'criteria/cycle.md', action: 'conflict', reason: 'symlink' },
+      { path: 'criteria/good.md', action: 'skip', reason: 'unchanged' },
+      { path: 'criteria/huge.md', action: 'conflict', reason: 'file-too-large' },
+      { path: 'criteria/link.md', action: 'conflict', reason: 'symlink' },
+    ], 'broken or linked registries surface as conflicts');
     const result = check(local).findings;
     assert.equal(result.filter(f => f.rule === 'symlink').length, 2);
     assert.ok(result.some(f => f.rule === 'file-too-large'));
@@ -739,6 +745,21 @@ describe('security regressions', () => {
     assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
   });
 
+  it('surfaces broken registries as conflicts instead of dropping from the plan', t => {
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/broken-local.md', 'x'.repeat(1024 * 1024 + 1));
+    write('shared', 'learnings/patterns/broken-shared.md', 'y'.repeat(1024 * 1024 + 1));
+    write('shared', 'criteria/only-shared.md', criterion('only-shared'));
+    write('local', 'criteria/only-shared.md', criterion('only-shared'));
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/broken-local.md', action: 'conflict', reason: 'file-too-large' },
+        { path: 'criteria/only-shared.md', action: 'skip', reason: 'unchanged' },
+        { path: 'learnings/patterns/broken-shared.md', action: 'conflict', reason: 'shared:file-too-large' },
+      ],
+      remove: [],
+    });
+  });
   it('bounds regex scanning of long lines', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/patterns/p.md', patternDoc('p', 'a'.repeat(100000) + '@abcdef0'));
