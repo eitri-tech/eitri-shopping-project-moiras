@@ -125,6 +125,16 @@ describe('issues', () => {
     });
   });
 
+  it('fails instead of returning a partial index when a learnings folder cannot be read', t => {
+    const { dir, local, write } = workspace(t);
+    write('local', 'learnings/patterns/ok.md', patternDoc('ok', '# P'));
+    symlinkSync(dir, join(local, 'learnings/solutions'));
+    assert.throws(() => issues(local), /learnings\/solutions cannot be indexed \(symlink\)/);
+    rmSync(join(local, 'learnings/solutions'));
+    write('local', 'learnings/decisions', 'not a folder');
+    assert.throws(() => issues(local), /learnings\/decisions cannot be indexed \(not-directory\)/);
+  });
+
   it('uses the CLI success and usage error paths', t => {
     const { dir } = workspace(t);
     assert.deepEqual(main(['issues', dir]), { output: '{"issues":{},"ids":[]}', code: 0 });

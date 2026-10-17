@@ -209,6 +209,8 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
   for (const dir of [dirs].flat()) {
     const invalid = new Set(check(dir, 'learnings').findings.filter(finding => finding.severity === 'error').map(finding => finding.path));
     for (const entry of records(dir, 'learnings')) {
+      // A folder that cannot be read (symlink, not a directory) would hide ids and issues: fail instead of a partial index.
+      if (entry.issue && !entry.path.endsWith('.md')) throw new Error(`${dir}: ${entry.path} cannot be indexed (${entry.issue}).`);
       const stem = entry.path.slice(entry.path.lastIndexOf('/') + 1, -'.md'.length);
       ids.add(stem);
       const fields = entry.doc?.fields;
