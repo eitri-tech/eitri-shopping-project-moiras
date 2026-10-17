@@ -431,6 +431,16 @@ function staleOutcome(local: Doc, shared: Doc): string | null {
   return observation(local).startsWith(observation(shared)) ? null : 'shared-observation-not-kept';
 }
 
+/** When and where a repository was read: it says when the index was made, not what it found, so it never decides an update. */
+const indexingFields = new Set(['indexed_at', 'indexed_commit', 'indexed_commit_date', 'indexed_dirty', 'indexed_branch', 'indexed_tag']);
+
+/** Two glossary records built from the same sources (same `sources_hash`) that differ only in when and where they were indexed. */
+function sameIndexedContent(a: Doc, b: Doc): boolean {
+  if (!asText(a.fields.sources_hash) || asText(a.fields.sources_hash) !== asText(b.fields.sources_hash)) return false;
+  const content = (doc: Doc) => JSON.stringify(Object.entries(doc.fields).filter(([name]) => !indexingFields.has(name)).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
+  return content(a) === content(b) && a.body.trim() === b.body.trim();
+}
+
 export function plan(localDir: string, sharedDir: string, sharedName?: string): Plan {
   const shared = new Map(records(sharedDir).filter(entry => !entry.issue).map(entry => [entry.path, entry]));
   const items: Item[] = [];
@@ -446,6 +456,7 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       if (stale) item('conflict', stale);
       else item('update', 'result-or-observation');
     }
+    else if (kind.type === 'repository' && doc && other.doc && sameIndexedContent(doc, other.doc)) item('skip', 'unchanged');
     else if (kind.type === 'repository' && doc && other.doc) {
       const [mine, theirs] = [asText(doc.fields.indexed_at), asText(other.doc.fields.indexed_at)];
       if (mine > theirs) item('update', 'newer-index');
@@ -480,7 +491,7 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)!;
 }
 
-export function sourcesHash(base: string, paths: string[], meta?: unknown, ignored?: (relativePath: string) => boolean): string {
+export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
   const entries: string[] = [];
   const visited = new Set<string>();
   const walk = (path: string, explicit: boolean) => {
@@ -488,9 +499,6 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown, ignor
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
     const full = resolve(base, path);
-    // A folder with its own `.git` (a submodule or a nested repository) is another repository: its content is not read.
-    if (full !== resolve(base) && existsSync(join(full, '.git'))) return;
-    if (ignored && (!explicit || lstatSync(full).isDirectory()) && ignored(relative(base, full).split(sep).join('/'))) return;
     if (lstatSync(full).isDirectory()) {
       const real = realpathSync(full);
       if (visited.has(real)) return;
@@ -518,50 +526,6 @@ function gitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
   return env;
-}
-
-/** Reading a repository must not run its scripts: `core.fsmonitor` is an executable Git would call for these queries. */
-const NO_HOOKS = ['-c', 'core.fsmonitor=false'];
-
-/**
- * Whether `base` is inside a Git work tree. A folder that is simply not a repository is `false`; a repository that Git cannot answer
- * for (a malformed config, say) throws, so callers never go on without its ignore rules.
- */
-function insideWorkTree(base: string, env: NodeJS.ProcessEnv): boolean {
-  const result = spawnSync('git', ['-C', base, ...NO_HOOKS, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', env: { ...env, LC_ALL: 'C' } });
-  if (result.status === 0) return result.stdout.trim() === 'true';
-  if (/not a git repository/i.test(result.stderr ?? '')) return false;
-  throw new Error('Could not read the Git ignore rules');
-}
-
-/**
- * The explicit source files that Git ignores (and does not track): a `.gitignore`d file is not part of the recorded commit and may
- * hold what the repository chose to keep out of it, so it must not become evidence. Folders are only listed by name and not checked.
- */
-export function ignoredSources(base: string, paths: string[]): string[] {
-  const env = gitEnv();
-  if (!insideWorkTree(base, env)) return [];
-  return paths.filter(path => {
-    try { if (!lstatSync(resolve(base, path)).isFile()) return false; } catch { return false; }
-    const status = spawnSync('git', ['-C', base, ...NO_HOOKS, 'check-ignore', '-q', '--', path], { env }).status;
-    // 0 ignored, 1 not ignored; anything else means the rules could not be read, and hashing must not go on without them.
-    if (status !== 0 && status !== 1) throw new Error('Could not read the Git ignore rules');
-    return status === 0;
-  });
-}
-
-/**
- * Whether a path inside `base` is ignored by Git and untracked: the untracked-and-ignored listing is read once (folders collapsed to
- * `dir/`), so folder hashes can leave out ignored descendants. `undefined` outside a Git work tree.
- */
-export function ignoredMatcher(base: string): ((relativePath: string) => boolean) | undefined {
-  const env = gitEnv();
-  if (!insideWorkTree(base, env)) return undefined;
-  const listed = spawnSync('git', ['-C', base, ...NO_HOOKS, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
-  // Inside a repository whose ignore rules cannot be read (a corrupt index, an output too large): fail closed, never hash without them.
-  if (listed.status !== 0) throw new Error('Could not read the Git ignore rules');
-  const entries = listed.stdout.split('\0').filter(Boolean);
-  return path => entries.some(entry => (entry.endsWith('/') ? path === entry.slice(0, -1) || path.startsWith(entry) : path === entry));
 }
 
 export interface Provenance {
@@ -646,9 +610,7 @@ export function main(argv: string[]): { output: string; code: number } {
   const { positionals: [command, ...rest], values } = parsed;
   if (command === 'hash') {
     if (values.base === undefined || !rest.length) throw new Error(usage);
-    const ignored = ignoredSources(values.base, rest);
-    if (ignored.length) throw new Error(`Git-ignored files cannot be sources: ${ignored.join(', ')}`);
-    return { output: sourcesHash(values.base, rest, values.meta === undefined ? undefined : JSON.parse(values.meta), ignoredMatcher(values.base)), code: 0 };
+    return { output: sourcesHash(values.base, rest, values.meta === undefined ? undefined : JSON.parse(values.meta)), code: 0 };
   }
   if (command === 'check') {
     if (rest.length !== 1) throw new Error(usage);

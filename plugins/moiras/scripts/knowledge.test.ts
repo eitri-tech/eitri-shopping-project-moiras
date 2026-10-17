@@ -52,13 +52,13 @@ replaces: [${replaces}]
 # Regra ${id}
 `;
 
-const glossary = (indexedAt: string) => `---
+const glossary = (indexedAt: string, sourcesHash = sha, provenance = '') => `---
 id: acme-shop-checkout
 type: repository
 url: https://github.com/acme/acme-shop-checkout
 platform: vtex
 indexed_at: ${indexedAt}
-sources_hash: ${sha}
+${provenance}sources_hash: ${sourcesHash}
 ---
 
 # acme-shop-checkout
@@ -420,18 +420,40 @@ describe('plan', () => {
   it('updates the glossary only when the local index is newer', t => {
     const { local, shared, write } = workspace(t);
     write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20'));
+    const other = `sha256:${'b'.repeat(64)}`;
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', other));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'update', reason: 'newer-index' },
     ]);
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-09-01'));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-09-01', other));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'shared-is-newer' },
+    ]);
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', other));
+    assert.deepEqual(plan(local, shared).items, [
+      { path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' },
     ]);
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', 'platform: wake'));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' },
     ]);
+  });
+
+  it('ignores when and where a glossary record was indexed when the sources are the same', t => {
+    const { local, shared, write } = workspace(t);
+    const at = (commit: string, date: string, dirty = 'false') => `indexed_commit: ${commit.repeat(40)}\nindexed_commit_date: ${date}\nindexed_dirty: ${dirty}\n`;
+    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', sha, at('a', '2026-10-01')));
+    const unchanged = [{ path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' }];
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', sha, at('b', '2026-09-01', 'true')));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'another commit on the same day');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha, at('b', '2026-10-15')));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'a later index of the same sources');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'a record from before the provenance existed');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha, at('b', '2026-10-15')).replace('# acme-shop-checkout', '# acme-shop-checkout\n\nNova linha.'));
+    assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'update', reason: 'newer-index' }], 'other content follows the date rule');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', `sha256:${'b'.repeat(64)}`, at('a', '2026-10-01')));
+    assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' }], 'other sources on the same day');
   });
 
   it('removes only the shared criteria that a local criterion replaces', t => {
@@ -759,46 +781,6 @@ describe('provenance', () => {
     assert.equal(provenance(cwd).indexed_dirty, true);
   });
 
-  it('refuses a Git-ignored file as a source but accepts tracked files and folders', t => {
-    const cwd = repository(t);
-    writeFileSync(join(cwd, '.gitignore'), 'config.json\nbuild/\n');
-    writeFileSync(join(cwd, 'config.json'), '{}');
-    mkdirSync(join(cwd, 'build'));
-    assert.throws(() => main(['hash', '--base', cwd, 'README.md', 'config.json']), /Git-ignored files cannot be sources: config\.json/);
-    assert.equal(typeof main(['hash', '--base', cwd, 'README.md', 'build']).output, 'string');
-    const { dir, write } = workspace(t);
-    write('plain', 'config.json', '{}');
-    assert.equal(typeof main(['hash', '--base', join(dir, 'plain'), 'config.json']).output, 'string');
-  });
-
-  it('leaves ignored descendants out of a folder hash', t => {
-    const cwd = repository(t);
-    writeFileSync(join(cwd, '.gitignore'), '*.private.json\nsecrets/\n');
-    mkdirSync(join(cwd, 'src'));
-    writeFileSync(join(cwd, 'src', 'index.ts'), 'x');
-    const hashOf = () => main(['hash', '--base', cwd, 'src']).output;
-    const before = hashOf();
-    writeFileSync(join(cwd, 'src', 'a.private.json'), '{}');
-    mkdirSync(join(cwd, 'src', 'secrets'));
-    writeFileSync(join(cwd, 'src', 'secrets', 'k.txt'), 'k');
-    assert.equal(hashOf(), before);
-    writeFileSync(join(cwd, 'src', 'other.ts'), 'y');
-    assert.notEqual(hashOf(), before);
-  });
-
-  it('stops at nested repositories and fails closed when the ignore rules cannot be read', t => {
-    const cwd = repository(t);
-    mkdirSync(join(cwd, 'libs', 'vendor'), { recursive: true });
-    writeFileSync(join(cwd, 'libs', 'vendor', '.git'), 'gitdir: ../../.git/modules/vendor\n');
-    writeFileSync(join(cwd, 'libs', 'keep.ts'), 'k');
-    const hashOf = () => main(['hash', '--base', cwd, 'libs']).output;
-    const before = hashOf();
-    writeFileSync(join(cwd, 'libs', 'vendor', 'inside.ts'), 'x');
-    assert.equal(hashOf(), before);
-    writeFileSync(join(cwd, '.git', 'index'), 'not an index');
-    assert.throws(() => hashOf(), /Could not read the Git ignore rules/);
-  });
-
   it('counts a staged submodule update as dirty without entering the submodule', t => {
     const { dir, write } = workspace(t);
     write('sub', 'a.txt', 'one');
@@ -830,24 +812,6 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
     mkdirSync(join(cwd, 'src'));
     assert.deepEqual(provenance(join(cwd, 'src')), { git: false });
-  });
-
-  it('does not run a configured fsmonitor while hashing and fails closed when Git cannot answer for a repository', t => {
-    const cwd = repository(t);
-    const marker = join(cwd, '..', 'fsmonitor-ran-hash');
-    const hook = join(cwd, '..', 'hook-hash.sh');
-    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
-    writeFileSync(join(cwd, '.gitignore'), 'config.json\n');
-    mkdirSync(join(cwd, 'src'));
-    writeFileSync(join(cwd, 'src', 'index.ts'), 'x');
-    writeFileSync(join(cwd, 'config.json'), '{}');
-    run(cwd, 'config', 'core.fsmonitor', hook);
-    assert.equal(typeof main(['hash', '--base', cwd, 'README.md']).output, 'string');
-    assert.equal(typeof main(['hash', '--base', cwd, 'src']).output, 'string');
-    assert.equal(existsSync(marker), false);
-    writeFileSync(join(cwd, '.git', 'config'), '[core\n\tbroken\n');
-    assert.throws(() => main(['hash', '--base', cwd, 'README.md', 'config.json']), /Could not read the Git ignore rules/);
-    assert.throws(() => main(['hash', '--base', cwd, 'src']), /Could not read the Git ignore rules/);
   });
 
   it('reports git: false without a repository or a commit and prints through the CLI', t => {

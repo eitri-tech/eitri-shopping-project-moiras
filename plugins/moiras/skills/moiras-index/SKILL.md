@@ -40,7 +40,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 ## Passos
 
 1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
-2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`, e respeite o `.gitignore`: arquivo ignorado pelo Git não é evidência (não está no commit registrado e pode guardar justamente o que o repositório quis deixar de fora), e o `knowledge.ts hash` recusa um arquivo assim e deixa de fora, no hash de uma pasta, o que o Git ignora dentro dela e qualquer subpasta que seja outro repositório (submódulo). Se o Git não conseguir ler as regras de ignore, o `hash` falha em vez de seguir sem elas.
+2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge ou, sem ele (como num knowledge recém-criado), com o "Modelo de reserva" abaixo (ver "O que vai em cada campo").
 4. **Registrar até onde o repositório foi lido (proveniência).** Rode, para cada repositório (só comandos de leitura do Git, por dentro do script):
 
