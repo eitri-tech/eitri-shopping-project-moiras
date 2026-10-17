@@ -214,7 +214,8 @@ function trimTrailingSpaces(line: string): string {
 export function parseIgnore(text: string): IgnoreRule[] {
   const rules: IgnoreRule[] = [];
   let pieces = 0;
-  for (const raw of text.split('\n')) {
+  // Git drops a UTF-8 byte order mark before the first rule.
+  for (const raw of (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).split('\n')) {
     let line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
     if (line.length > maxLineLength) return [];
     if (line === '' || line[0] === '#') continue;

@@ -105,6 +105,13 @@ describe('parseIgnore', () => {
   });
 });
 
+describe('byte order mark', () => {
+  it('is dropped before the first rule, as Git does', () => {
+    assert.equal(ignored('\uFEFFsecret.txt\nother.txt', 'secret.txt'), true);
+    assert.equal(ignored('\uFEFF# comment\nother.txt', 'other.txt'), true);
+  });
+});
+
 describe('isIgnored', () => {
   it('scopes a .gitignore to its own folder', () => {
     const layers = [layer('/local.txt\n*.tmp', 'pkg')];

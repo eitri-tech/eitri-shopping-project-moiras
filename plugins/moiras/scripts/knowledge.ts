@@ -460,7 +460,7 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
  * inside directories. A path that does not exist is ignored, so an optional file does not
  * change the hash until it shows up. Walking a directory leaves out what the `.gitignore` of
  * the base and of every folder below it excludes, as Git would (never one above the base):
- * ignored folders are not even read. A path named explicitly is always read.
+ * ignored folders are not even read. A file named explicitly is always read; a folder named explicitly is skipped when a .gitignore above it excludes it.
  */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -501,6 +501,8 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
           const above = ignoreLayer(base, names.slice(0, depth).join(sep));
           if (above) layers.push(above);
         }
+        // A directory named on its own is skipped when a .gitignore above it excludes it; a file named on its own is always read.
+        if (names.length && isIgnoredParts(layers, here, true)) return;
       }
       const children = readdirSync(full, { withFileTypes: true });
       // Only a folder that holds a .gitignore pays for reading one.

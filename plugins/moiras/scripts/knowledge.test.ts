@@ -500,6 +500,15 @@ describe('sourcesHash', () => {
     assert.equal(hashOf('src/deep'), deep, 'a path named on its own still obeys the .gitignore of the folders between it and the base');
     write('repo', 'src/deep/other.txt', 'x');
     assert.notEqual(hashOf('src/deep'), deep);
+    write('repo', 'src/generated/ignored.ts', 'x');
+    const generated = hashOf('src/generated');
+    chmodSync(join(base, 'src', 'generated'), 0o000);
+    try {
+      assert.equal(hashOf('src/generated'), hashOf('src/missing'), 'a folder named on its own is skipped when a .gitignore above excludes it');
+    } finally {
+      chmodSync(join(base, 'src', 'generated'), 0o755);
+    }
+    assert.ok(generated);
   });
 
   it('reads an explicit file even when a .gitignore names it, and skips an unreadable .gitignore', t => {
