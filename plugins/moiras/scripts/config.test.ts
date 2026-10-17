@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -76,6 +76,11 @@ describe('validate', () => {
     ]);
   });
 
+  it('rejects repositories that would share a glossary file', () => {
+    const config = { ...minimal(), index: { repositories: [{ name: 'acme-shop-checkout', path: '../a' }, { name: 'Acme-Shop-Checkout', path: '../b' }, { name: 'acme-shop-cart', path: '../c' }] } };
+    assert.deepEqual(rules(config), ['index.repositories[1].name:name-duplicate:error']);
+  });
+
   it('checks the knowledge list', () => {
     const config = {
       ...minimal(),
@@ -133,6 +138,13 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), github: { token: '<token>' } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { api_keys: ['plain-value'], credentials: { value: 'plain-value', list: [{ k: 'x' }] } } }), ['github.api_keys[0]:secret:error', 'github.credentials.value:secret:error', 'github.credentials.list[0].k:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { credentials: { value: '<token>' } } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { token: 123456, api_keys: [123456], credentials: { value: 123456, flag: true, none: null } } }), ['github.token:secret:error', 'github.api_keys[0]:secret:error', 'github.credentials.value:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { retries: 3, max_tokens: 4096, token_budget: 1000, tokenizer: { enabled: true } } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { token_budget: { password: 123456, limit: 5 }, tokenizer: { token: 1 } } }), ['github.token_budget.password:secret:error', 'github.tokenizer.token:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { tokens: [123456], password_tokens: 123456, password: { max_tokens: 123456 } } }), ['github.tokens[0]:secret:error', 'github.password_tokens:secret:error', 'github.password.max_tokens:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { auth: 'Basic cGxhaW4tc2VjcmV0LXZhbHVl', headers: { Authorization: 'Bearer plain-value', 'x-auth': 'plain-value' }, cookie: 'sid=plain-value', session_id: 'plain-value', sessionId: 'plain-value' } }), ['github.auth:secret:error', 'github.headers.Authorization:secret:error', 'github.headers.x-auth:secret:error', 'github.cookie:secret:error', 'github.session_id:secret:error', 'github.sessionId:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { author: 'Fulano', authors: ['Beltrana'], auth: '<token>', session: { timeout: 30 } } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { tokens: ['plain-value'] } }), ['github.tokens[0]:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
     assert.deepEqual(rules({ ...minimal(), agencies: [{ channel: '#a' }], slack: 3 }), ['agencies[0].name:field-missing:error', 'slack:not-an-object:error']);
@@ -143,7 +155,7 @@ describe('init', () => {
   it('creates sources.json and a self-ignoring folder', t => {
     const { target } = workspace(t);
     const result = init(minimal(), target);
-    assert.deepEqual(result.created, [join(target, 'sources.json'), join(target, '.gitignore')]);
+    assert.deepEqual(result.created, [join(target, '.gitignore'), join(target, 'sources.json')]);
     assert.deepEqual(JSON.parse(readFileSync(join(target, 'sources.json'), 'utf8')), minimal());
     assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), '*\n');
     assert.deepEqual(validate(JSON.parse(readFileSync(join(target, 'sources.json'), 'utf8'))), []);
@@ -176,6 +188,53 @@ describe('init', () => {
     assert.deepEqual(refused('custom\n'), ['gitignore-not-protecting:error']);
     assert.deepEqual(refused('*\n!sources.json\n'), ['gitignore-not-protecting:error']);
     assert.deepEqual(refused('custom\n', true), ['gitignore-not-protecting:error']);
+    assert.deepEqual(refused(' *\n'), ['gitignore-not-protecting:error']);
+    assert.deepEqual(refused('\t*\n'), ['gitignore-not-protecting:error']);
+    assert.deepEqual(refused('*\t\n'), ['gitignore-not-protecting:error']);
+    // Trailing spaces and CRLF are dropped by Git, so these still protect the folder.
+    writeFileSync(join(target, '.gitignore'), '*  \r\n');
+    rmSync(join(target, 'sources.json'), { force: true });
+    assert.deepEqual(init(minimal(), target).created, [join(target, 'sources.json')]);
+  });
+
+  it('refuses to recreate a configuration that Git still tracks', t => {
+    const { dir, target } = workspace(t);
+    const git = (...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    if (git('init', '-q').status !== 0) return t.skip('git is not available');
+    init(minimal(), target);
+    assert.equal(git('add', '-f', '.moiras/sources.json').status, 0);
+    rmSync(join(target, 'sources.json'));
+    const result = init(minimal(), target);
+    assert.deepEqual(result.created, []);
+    assert.deepEqual(result.findings.map(finding => `${finding.rule}:${finding.severity}`), ['sources-tracked:error']);
+    assert.ok(!existsSync(join(target, 'sources.json')));
+  });
+
+  it('refuses a symlinked folder or file instead of writing through it', t => {
+    const { dir, target } = workspace(t);
+    const outside = join(dir, 'outside');
+    mkdirSync(outside);
+    symlinkSync(outside, target);
+    for (const dryRun of [false, true]) {
+      const result = init(minimal(), target, dryRun);
+      assert.deepEqual(result.created, []);
+      assert.deepEqual(result.findings.map(finding => `${finding.rule}:${finding.severity}`), ['symlink-refused:error']);
+    }
+    assert.deepEqual(readdirSync(outside), []);
+    rmSync(target);
+    // A link above the folder is refused too when it lives under the working directory.
+    const nested = join(process.cwd(), `.moiras-link-test-${process.pid}`);
+    t.after(() => rmSync(nested, { force: true }));
+    symlinkSync(outside, nested);
+    const through = init(minimal(), join(nested, '.moiras'));
+    assert.deepEqual(through.created, []);
+    assert.ok(through.findings.some(finding => finding.rule === 'symlink-refused'));
+    assert.deepEqual(readdirSync(outside), []);
+    mkdirSync(target);
+    writeFileSync(join(dir, 'real'), '');
+    symlinkSync(join(dir, 'real'), join(target, '.gitignore'));
+    assert.ok(init(minimal(), target).findings.some(finding => finding.rule === 'symlink-refused'));
+    assert.ok(!existsSync(join(target, 'sources.json')));
   });
 
   it('writes nothing when there are errors or on a dry run', t => {
@@ -197,7 +256,7 @@ describe('main', () => {
     assert.ok(!existsSync(target));
     const good = run(['init', '--dir', target], JSON.stringify(minimal()));
     assert.equal(good.status, 0, good.stderr);
-    assert.deepEqual(JSON.parse(good.stdout).created, [join(target, 'sources.json'), join(target, '.gitignore')]);
+    assert.deepEqual(JSON.parse(good.stdout).created, [join(target, '.gitignore'), join(target, 'sources.json')]);
     assert.equal(run(['init', '--dir', target], JSON.stringify(minimal())).status, 2);
     const checked = run(['check', join(target, 'sources.json')]);
     assert.equal(checked.status, 0);

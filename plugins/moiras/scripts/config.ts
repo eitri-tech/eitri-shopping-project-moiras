@@ -8,8 +8,9 @@
  *
  * Findings carry the path of the field and the rule, never the value.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern } from './knowledge.ts';
 
@@ -55,14 +56,25 @@ export function validate(config: unknown): Finding[] {
     else if (isObject(value)) for (const [key, item] of Object.entries(value)) scan(item, path ? `${path}.${key}` : key);
   };
   scan(config, '');
-  // Any string under a key that names a credential (token, password...), at any depth, is a secret even when it looks harmless.
-  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
-  const scanKeys = (value: unknown, path: string, underCredential = false) => {
+  // Any string or number under a key that names a credential (token, password...), at any depth, is a secret even when it
+  // looks harmless (only an empty string, null or a `<placeholder>` passes). Booleans carry no secret, and numbers under
+  // a counter such as `max_tokens` or `token_budget` are not credentials either.
+  // `auth` only as a whole word (auth, auth_token, x-auth): `author` is not a credential.
+  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential|authorization|bearer|cookie|session[_-]?id|(?:^|[_-])auth(?:$|[_-]))/i;
+  const counterKey = /^(?:(?:max|min|total|input|output|prompt|completion)[_-]?tokens|tokens?[_-]?(?:budget|limit|count|usage|ttl|expiry|lifetime))$/i;
+  // The counter exemption applies from the key down, never below a credential key, and a credential key inside it clears it.
+  const scanKeys = (value: unknown, path: string, underCredential = false, counter = false) => {
     if (typeof value === 'string') {
       if (underCredential && value.trim() !== '' && !placeholder(value.trim())) add(path, 'secret');
-    } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential));
+    } else if (typeof value === 'number') {
+      if (underCredential && !counter) add(path, 'secret');
+    } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential, counter));
     else if (isObject(value)) {
-      for (const [key, item] of Object.entries(value)) scanKeys(item, path ? `${path}.${key}` : key, underCredential || credentialKey.test(key));
+      for (const [key, item] of Object.entries(value)) {
+        const isCounter = counterKey.test(key);
+        const isCredential = credentialKey.test(key);
+        scanKeys(item, path ? `${path}.${key}` : key, underCredential || isCredential, isCredential && !isCounter ? false : counter || (isCounter && !underCredential));
+      }
     }
   };
   scanKeys(config, '');
@@ -148,10 +160,14 @@ export function validate(config: unknown): Finding[] {
     if (!isObject(index)) add('index', 'not-an-object');
     else {
       if (index.roots !== undefined && (!Array.isArray(index.roots) || index.roots.some(root => !isText(root)))) add('index.roots', 'not-a-list');
+      // Each name is a file (`glossary/<name>.md`): two repositories with one name (any case) would overwrite each other.
+      const repositoryNames = new Set<string>();
       list(index.repositories, 'index.repositories').forEach((repository, position) => {
         const path = `index.repositories[${position}]`;
         for (const field of ['name', 'path']) if (!isText(repository[field])) add(`${path}.${field}`, 'field-missing');
         if (isText(repository.name) && !safeName.test(repository.name)) add(`${path}.name`, 'name-invalid');
+        else if (isText(repository.name) && repositoryNames.has(repository.name.toLowerCase())) add(`${path}.name`, 'name-duplicate');
+        else if (isText(repository.name)) repositoryNames.add(repository.name.toLowerCase());
         for (const field of ['url', 'owner', 'agency', 'platform']) if (repository[field] !== undefined && !isText(repository[field])) add(`${path}.${field}`, 'field-invalid');
       });
     }
@@ -180,9 +196,29 @@ const hasErrors = (findings: Finding[]) => findings.some(finding => finding.seve
 
 /** True when a `*` rule is not re-included by a later negation such as `!sources.json`. */
 function ignoresEverything(rules: string): boolean {
-  const lines = rules.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  // Git drops only unescaped trailing spaces: leading spaces and tabs belong to the pattern, so ` *` and `*\t` do not ignore everything.
+  const lines = rules.split(/\r?\n/).map(line => line.replace(/ +$/, '')).filter(line => line && !line.startsWith('#'));
   const last = lines.lastIndexOf('*');
   return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
+}
+
+/** True when Git tracks the path: ignore rules do not apply to tracked files. No Git, or outside a repository, means no. */
+function isTracked(file: string): boolean {
+  let base = dirname(resolve(file));
+  while (!existsSync(base) && dirname(base) !== base) base = dirname(base);
+  const result = spawnSync('git', ['-C', base, 'ls-files', '--error-unmatch', '--', resolve(file)], { stdio: 'ignore' });
+  return result.status === 0;
+}
+
+/** The folder and every component between the working directory and it (all of it when outside); system links above stay allowed. */
+function symlinkScope(dir: string): string[] {
+  const root = resolve('.');
+  const scope: string[] = [];
+  for (let current = resolve(dir); ; current = dirname(current)) {
+    scope.push(current);
+    if (dirname(current) === current || dirname(current) === root || !current.startsWith(`${root}${sep}`)) break;
+  }
+  return scope;
 }
 
 /** Creates the configuration folder and file; refuses to touch an existing file. */
@@ -192,18 +228,26 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   // An existing ignore file that does not cover the folder would leave IDs and names open to an accidental commit:
   // refuse before writing anything (the dry run reports it too).
   if (existsSync(ignore) && !ignoresEverything(readFileSync(ignore, 'utf8'))) findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'error' });
-  if (hasErrors(findings)) return { created: [], findings };
   const file = join(dir, 'sources.json');
+  // Writes must land where the user approved: a symlinked folder or file would send them (and a `*` ignore file) elsewhere.
+  for (const target of [...symlinkScope(dir), ignore, file]) {
+    if (lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) findings.push({ path: target, rule: 'symlink-refused', severity: 'error' });
+  }
+  // A tracked path keeps showing up as modified even when the folder is ignored: refuse to recreate it.
+  if (!existsSync(file) && isTracked(file)) findings.push({ path: file, rule: 'sources-tracked', severity: 'error' });
+  if (hasErrors(findings)) return { created: [], findings };
   if (existsSync(file)) throw new Error(`${file} already exists; edit it by hand or remove it first.`);
   if (dryRun) return { created: [], findings };
   mkdirSync(dir, { recursive: true });
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
-  const created = [file];
-  // The folder ignores itself, so nothing in it (IDs, knowledge, memory, reports) is committed by accident.
+  // The folder ignores itself, so nothing in it (IDs, knowledge, memory, reports) is committed by accident;
+  // the ignore file goes first so the configuration is never on disk unprotected.
+  const created: string[] = [];
   if (!existsSync(ignore)) {
     writeFileSync(ignore, '*\n', { flag: 'wx' });
     created.push(ignore);
   }
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
+  created.push(file);
   return { created, findings };
 }
 
