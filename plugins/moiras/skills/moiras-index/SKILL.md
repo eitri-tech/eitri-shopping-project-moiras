@@ -33,13 +33,13 @@ Esta skill é a única que escreve em `glossary/`. O glossário é derivado do c
 - `roots`: pastas cujas subpastas com `.git` são descobertas como repositórios. O nome do repositório é o nome da pasta.
 - `repositories`: repositórios explícitos. `name` e `path` são obrigatórios; `url`, `owner`, `agency` e `platform` são opcionais e **valem mais que o detectado**, porque dono e agência não saem do código.
 - `agency`, quando existir, precisa ser um `name` de `agencies`. Se não for, avise e deixe o campo vazio.
-- Caminhos relativos valem a partir da pasta onde está o `.moiras/`. Sem `index`, pergunte em qual pasta estão os repositórios e proponha a configuração; só grave `sources.json` se o usuário pedir.
+- Caminhos relativos valem a partir da pasta onde está o `.moiras/`. Sem `index`, pergunte em qual pasta estão os repositórios e proponha a configuração, mas não grave o `sources.json`: indique `/moiras:moiras-init` (se o arquivo não existe) ou a edição à mão.
 
 Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all` (o padrão quando não há nome).
 
 ## Passos
 
-1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. Repositório da lista que não existe em disco vira `missing` no relatório.
+1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
 2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge (ver "O que vai em cada campo").
 4. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:
@@ -65,7 +65,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 |---|---|
 | `id` | nome do repositório, igual ao nome do arquivo |
 | `type` | sempre `repository` |
-| `url` | `index.repositories[].url` ou o `origin` do git, sempre sem usuário, senha ou token na URL |
+| `url` | `index.repositories[].url` ou o `origin` do git, sempre sem usuário, senha ou token na URL; `git@host:org/repo.git` vira `https://host/org/repo` |
 | `local_path` | caminho relativo (ex.: `../acme-shop-checkout`); nunca absoluto nem com a pasta pessoal |
 | `platform` | `vtex`, `wake`, `shopify` ou `other`, pelas dependências e pela configuração; se não der para confirmar, deixe vazio |
 | `apps` | pastas de aplicativo ou de views encontradas |

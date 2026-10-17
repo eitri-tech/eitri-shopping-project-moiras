@@ -17,6 +17,7 @@ O plugin fica em `plugins/moiras/` e é publicado pelo marketplace em `.claude-p
 Estrutura:
 
 - `.claude-plugin/plugin.json`: manifesto
+- `skills/moiras-init/SKILL.md`: skill que cria o `.moiras/sources.json` conversando com o usuário (única que o cria, sem nunca sobrescrever)
 - `skills/moiras-triage/SKILL.md`: skill que orquestra as três etapas, em ordem, e define como ler e escrever o knowledge; cada etapa fica em `stages/`
 - `config/sources.example.json`: modelo da configuração lida de `.moiras/sources.json`
 - `skills/moiras-audit/SKILL.md`: skill de auditoria do knowledge (revisão e ajustes aprovados por quem audita)
@@ -24,6 +25,7 @@ Estrutura:
 - `skills/moiras-sync/SKILL.md`: skill que traz o que foi mergeado nos knowledges compartilhados (só avança o clone)
 - `skills/moiras-publish/SKILL.md`: skill que leva o knowledge local a um knowledge compartilhado, por PR
 - `scripts/memory.ts`: grava e consulta a memória de cada etapa (`.moiras/memory/<stage>.jsonl`) com hash SHA-256
+- `scripts/config.ts`: cria (`init`) e valida (`check`) o `.moiras/sources.json`; `init` nunca sobrescreve
 - `scripts/knowledge.ts`: ferramentas só de leitura para o knowledge: `hash` (fingerprint das fontes), `check` (regras dos registros) e `plan` (o que o `moiras-publish` levaria)
 
 ## Repositório público
@@ -45,7 +47,8 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Auditoria (`moiras-audit`) é só interativa e só altera o knowledge local, com o "sim" de quem audita à lista exata de ajustes: mesmas regras da escrita da triagem (aprendizado só muda `result` e a observação; critério só por regeneração com `replaces`; glossário nunca é editado). O relatório da auditoria não repete conteúdo sensível.
 - Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
 - Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (hash e metadados derivados da etapa, como ação, categoria e confiança). Ela é local e nunca vai para um knowledge.
-- Fora a memória e os relatórios, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` e `criteria/` pelas Moiras e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
+- Configuração (`moiras-init`): só interativa, só com o "sim" ao arquivo inteiro, só pelo `config.ts init`. Cria apenas `.moiras/sources.json` e `.moiras/.gitignore`, nunca sobrescreve e recusa segredo (inclusive qualquer valor sob chave de credencial), credencial em URL, nome de repositório ou de knowledge que não seja um nome de arquivo seguro ou que se repita um `.moiras/.gitignore` existente que não cubra a pasta um `sources.json` que o Git ainda rastreia e qualquer link simbólico no caminho (pasta, ancestral, `.gitignore` ou arquivo). O `check` aplica as mesmas conferências como aviso (link simbólico, rastreado, não ignorado pelo Git) e não bloqueia a leitura. Os conectores só leem. O arquivo aceita blocos de outras fontes além de Jira e Slack, que hoje são o foco.
+- Fora a memória, os relatórios e a configuração, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` e `criteria/` pelas Moiras e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
 - O knowledge nunca tem cópia de código: no máximo um trecho por registro, de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
 - O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time. Sem critérios aplicáveis, os padrões do plugin são apenas fallback, sempre sinalizado com `criteria-missing`; não são regras do time.
