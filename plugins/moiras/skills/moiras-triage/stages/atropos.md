@@ -135,7 +135,7 @@ id: PROJ-123-1
 type: solution
 issue: PROJ-123
 created_at: 2026-10-06
-chosen_by: <pseudônimo não identificável escolhido pelo usuário>
+chosen_by: <identificador escolhido pelo usuário; sugestão: knowledge.ts identity>
 agency: Agência Aurora
 repositories: [acme-shop-checkout]
 component: checkout
@@ -181,7 +181,7 @@ Quando o usuário discordar de uma ação, de uma categoria ou da ordem das solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
-approved_by: <pseudônimo não identificável escolhido pelo usuário>
+approved_by: <identificador escolhido pelo usuário; sugestão: knowledge.ts identity>
 applies_to: category | origin | action | solutions
 replaces: []
 ---

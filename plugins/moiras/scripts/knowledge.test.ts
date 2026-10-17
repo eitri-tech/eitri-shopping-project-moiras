@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, issues, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
+import { check, issues, main, parseDoc, plan, pseudonymPattern, sourcesHash, suggestIdentifier } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -620,5 +620,33 @@ describe('security regressions', () => {
     for (const key of Object.keys(meta)) assert.notEqual(sourcesHash(base, ['a.txt'], { ...meta, [key]: 'changed' }), first);
     assert.equal(sourcesHash(base, ['a.txt'], { a: { z: 1, b: 2 } }), sourcesHash(base, ['a.txt'], { a: { b: 2, z: 1 } }));
     assert.throws(() => main(['hash', '--base', base, '--meta', '{', 'a.txt']));
+  });
+});
+
+describe('suggestIdentifier', () => {
+  const accepted = (value: string | null) => value !== null && pseudonymPattern.test(value);
+
+  it('derives a user-<name> identifier from the Git name, without accents', () => {
+    assert.deepEqual(suggestIdentifier('Ana  María Ñandú-Silva'), { suggestion: 'user-ana-maria-nandu-silva', source: 'git-name' });
+    assert.ok(accepted(suggestIdentifier('Fulano de Tal').suggestion));
+  });
+
+  it('falls back to the local part of the e-mail and never returns the address', () => {
+    const result = suggestIdentifier('', 'ana.silva+work@example.test');
+    assert.deepEqual(result, { suggestion: 'user-ana-silva', source: 'git-email' });
+    assert.ok(!JSON.stringify(result).includes('@') && !JSON.stringify(result).includes('example'));
+  });
+
+  it('caps the length and returns null when nothing usable is left', () => {
+    const long = suggestIdentifier('a'.repeat(80)).suggestion!;
+    assert.ok(long.length <= 'user-'.length + 32 && accepted(long));
+    assert.deepEqual(suggestIdentifier('!!!', '@example.test'), { suggestion: null, source: null });
+    assert.deepEqual(suggestIdentifier(), { suggestion: null, source: null });
+  });
+
+  it('prints through the CLI and rejects arguments', () => {
+    const result = JSON.parse(main(['identity']).output);
+    assert.ok('suggestion' in result && 'source' in result);
+    assert.throws(() => main(['identity', 'extra']), /Usage/);
   });
 });

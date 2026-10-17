@@ -2,6 +2,7 @@
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
  * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
+ * node knowledge.ts identity
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -11,13 +12,14 @@
  * parameter properties) and import siblings with the .ts extension.
  */
 import { isUtf8 } from 'node:buffer';
+import { spawnSync } from 'node:child_process';
 import { hash as digest } from 'node:crypto';
 import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>] | identity';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -494,6 +496,29 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
   throw new Error(`Invalid --only. ${usage}`);
 };
 
+const slug = (text: string) => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '');
+
+/**
+ * A suggestion for `chosen_by`, `approved_by` and `audit.auditors`, in the format `check` accepts (`user-<name>`): from the Git
+ * user name or, without one, from the local part of the Git e-mail (never the address itself). Only a suggestion: the person
+ * may use another identifier.
+ */
+export function suggestIdentifier(name?: string, email?: string): { suggestion: string | null; source: 'git-name' | 'git-email' | null } {
+  const fromName = slug(name ?? '');
+  if (fromName) return { suggestion: `user-${fromName}`, source: 'git-name' };
+  const fromEmail = slug((email ?? '').split('@')[0]!.split('+')[0]!);
+  if (fromEmail) return { suggestion: `user-${fromEmail}`, source: 'git-email' };
+  return { suggestion: null, source: null };
+}
+
+export function identity(): { suggestion: string | null; source: 'git-name' | 'git-email' | null } {
+  const config = (key: string) => {
+    const result = spawnSync('git', ['config', '--get', key], { encoding: 'utf8' });
+    return result.status === 0 ? result.stdout.trim() : undefined;
+  };
+  return suggestIdentifier(config('user.name'), config('user.email'));
+}
+
 export function main(argv: string[]): { output: string; code: number } {
   let parsed;
   try {
@@ -525,6 +550,10 @@ export function main(argv: string[]): { output: string; code: number } {
   if (command === 'issues') {
     if (!rest.length || Object.keys(values).length) throw new Error(usage);
     return { output: JSON.stringify(issues(rest)), code: 0 };
+  }
+  if (command === 'identity') {
+    if (rest.length || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(identity()), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);

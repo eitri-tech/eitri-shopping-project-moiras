@@ -13,8 +13,8 @@ A triagem já deixa o usuário corrigir a Átropos no fim do pipeline: escolher 
 
 ## Quem audita
 
-- Auditor é quem está conversando com a skill. A skill pede um pseudônimo não identificável escolhido pela pessoa (nunca nome real, e-mail ou identificador de conta) e o usa em `approved_by` dos critérios que gerar e na observação dos aprendizados que ajustar.
-- Se `audit.auditors` existir em `.moiras/sources.json`, o pseudônimo precisa estar na lista (que deve conter apenas esses pseudônimos); se não estiver, a skill avisa e só permite a leitura (sem ajustes). Sem a chave, qualquer pessoa pode auditar. É uma identificação, não uma autenticação: o plugin roda na máquina de quem o usa.
+- Auditor é quem está conversando com a skill. A skill pede um identificador escolhido pela pessoa (nunca o e-mail nem um identificador de conta), **sugerindo** o dela com `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" identity` (derivado do nome no Git; ela confirma ou informa outro), e o usa em `approved_by` dos critérios que gerar e na observação dos aprendizados que ajustar.
+- Se `audit.auditors` existir em `.moiras/sources.json`, o identificador precisa estar na lista (que deve conter apenas esses identificadores); se não estiver, a skill avisa e só permite a leitura (sem ajustes). Sem a chave, qualquer pessoa pode auditar. É uma identificação, não uma autenticação: o plugin roda na máquina de quem o usa.
 - A skill só altera o knowledge de escopo `local`. Um registro de knowledge compartilhado (`project`, `group`, `global`) nunca é alterado por aqui, e o que fazer com ele depende do tipo: critério é substituído por um critério local com `replaces`; aprendizado e glossário só são reportados (o aprendizado é ajustado por quem tem o registro no knowledge local ou no repositório compartilhado, e o glossário se resolve com `moiras-index`). Levar um ajuste local ao compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
 ## Escopo
@@ -55,7 +55,7 @@ A skill também compara cada critério com os aprendizados recentes: se uma solu
 id: <slug-curto>
 type: criterion
 created_at: 2026-10-06
-approved_by: <pseudônimo não identificável do auditor>
+approved_by: <identificador do auditor; sugestão: knowledge.ts identity>
 applies_to: category | origin | action | solutions
 replaces: []
 ---
