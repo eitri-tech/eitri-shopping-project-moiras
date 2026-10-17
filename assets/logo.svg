@@ -31,7 +31,7 @@
     <circle cx="220" cy="84" r="36" fill="#9C9AF5"/>
     <circle cx="378" cy="84" r="36" fill="#F0708A"/>
   </g>
-  <g font-family="'Cormorant Garamond', Georgia, 'Times New Roman', serif" font-weight="700" font-size="53" fill="#0F0D14" text-anchor="middle">
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="53" fill="#0F0D14" text-anchor="middle">
     <text x="62" y="102">Κ</text>
     <text x="220" y="102">Λ</text>
     <text x="378" y="102">Α</text>
