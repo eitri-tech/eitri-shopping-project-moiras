@@ -61,6 +61,7 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, jql: 3 } }), ['jira.jql:field-invalid:error']);
     assert.deepEqual(rules({ jira: { site, jql: 'project = PROJ order   by created' } }), ['jira.jql:jql-order-by:error']);
     assert.deepEqual(rules({ jira: { site, jql: 'a'.repeat(2001) } }), ['jira.jql:jql-too-long:error']);
+    assert.deepEqual(rules({ jira: { site, jql: 'summary ~ "order by date" AND labels = \'order by\'' } }), []);
   });
 
   it('accepts a configuration without Jira for the skills that do not triage', () => {

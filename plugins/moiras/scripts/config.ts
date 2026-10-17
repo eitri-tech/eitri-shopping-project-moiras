@@ -118,11 +118,11 @@ export function validate(config: unknown): Finding[] {
         });
       });
     }
-    // The fragment is read-only by nature (a search), but the Clotho owns the ORDER BY, so a second one would break the query.
+    // The fragment is read-only by nature (a search), but the Clotho owns the ORDER BY, so a second one would break the query (words inside quoted text do not count).
     if (jira.jql !== undefined) {
       if (!isText(jira.jql)) add('jira.jql', 'field-invalid');
       else if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
-      else if (/\border\s+by\b/i.test(jira.jql)) add('jira.jql', 'jql-order-by');
+      else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
     }
     if ([jira.epic, jira.epics, jira.categories, jira.jql].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');

@@ -9,7 +9,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 ```json
 {
   "input": {
-    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15, "agency": null, "change": "new", "warnings": [] },
+    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "epic": "PROJ-100", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15, "agency": null, "change": "new", "warnings": [] },
     "classification": "<saída da Láquesis para esta issue, com os avisos acumulados>",
     "precedents": [
       { "id": "PROJ-187-1", "solution": "", "result": "resolved | not-resolved | pending", "ref": "knowledge:local/learnings/solutions/PROJ-187-1.md" }

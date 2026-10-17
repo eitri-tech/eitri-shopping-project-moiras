@@ -1,5 +1,5 @@
 {
-  description = "Moiras: plugin de triagem de épicos do Jira para Claude Code";
+  description = "Moiras: plugin de triagem de issues do Jira para Claude Code";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
