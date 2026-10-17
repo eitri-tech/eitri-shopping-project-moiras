@@ -119,7 +119,7 @@ Onde mexer:
 | Orquestração, modos e leitura e escrita do knowledge | `plugins/moiras/skills/moiras-triage/SKILL.md` |
 | Configuração, aprendizado do histórico, auditoria, indexação, sincronização e publicação | `plugins/moiras/skills/moiras-{init,learn,audit,index,sync,publish}/SKILL.md` |
 | Memória das etapas | `plugins/moiras/scripts/memory.ts` |
-| Regras dos registros do knowledge (`hash`, `check`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
+| Regras dos registros do knowledge (`hash`, `check`, `issues`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
 | Criação e validação da configuração | `plugins/moiras/scripts/config.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |
 

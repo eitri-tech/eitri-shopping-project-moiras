@@ -36,10 +36,10 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 3. **Pular o que o knowledge já cobre.** Rode:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" issues <local-dir>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" issues <local-dir> <dir-do-knowledge-compartilhado>...
    ```
 
-   A saída tem `issues` (chave → ids de soluções e padrões que a citam) e `ids` (todos os ids em uso). Issue já citada vira `already-known` e não entra na proposta; os `ids` evitam colisão de identificador.
+   Passe o `dir` de **todos** os knowledges de `knowledge` (o local e os compartilhados que existam em disco). A saída tem `issues` (chave → ids de soluções e padrões que a citam, só de registros que passam no `check`) e `ids` (todo id e nome de arquivo em uso). Issue já citada vira `already-known` e não entra na proposta; os `ids` evitam colisão de identificador e de caminho, também com o que já existe nos compartilhados. Registro inválido não cobre a issue: rode `moiras-audit` para ele.
 4. **Classificar (Láquesis).** Para cada issue restante, identifique repositório e componente pelo glossário (`knowledge:<name>/glossary/<repo>.md`) e pela referência do PR; categoria e confiança seguem `stages/lachesis.md`, inclusive `criteria-missing` e o limite de `confidence` sem critérios. Repositório que não está no glossário fica sem repositório e a issue sai da proposta (`repository-unknown`), com a sugestão de rodar `moiras-index`: não invente.
 5. **Propor (Átropos, adaptada).** Agrupe por repositório e componente e monte a lista numerada:
    - **Solução** (`learnings/solutions/<KEY>-<n>.md`): uma por issue, com `result: resolved` **somente** com evidência de que a correção foi entregue (PR mergeado e ligado, ou comentário de fechamento que diga o que foi feito). Sem isso, a issue não vira solução.
@@ -60,7 +60,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 - Siga o modelo do tipo em `_templates/`. O corpo é uma **síntese curta em português**, escrita por você; nunca cole título, descrição, comentário ou mensagem da issue.
 - `Fontes` leva a chave da issue e o PR (`repositório#número`) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
-- `agency` do registro vem só do campo configurado. De issue de agência ficam a síntese técnica e a chave; nada da conversa com a agência nem de outros clientes.
+- `agency` do registro segue a seção 3 de `stages/lachesis.md`: o campo configurado (`jira.agency_field`) e, sem ele, o `agency` do glossário quando todos os repositórios concordam; ambíguo ou vazio fica `null`. De issue de agência ficam a síntese técnica e a chave; nada da conversa com a agência nem de outros clientes.
 - `confidence` reflete a evidência: PR mergeado e ligado, mais alta; só o comentário de fechamento, mais baixa. Sem critérios aplicáveis, vale o limite do fallback e o aviso `criteria-missing`.
 - Datas dos registros em `AAAA-MM-DD`.
 

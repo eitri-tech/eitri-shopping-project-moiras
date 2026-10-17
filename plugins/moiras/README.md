@@ -42,8 +42,8 @@ Quem escreve onde:
   Critérios mudam por regeneração com `replaces`; a remoção dos antigos locais
   fica limitada ao escopo aprovado.
 - Só `scripts/memory.ts` acrescenta registros à memória das etapas;
-  `scripts/knowledge.ts` apenas lê para calcular `hash`, validar com `check`
-  e comparar com `plan`: não grava knowledge.
+  `scripts/knowledge.ts` apenas lê para calcular `hash`, validar com `check`,
+  listar as issues já citadas com `issues` e comparar com `plan`: não grava knowledge.
 - A triagem persiste saídas completas e pendências; no `--auto`, também o relatório.
   Auditoria, publish e sync automático salvam seus relatórios em `runs.dir`
   (padrão `.moiras/runs/`). Veja também [Memória](#memória).

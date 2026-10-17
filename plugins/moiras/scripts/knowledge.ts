@@ -1,7 +1,7 @@
 /* Usage:
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
- * node knowledge.ts issues .moiras/knowledge
+ * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -17,7 +17,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir> | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -199,21 +199,30 @@ export function records(dir: string, only?: Scope): Entry[] {
     });
 }
 
-export function issues(dir: string): { issues: Record<string, { solutions: string[]; patterns: string[] }>; ids: string[] } {
+/**
+ * Issue keys that `learnings/` already cite (only from records that pass `check`) and every id or file
+ * name in use, over one or more knowledges. A caller uses it to skip known issues and avoid collisions.
+ */
+export function issues(dirs: string | string[]): { issues: Record<string, { solutions: string[]; patterns: string[] }>; ids: string[] } {
   const ids = new Set<string>();
   const mentions = new Map<string, { solutions: Set<string>; patterns: Set<string> }>();
-  for (const entry of records(dir, 'learnings').filter(entry => !entry.issue)) {
-    if (!entry.doc) continue;
-    const fields = entry.doc.fields;
-    const id = typeof fields.id === 'string' && fields.id ? fields.id : entry.path.split('/').at(-1)!.slice(0, -3);
-    ids.add(id);
-    const keys = entry.kind.type === 'solution' && typeof fields.issue === 'string'
-      ? [fields.issue]
-      : entry.kind.type === 'pattern' && Array.isArray(fields.issues) ? fields.issues : [];
-    for (const key of keys.filter(Boolean)) {
-      const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
-      group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
-      mentions.set(key, group);
+  for (const dir of [dirs].flat()) {
+    const invalid = new Set(check(dir, 'learnings').findings.filter(finding => finding.severity === 'error').map(finding => finding.path));
+    for (const entry of records(dir, 'learnings')) {
+      const stem = entry.path.slice(entry.path.lastIndexOf('/') + 1, -'.md'.length);
+      ids.add(stem);
+      const fields = entry.doc?.fields;
+      if (!fields || entry.issue) continue;
+      if (typeof fields.id === 'string' && fields.id) ids.add(fields.id);
+      if (invalid.has(entry.path)) continue;
+      const id = stem;
+      const raw = entry.kind.type === 'solution' ? fields.issue : entry.kind.type === 'pattern' ? fields.issues : undefined;
+      const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
+      for (const key of keys) {
+        const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
+        group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
+        mentions.set(key, group);
+      }
     }
   }
   return {
@@ -511,8 +520,8 @@ export function main(argv: string[]): { output: string; code: number } {
     return { output: JSON.stringify(result), code: result.findings.some(f => f.severity === 'error') ? 1 : 0 };
   }
   if (command === 'issues') {
-    if (rest.length !== 1 || Object.keys(values).length) throw new Error(usage);
-    return { output: JSON.stringify(issues(rest[0]!)), code: 0 };
+    if (!rest.length || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(issues(rest)), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);
