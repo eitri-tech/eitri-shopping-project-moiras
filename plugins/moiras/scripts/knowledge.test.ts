@@ -783,6 +783,42 @@ describe('provenance', () => {
     assert.equal(typeof main(['hash', '--base', join(dir, 'plain'), 'config.json']).output, 'string');
   });
 
+  it('leaves ignored descendants out of a folder hash', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, '.gitignore'), '*.private.json\nsecrets/\n');
+    mkdirSync(join(cwd, 'src'));
+    writeFileSync(join(cwd, 'src', 'index.ts'), 'x');
+    const hashOf = () => main(['hash', '--base', cwd, 'src']).output;
+    const before = hashOf();
+    writeFileSync(join(cwd, 'src', 'a.private.json'), '{}');
+    mkdirSync(join(cwd, 'src', 'secrets'));
+    writeFileSync(join(cwd, 'src', 'secrets', 'k.txt'), 'k');
+    assert.equal(hashOf(), before);
+    writeFileSync(join(cwd, 'src', 'other.ts'), 'y');
+    assert.notEqual(hashOf(), before);
+  });
+
+  it('counts a staged submodule update as dirty without entering the submodule', t => {
+    const { dir, write } = workspace(t);
+    write('sub', 'a.txt', 'one');
+    const sub = join(dir, 'sub');
+    run(sub, 'init', '-q', '-b', 'main');
+    run(sub, 'add', '.');
+    run(sub, 'commit', '-q', '-m', 'sub');
+    write('sup', 'README.md', 'acme');
+    const sup = join(dir, 'sup');
+    run(sup, 'init', '-q', '-b', 'main');
+    run(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'libs/sub');
+    run(sup, 'add', '.');
+    run(sup, 'commit', '-q', '-m', 'sup');
+    assert.equal(provenance(sup).indexed_dirty, false);
+    const inner = join(sup, 'libs', 'sub');
+    writeFileSync(join(inner, 'a.txt'), 'two');
+    run(inner, 'commit', '-q', '-am', 'advance');
+    run(sup, 'add', 'libs/sub');
+    assert.equal(provenance(sup).indexed_dirty, true);
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');

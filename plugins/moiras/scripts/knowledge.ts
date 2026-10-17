@@ -486,7 +486,7 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)!;
 }
 
-export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
+export function sourcesHash(base: string, paths: string[], meta?: unknown, ignored?: (relativePath: string) => boolean): string {
   const entries: string[] = [];
   const visited = new Set<string>();
   const walk = (path: string, explicit: boolean) => {
@@ -494,6 +494,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
     const full = resolve(base, path);
+    if (ignored && (!explicit || lstatSync(full).isDirectory()) && ignored(relative(base, full).split(sep).join('/'))) return;
     if (lstatSync(full).isDirectory()) {
       const real = realpathSync(full);
       if (visited.has(real)) return;
@@ -533,6 +534,17 @@ export function ignoredSources(base: string, paths: string[]): string[] {
     try { if (!lstatSync(resolve(base, path)).isFile()) return false; } catch { return false; }
     return spawnSync('git', ['-C', base, 'check-ignore', '-q', '--', path], { env }).status === 0;
   });
+}
+
+/**
+ * Whether a path inside `base` is ignored by Git and untracked: the untracked-and-ignored listing is read once (folders collapsed to
+ * `dir/`), so folder hashes can leave out ignored descendants. `undefined` outside a Git work tree.
+ */
+export function ignoredMatcher(base: string): ((relativePath: string) => boolean) | undefined {
+  const listed = spawnSync('git', ['-C', base, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { encoding: 'utf8', env: gitEnv(), maxBuffer: 64 * 1024 * 1024 });
+  if (listed.status !== 0) return undefined;
+  const entries = listed.stdout.split('\0').filter(Boolean);
+  return path => entries.some(entry => (entry.endsWith('/') ? path === entry.slice(0, -1) || path.startsWith(entry) : path === entry));
 }
 
 export interface Provenance {
@@ -588,6 +600,13 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;
   // Any other failure (a corrupt index, say): without the dirty state the commit does not say what was read, so no provenance at all.
   else return { git: false, reason: 'status-unreadable' };
+  // `--ignore-submodules=all` also hides a staged gitlink update (`git add libs/sub`); index against HEAD compares object ids only,
+  // so it counts that without entering the submodule or reading any content.
+  if (result.indexed_dirty === false) {
+    const staged = run('diff-index', '--cached', '--ignore-submodules=none', '--name-only', 'HEAD');
+    if (staged.status !== 0) return { git: false, reason: 'index-unreadable' };
+    if (staged.stdout.trim() !== '') result.indexed_dirty = true;
+  }
   // `assume-unchanged` and `skip-worktree` entries hide edits from `git status`. `ls-files -v` marks them (lowercase tag, or `S`)
   // without comparing content, so no filter runs. A skip-worktree file that is not on disk (sparse checkout) is not read by the indexer.
   if (result.indexed_dirty === false) {
@@ -624,7 +643,7 @@ export function main(argv: string[]): { output: string; code: number } {
     if (values.base === undefined || !rest.length) throw new Error(usage);
     const ignored = ignoredSources(values.base, rest);
     if (ignored.length) throw new Error(`Git-ignored files cannot be sources: ${ignored.join(', ')}`);
-    return { output: sourcesHash(values.base, rest, values.meta === undefined ? undefined : JSON.parse(values.meta)), code: 0 };
+    return { output: sourcesHash(values.base, rest, values.meta === undefined ? undefined : JSON.parse(values.meta), ignoredMatcher(values.base)), code: 0 };
   }
   if (command === 'check') {
     if (rest.length !== 1) throw new Error(usage);
