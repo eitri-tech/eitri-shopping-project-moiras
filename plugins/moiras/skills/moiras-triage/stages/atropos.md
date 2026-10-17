@@ -97,7 +97,7 @@ Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo
 
 Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
 
-No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`), recuperando as soluções completas pelo relatório da execução (seção 6).
+No modo interativo, termine perguntando qual solução foi escolhida em cada issue (ex.: `PROJ-123: 2`), aceitando `none`. Inclua também as escolhas pendentes de execuções automáticas anteriores (registros da memória com `choice: null`), recuperando as soluções completas pelo relatório da execução (seção 6). Antes de gravar o aprendizado (e também ao aprovar um critério), confirme com a pessoa o identificador de `chosen_by` ou `approved_by`, sugerindo o dela com `knowledge.ts identity` (ver "Regras de escrita" em `SKILL.md`).
 
 No modo automático, não pergunte: salve o relatório em arquivo (ver `SKILL.md`) e liste as issues que aguardam escolha e as que são geridas por agência.
 

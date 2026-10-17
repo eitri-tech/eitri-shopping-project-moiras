@@ -644,6 +644,13 @@ describe('suggestIdentifier', () => {
     assert.deepEqual(suggestIdentifier(), { suggestion: null, source: null });
   });
 
+  it('is accepted by check as chosen_by and approved_by, and is not personal data', t => {
+    const { local, write } = workspace(t);
+    write('local', 'criteria/regra-a.md', criterion('regra-a').replace(/approved_by: .*/, 'approved_by: user-ana-maria-nandu-silva'));
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace(/chosen_by: .*/, 'chosen_by: user-ana-maria-nandu-silva'));
+    assert.deepEqual(check(local).findings, []);
+  });
+
   it('prints through the CLI and rejects arguments', () => {
     const result = JSON.parse(main(['identity']).output);
     assert.ok('suggestion' in result && 'source' in result);

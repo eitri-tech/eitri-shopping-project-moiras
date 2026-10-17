@@ -32,5 +32,5 @@ Cria o `.moiras/sources.json` que as outras skills leem. O usuário pode (e deve
 
 - Só cria `<base>/.moiras/sources.json` e `<base>/.moiras/.gitignore`, e só pelo `scripts/config.ts`. Não toca no Jira, no Slack, nos repositórios nem no `.gitignore` do projeto.
 - Nada de segredo: sem tokens, senhas nem usuário em URL. O script recusa o que parece segredo ou credencial e a skill não repete o valor ao relatar.
-- Os IDs e nomes ficam só em `.moiras/`, fora do git. A skill nunca os copia para outro lugar.
+- Os IDs e nomes do `sources.json` ficam só em `.moiras/`, fora do git, e a skill nunca os copia para outro lugar. Os identificadores de `chosen_by` e `approved_by`, usados depois, aparecem no knowledge (privado) e nos relatórios locais.
 - Os conectores são usados só para leitura.
