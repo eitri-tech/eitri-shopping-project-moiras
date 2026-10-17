@@ -526,6 +526,26 @@ describe('sourcesHash', () => {
     assert.notEqual(sourcesHash(base, ['src']), all, 'a binary .gitignore excludes nothing');
   });
 
+  it('evaluates anchored rules of a nested .gitignore and skips folders under an ignored ancestor', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/.gitignore', '/ignored.txt\n');
+    write('repo', 'src/keep.ts', 'x');
+    write('repo', 'src/deep/.gitignore', '/local.txt\n');
+    write('repo', 'src/deep/a.ts', 'x');
+    const before = sourcesHash(base, ['.']);
+    write('repo', 'src/ignored.txt', 'x');
+    write('repo', 'src/deep/local.txt', 'x');
+    assert.equal(sourcesHash(base, ['.']), before, 'the first .gitignore found below the base anchors to its own folder');
+    write('repo', 'src/other/ignored.txt', 'x');
+    assert.notEqual(sourcesHash(base, ['.']), before, 'an anchored rule does not reach deeper folders');
+
+    write('repo', '.gitignore', 'foo/\n');
+    write('repo', 'foo/bar/x.ts', 'x');
+    assert.equal(sourcesHash(base, ['foo/bar']), sourcesHash(base, ['missing']), 'a folder under an ignored ancestor is skipped');
+    assert.notEqual(sourcesHash(base, ['foo/bar/x.ts']), sourcesHash(base, ['missing']), 'a file named on its own is still read');
+  });
+
   it('reads .gitignore files from the base down and never above it', t => {
     const { dir, write } = workspace(t);
     write('', '.gitignore', 'a.txt\n');

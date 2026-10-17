@@ -487,7 +487,9 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
     if (!layerCache.has(dir)) layerCache.set(dir, ignoreLayer(base, dir));
     return layerCache.get(dir);
   };
-  const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], parts: Buffer[]) => {
+  const toParts = (relDir: string) => (relDir === '' ? [] : relDir.split('/').map(name => Buffer.from(name, 'utf8')));
+  // `rel` is the folder relative to the base, `/`-separated; `parts` is the same as bytes, only built once a .gitignore applies.
+  const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], rel: string, parts: Buffer[] | undefined) => {
     const issue = pathIssue(base, path);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
@@ -498,17 +500,19 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       visited.add(real);
       let layers = inherited;
       let here = parts;
+      let relDir = rel;
       if (explicit) {
-        // A path named on its own still obeys the .gitignore of the folders between it and the base (never above the base).
+        // A path named on its own still obeys the .gitignore of the folders between it and the base (never above the base), and
+        // is skipped when one of those folders, or itself, is excluded. A file named on its own is always read.
         const names = relative(resolve(base), full).split(sep).filter(Boolean);
-        here = names.map(name => Buffer.from(name, 'utf8'));
+        relDir = names.join('/');
+        here = toParts(relDir);
         layers = [];
         for (let depth = 0; depth < names.length; depth += 1) {
           const above = cachedLayer(names.slice(0, depth).join(sep));
           if (above) layers.push(above);
+          if (isIgnoredParts(layers, here.slice(0, depth + 1), true)) return;
         }
-        // A directory named on its own is skipped when a .gitignore above it excludes it; a file named on its own is always read.
-        if (names.length && isIgnoredParts(layers, here, true)) return;
       }
       const children = readdirSync(full, { withFileTypes: true });
       // Only a folder that holds a .gitignore pays for reading one.
@@ -516,10 +520,15 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
         const own = cachedLayer(relative(resolve(base), full));
         if (own) layers = [...layers, own];
       }
+      if (layers.length) here ??= toParts(relDir);
       for (const child of children.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-        const childParts = layers.length ? [...here, Buffer.from(child.name, 'utf8')] : here;
-        if (layers.length && isIgnoredParts(layers, childParts, child.isDirectory())) continue;
-        walk(join(path, child.name), false, layers, childParts);
+        const childRel = relDir === '' ? child.name : `${relDir}/${child.name}`;
+        let childParts: Buffer[] | undefined;
+        if (layers.length) {
+          childParts = [...here!, Buffer.from(child.name, 'utf8')];
+          if (isIgnoredParts(layers, childParts, child.isDirectory())) continue;
+        }
+        walk(join(path, child.name), false, layers, childRel, childParts);
       }
     } else {
       const { issue } = readSafe(full);
@@ -527,7 +536,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
     }
   };
-  for (const path of paths) walk(path, true, [], []);
+  for (const path of paths) walk(path, true, [], '', undefined);
   if (meta !== undefined) entries.push(`meta:${canonical(meta)}`);
   return hash([...new Set(entries)].sort().join('\n'));
 }
