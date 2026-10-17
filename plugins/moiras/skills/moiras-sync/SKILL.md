@@ -42,7 +42,7 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <dir>
    ```
 
-   Registro fora das regras (segredo, caminho pessoal, código acima de 20 linhas, sem `indexed_at`/`created_at`) é apontado, não corrigido: o clone é um espelho. Quem corrige é o `moiras-audit` num PR, ou o repositório de origem.
+   Registro fora das regras (segredo, caminho pessoal, código acima de 20 linhas, sem `indexed_at`/`created_at`) é apontado, não corrigido: o clone é um espelho. Quem corrige é quem mantém o repositório de origem (por PR); o `moiras-audit` só ajusta o knowledge local.
 8. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
 
    ```bash

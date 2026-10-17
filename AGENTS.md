@@ -44,9 +44,9 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Agência é opcional (`jira.agency_field` ou `agency` no glossário). Para issue com agência, a Átropos só oferece um rascunho de repasse, que o usuário envia: nada vai à agência (Jira, Slack ou outro canal) pelo plugin, e o rascunho não leva conversas internas nem dados de outros clientes.
 - Auditoria (`moiras-audit`) é só interativa e só altera o knowledge local, com o "sim" de quem audita à lista exata de ajustes: mesmas regras da escrita da triagem (aprendizado só muda `result` e a observação; critério só por regeneração com `replaces`; glossário nunca é editado). O relatório da auditoria não repete conteúdo sensível.
 - Dois modos: interativo (padrão) e `--auto` (cron, sem perguntas, só o que mudou, relatório em `.moiras/runs/`).
-- Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (apenas hash). Ela é local e nunca vai para um knowledge.
+- Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (hash e metadados derivados da etapa, como ação, categoria e confiança). Ela é local e nunca vai para um knowledge.
 - Fora a memória e os relatórios, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` e `criteria/` pelas Moiras e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
-- O knowledge nunca tem cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
+- O knowledge nunca tem cópia de código: no máximo um trecho por registro, de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
 - O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time. Sem critérios aplicáveis, os padrões do plugin são apenas fallback, sempre sinalizado com `criteria-missing`; não são regras do time.
 - Nunca commite tokens nem URLs com segredo (no `.mcp.json` inclusive).
