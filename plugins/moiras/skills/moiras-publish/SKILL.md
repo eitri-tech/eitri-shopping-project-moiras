@@ -38,7 +38,7 @@ Ela copia do knowledge `local` (`<local-dir>`) para um clone do destino, num bra
 | `conflict` | a mesma `id` com conteúdo diferente em aprendizado (só acréscimo) ou critério (só muda por regeneração); ou solução cuja cópia local está velha (o destino já tem um resultado final diferente do local, ou a observação do destino não foi mantida); ou glossário reindexado no mesmo dia (`indexed_at` igual e conteúdo diferente) | **não publica**; explica ao usuário e sugere um critério novo com `replaces`, ou um `id` novo |
 | `remove` | critério do destino que um critério novo do local substitui (`replaces`) | oferece a remoção **no mesmo PR**, junto com o critério novo |
 
-`replaces` aceita um ID simples ou `knowledge:<name>/<path>`. Resolva a referência no knowledge indicado; só ofereça remoção de critério do destino escolhido, nunca de outro knowledge.
+`replaces` é uma lista (`replaces: [id]`); cada item é um ID simples ou `knowledge:<name>/<path>`. Um texto simples fora de lista não é lido. Resolva a referência no knowledge indicado; só ofereça remoção de critério do destino escolhido, nunca de outro knowledge.
 
 A skill nunca reescreve um aprendizado do destino além de `result` e da observação, e nunca edita um critério do destino: o critério muda por regeneração. Trocar um resultado final já publicado, ou escolher entre dois glossários do mesmo dia, é decisão de quem revisa o repositório compartilhado, num PR feito à mão: a skill só aponta o conflito.
 

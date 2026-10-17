@@ -177,9 +177,9 @@ cd "$(mktemp -d)"
 S=/caminho/do/repo/plugins/moiras/scripts/memory.ts
 
 echo '{"b":2,"a":1}' | node $S hash                                     # hash canônico (ordem das chaves não importa)
-echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "new"
-echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "unchanged"
-echo '{"key":"jira:PROJ-1","content":{"a":2}}' | node $S record clotho      # "changed"
+echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # [{"key":"jira:PROJ-1","hash":"sha256:…","change":"new"}]
+echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # o mesmo, com "change":"unchanged"
+echo '{"key":"jira:PROJ-1","content":{"a":2}}' | node $S record clotho      # o mesmo, com "change":"changed"
 node $S query clotho                                                    # último registro de cada chave
 cat .moiras/memory/clotho.jsonl                                         # hash e metadados da etapa, nunca o texto bruto
 ```

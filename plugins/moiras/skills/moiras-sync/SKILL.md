@@ -43,7 +43,7 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
    ```
 
    Registro fora das regras (segredo, caminho pessoal, código acima de 20 linhas, sem `indexed_at`/`created_at`) é apontado, não corrigido: o clone é um espelho. Quem corrige é quem mantém o repositório de origem (por PR); o `moiras-audit` só ajusta o knowledge local.
-8. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros que já estão no compartilhado (`skip`/`unchanged`) foram publicados e mergeados:
+8. **Procurar duplicados com o knowledge local.** Rode `plan` com o local e o clone; registros iguais no compartilhado (`skip` com motivo `unchanged`) foram publicados e mergeados; `skip` com motivo `shared-is-newer` é um glossário local diferente e mais antigo, e não prova publicação:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir> --shared-name <name>

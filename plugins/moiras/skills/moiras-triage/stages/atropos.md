@@ -1,6 +1,6 @@
 # Átropos — veredito e soluções
 
-Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e sugere **de 3 a 5 soluções**, cada uma com a porcentagem de confiança de que resolve o problema. Depois, guarda no aprendizado a solução que o usuário escolher, para reaproveitar nas próximas triagens.
+Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e sugere, **normalmente, de 3 a 5 soluções**, cada uma com a porcentagem de confiança de que resolve o problema. Depois, guarda no aprendizado a solução que o usuário escolher, para reaproveitar nas próximas triagens.
 
 **Recomenda, não executa.** Esta etapa só escreve no knowledge local (aprendizado e critérios), e só depois da escolha ou do "sim" do usuário.
 
@@ -9,7 +9,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 ```json
 {
   "input": {
-    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15 },
+    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15, "agency": null, "change": "new", "warnings": [] },
     "classification": "<saída da Láquesis para esta issue, com os avisos acumulados>",
     "precedents": [
       { "id": "PROJ-187-1", "solution": "", "result": "resolved | not-resolved | pending", "ref": "knowledge:local/learnings/solutions/PROJ-187-1.md" }
@@ -79,7 +79,7 @@ Critérios do time em `criteria/` podem refinar esta tabela; quando um critério
 - Pelo menos 3 soluções, em ordem decrescente de confiança. Quando a Láquesis marcar `complex: true`, dê até 5. Um critério do time pode mudar o máximo ou a regra de complexidade.
 - `duplicate` e `close` podem vir sem soluções. Em `needs-info`, as primeiras soluções são o que investigar ou perguntar.
 - As soluções precisam ser diferentes de verdade: não repita a mesma ideia com outra redação. Se não houver 3 ideias distintas com alguma fonte, dê as que houver e diga na justificativa por que faltam.
-- `confidence` é a porcentagem (0 a 100) de chance de a solução resolver o problema, não a qualidade dela. As soluções não são excludentes, então as porcentagens não precisam somar 100.
+- `confidence` é a porcentagem (inteiro de 0 a 100; decimal como `70.5` o `check` recusa) de chance de a solução resolver o problema, não a qualidade dela. As soluções não são excludentes, então as porcentagens não precisam somar 100.
 
 Como calibrar:
 
