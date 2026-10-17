@@ -61,7 +61,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 
 ## Modelo de reserva
 
-Use o `_templates/glossary.md` do knowledge quando existir; senão, este modelo, com os mesmos campos e corpo. Os valores são fictícios: troque todos pelos dados reais, e o `sources_hash` pelo hash do passo 4 (o `check` recusa outro formato). `platform` é um só valor entre `vtex`, `wake`, `shopify` e `other`; `agency` fica vazio sem agência.
+Use o `_templates/glossary.md` do knowledge quando existir; senão, este modelo, com os mesmos campos e corpo. Os valores são fictícios: troque todos pelos dados reais, e o `sources_hash` pelo hash do passo 4 (o `check` recusa outro formato). `platform` é um só valor entre `vtex`, `wake`, `shopify` e `other`, ou fica vazio quando não dá para confirmar (nunca invente `other`); `agency` fica vazio sem agência.
 
 ```markdown
 ---
