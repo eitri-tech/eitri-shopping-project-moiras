@@ -860,6 +860,25 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
   });
 
+  it('gives no provenance, and runs no filter, when the filter listing overflows its buffer', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'filter-ran');
+    const script = join(cwd, '..', 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    writeFileSync(join(cwd, '.gitattributes'), '*.txt filter=zprobe\n');
+    for (let i = 0; i < 40; i++) run(cwd, 'config', `filter.a${String(i).padStart(2, '0')}.clean`, 'cat');
+    run(cwd, 'config', 'filter.zprobe.clean', script);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'with filter');
+    rmSync(marker, { force: true });
+    writeFileSync(join(cwd, 'a.txt'), 'two');
+    assert.deepEqual(provenance(cwd, 256), { git: false, reason: 'filters-unreadable' });
+    assert.equal(existsSync(marker), false);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    assert.equal(provenance(cwd).git, true);
+  });
+
   it('does not enter submodules, so their filters never run', t => {
     const { dir, write } = workspace(t);
     write('sub', 'a.txt', 'one');

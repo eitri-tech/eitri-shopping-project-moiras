@@ -602,6 +602,10 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   // that keeps both would read as clean; the defaults also compare ctime, which an edit cannot keep.
   const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.checkStat=default', '-c', 'core.trustctime=true', '-c', 'core.ignoreStat=false'];
   const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
+  // Exit 1 is "no filter configured". A listing that was cut short (buffer overflow, which still reports exit 0, or a killed process) is
+  // only part of the filters: going on would let `git status` run the ones that are missing, so the answer is no provenance. A missing
+  // Git binary falls through to `{ git: false }`.
+  if ((listed.error || listed.status === null) && (listed.error as NodeJS.ErrnoException | undefined)?.code !== 'ENOENT') return { git: false, reason: 'filters-unreadable' };
   const filters = listed.status === 0 ? listed.stdout.split('\n').filter(Boolean).flatMap(key => ['-c', `${key}=`]) : [];
   const run = (...args: string[]) => spawnSync('git', [...base, ...filters, ...args], { encoding: 'utf8', env, maxBuffer });
   const git = (...args: string[]) => {
