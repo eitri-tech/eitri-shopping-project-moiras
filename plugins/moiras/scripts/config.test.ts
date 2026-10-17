@@ -34,6 +34,8 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: 3 }), ['jira:not-an-object:error']);
     assert.deepEqual(rules({ jira: { site: 'https://example.atlassian.net/x', epic: 'proj-1' } }), ['jira.site:site-invalid:error', 'jira.epic:epic-invalid:error']);
     assert.deepEqual(rules({ jira: { site: 'example.atlassian.net' } }), ['jira:scope-missing:warning']);
+    // The free-form query is gone: a leftover `jql` counts for nothing.
+    assert.deepEqual(rules({ jira: { site: 'example.atlassian.net', jql: 'project = PROJ' } }), ['jira:scope-missing:warning']);
   });
 
   it('accepts several epics and categories as the scope', () => {

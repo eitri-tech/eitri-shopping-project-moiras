@@ -14,7 +14,7 @@ Argumentos: `$ARGUMENTS`
 | Modo | Como | Comportamento |
 |---|---|---|
 | Interativo (padrão) | o usuário chama a skill na conversa | pode perguntar o que faltar; no fim, pede a escolha das soluções e registra o aprendizado |
-| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem escopo (épico, categoria ou consulta), encerra com erro no relatório; processa issues novas, alteradas ou sem conclusão comprovada para a entrada e o knowledge atuais; não registra aprendizado; aplica só as interações de baixo impacto autorizadas na configuração (reações) e lista as demais; salva o relatório em arquivo |
+| Automático | `--auto` (ex.: cron com `claude -p`) | nunca pergunta; sem escopo (épico ou categoria), encerra com erro no relatório; processa issues novas, alteradas ou sem conclusão comprovada para a entrada e o knowledge atuais; não registra aprendizado; aplica só as interações de baixo impacto autorizadas na configuração (reações) e lista as demais; salva o relatório em arquivo |
 
 `--full` reprocessa todas as issues, mesmo as que não mudaram.
 

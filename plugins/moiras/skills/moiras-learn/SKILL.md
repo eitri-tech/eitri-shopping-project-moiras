@@ -1,6 +1,6 @@
 ---
 name: moiras-learn
-description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e categorias, ou uma consulta) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
+description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e/ou categorias) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
 argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N]"
 allowed-tools: Bash(node:*)
 ---
