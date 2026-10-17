@@ -111,6 +111,11 @@ describe('record', () => {
       assert.throws(() => record('atropos', { ...base, solutions: [] , choice }, { dir }), /Invalid metadata: choice/);
       assert.throws(() => record('atropos', { key: 'C', content: '', choice }, { dir }), /Invalid metadata: choice/);
     }
+    const three = { ...base, solutions: [{ title: 'A', confidence: 60 }, { title: 'B', confidence: 30 }, { title: 'C', confidence: 10 }] };
+    for (const choice of [1.5, 2.25, Number.NaN]) {
+      assert.throws(() => record('atropos', { ...three, choice }, { dir }), /Invalid metadata: choice/);
+    }
+    assert.doesNotThrow(() => record('atropos', { ...three, choice: 3 }, { dir }));
     assert.doesNotThrow(() => record('atropos', { ...base, choice: 1, id: 'PROJ-123-1' }, { dir }));
     assert.throws(() => record('atropos', { ...base, choice: 'none', id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
     assert.throws(() => record('atropos', { ...base, choice: null, id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);

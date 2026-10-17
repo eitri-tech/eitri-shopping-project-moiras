@@ -165,7 +165,7 @@ export function record(
       }
       if (Object.hasOwn(entry, 'choice') && typeof entry.choice === 'number') {
         const solutions = Array.isArray(entry.solutions) ? entry.solutions : [];
-        if (solutions.length === 0 || (entry.choice as number) < 1 || (entry.choice as number) > solutions.length) {
+        if (solutions.length === 0 || !Number.isInteger(entry.choice) || (entry.choice as number) < 1 || (entry.choice as number) > solutions.length) {
           throw new Error('Invalid metadata: choice');
         }
       }
