@@ -88,7 +88,8 @@ const doneStates = new Set(['done', 'concluído', 'concluido', 'concluída', 'co
  * Filters of a `jira.jql` that cannot coexist with what the Clotho appends (`assignee IS EMPTY AND statusCategory != Done`).
  * Conservative on purpose: only a plain chain of `AND` clauses is read. `OR`, `NOT`, grouping parentheses, `&`/`|`, an open quote or
  * anything it does not recognise leave the query alone, because a wrong warning is worse than a missing one. Jira leaves out issues
- * with no value for `=`, `!=`, `IN` and `NOT IN`, so those on the assignee can never meet `assignee IS EMPTY`.
+ * with no value for `=`, `!=`, `IN` and `NOT IN`, so those on the assignee can never meet `assignee IS EMPTY`. Only `statusCategory` is read
+ * for the state: a status name says nothing about its category (an admin can file a status called `Done` under To Do).
  */
 export function jqlContradictions(jql: string): { assignee: boolean; state: boolean } {
   const none = { assignee: false, state: false };
@@ -120,7 +121,7 @@ export function jqlContradictions(jql: string): { assignee: boolean; state: bool
   const result = { ...none };
   for (const [field, ...rest] of clauses) {
     const target = field !== undefined && (field.kind === 'word' || field.kind === 'text') ? field.value.toLowerCase() : undefined;
-    if (target !== 'assignee' && target !== 'status' && target !== 'statuscategory') continue;
+    if (target !== 'assignee' && target !== 'statuscategory') continue;
     const first = rest[0];
     let negated = word(first) === 'not';
     const inList = word(rest[negated ? 1 : 0]) === 'in';

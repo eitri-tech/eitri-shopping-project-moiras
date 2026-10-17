@@ -72,10 +72,9 @@ describe('validate', () => {
   it('warns when the JQL contradicts the filters the Clotho adds, but not for compatible or undecidable ones', () => {
     const site = 'example.atlassian.net';
     for (const [jql, rule] of [
-      ['project = PROJ AND status = Done', 'jql-state-contradicts'],
+      ['project = PROJ AND statusCategory = Done', 'jql-state-contradicts'],
       ['project = PROJ and statuscategory="Done"', 'jql-state-contradicts'],
-      ['project = PROJ AND status = "Concluído"', 'jql-state-contradicts'],
-      ['project = PROJ AND status IN (Done, "Concluído")', 'jql-state-contradicts'],
+      ['project = PROJ AND statusCategory IN (Done)', 'jql-state-contradicts'],
       ['project = PROJ AND assignee = Fulano', 'jql-assignee-contradicts'],
       ['project = PROJ AND assignee = currentUser()', 'jql-assignee-contradicts'],
       ['project = PROJ AND assignee != Fulano', 'jql-assignee-contradicts'],
@@ -91,6 +90,12 @@ describe('validate', () => {
       'project = PROJ AND status != Done AND statusCategory != Done',
       'project = PROJ AND status IN ("Done", "To Do")',
       'project = PROJ AND status = "Aprovado"',
+      // A status name does not prove its category: an admin can file a status called Done under To Do.
+      'project = PROJ AND status = Done',
+      'project = PROJ AND status = "Concluído"',
+      'project = PROJ AND status IN (Done, "Concluído")',
+      // `Undefined` (No Category) is a category too, so excluding the other two does not leave only Done.
+      'project = PROJ AND statusCategory NOT IN ("To Do", "In Progress")',
       'project = PROJ AND resolution != EMPTY',
       'project = PROJ AND resolution = EMPTY',
       'project = PROJ AND assignee IS EMPTY',
@@ -99,7 +104,7 @@ describe('validate', () => {
       'project = PROJ AND labels = "Done" AND summary ~ "status report about Done"',
       'project = PROJ AND "Story Points" = "Done asks"',
       'project = PROJ AND summary ~ "assignee=Fulano"',
-      "project = PROJ AND summary ~ 'status = Done'",
+      "project = PROJ AND summary ~ 'statusCategory = Done'",
       // A condition that sits in an OR, a NOT or a group is not a plain filter: no warning rather than a wrong one.
       'project = PROJ AND (status = Done OR statusCategory != Done)',
       'project = PROJ AND NOT (statusCategory = Done)',
