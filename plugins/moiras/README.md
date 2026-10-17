@@ -20,6 +20,7 @@ Os contratos e as regras estão nos [stages da triagem](skills/moiras-triage/sta
 
 Quando usar cada skill:
 
+- [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
 - [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
@@ -28,6 +29,7 @@ Quando usar cada skill:
 
 Quem escreve onde:
 
+- `moiras-init` é a única que cria o `.moiras/sources.json` (e o `.moiras/.gitignore`), pelo `scripts/config.ts`, só após o "sim" ao arquivo inteiro e sem sobrescrever.
 - `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
   grava só após o "sim" à lista exata e não apaga registros.
 - `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`
@@ -92,6 +94,7 @@ Limites de segurança:
 moiras/
 ├── .claude-plugin/plugin.json      # manifesto
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
+├── scripts/config.ts               # cria e valida o .moiras/sources.json
 ├── scripts/knowledge.ts            # hash das fontes, checagem e plano de publicação do knowledge
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
@@ -101,6 +104,8 @@ moiras/
     │       ├── clotho.md           # coleta
     │       ├── lachesis.md         # classificação
     │       └── atropos.md          # veredito
+    ├── moiras-init/
+    │   └── SKILL.md                # cria o .moiras/sources.json conversando
     ├── moiras-index/
     │   └── SKILL.md                # glossário derivado do código
     ├── moiras-sync/
@@ -131,7 +136,7 @@ Para revisar o knowledge fora de uma triagem, use a skill `moiras-audit`: ela ap
 
 ## Configuração
 
-Copie `config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar a triagem e preencha:
+Rode `/moiras:moiras-init` no projeto onde vai rodar a triagem: ela pergunta o que falta, mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim" (e nunca sobrescreve um existente). Para validar um arquivo editado à mão: `node scripts/config.ts check .moiras/sources.json`. Se preferir montar à mão, copie `config/sources.example.json` para `.moiras/sources.json`. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes (ver `stages/clotho.md`). Os campos:
 
 - `jira`: site, épico e data fim do projeto; opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task; sem valor nele, usa-se `agency` do glossário, recalculado inclusive para issues `unchanged`;
 - `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse que só o usuário envia; o plugin apenas prepara o rascunho;

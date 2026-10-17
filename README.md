@@ -25,7 +25,7 @@ Cloto (coleta Jira e Slack) → Láquesis (classifica, acha duplicados) → Átr
 **Outros agentes** (Codex, Cursor, Copilot, opencode, Antigravity etc.): use o [`npx skills`](https://github.com/vercel-labs/skills), que copia ou liga as skills na pasta de cada agente.
 
 ```bash
-npx skills add <owner>/<repo> --list                  # lista as cinco skills
+npx skills add <owner>/<repo> --list                  # lista as seis skills
 npx skills add <owner>/<repo> -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
@@ -35,7 +35,7 @@ Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou serv
 
 ## Uso
 
-Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` no projeto onde vai rodar. Um exemplo enxuto, com os endereços (os caminhos são relativos à pasta que contém `.moiras/`):
+Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (usa os conectores só para ler e propor, como os IDs do Slack), mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim". Nunca sobrescreve um existente, e você pode editar o arquivo à vontade; `node plugins/moiras/scripts/config.ts check .moiras/sources.json` valida. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes. Um exemplo enxuto, com os endereços (caminhos relativos à pasta que contém `.moiras/`; o modelo completo está em `plugins/moiras/config/sources.example.json`):
 
 ```json
 {
@@ -60,6 +60,7 @@ Copie `plugins/moiras/config/sources.example.json` para `.moiras/sources.json` n
 
 | Comando | O que faz |
 |---|---|
+| `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
 | `/moiras:moiras-triage PROJ-100` | Tria as issues sem responsável do épico. `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios; grava no knowledge local depois do seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
@@ -115,9 +116,10 @@ Onde mexer:
 |---|---|
 | Contratos e regras de cada etapa | `plugins/moiras/skills/moiras-triage/stages/*.md` |
 | Orquestração, modos e leitura e escrita do knowledge | `plugins/moiras/skills/moiras-triage/SKILL.md` |
-| Auditoria, indexação, sincronização e publicação | `plugins/moiras/skills/moiras-{audit,index,sync,publish}/SKILL.md` |
+| Configuração, auditoria, indexação, sincronização e publicação | `plugins/moiras/skills/moiras-{init,audit,index,sync,publish}/SKILL.md` |
 | Memória das etapas | `plugins/moiras/scripts/memory.ts` |
 | Regras dos registros do knowledge (`hash`, `check`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
+| Criação e validação da configuração | `plugins/moiras/scripts/config.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |
 
 Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`Add ...`, `Fix ...`) e PR com título curto e descrição curta em português (o que muda e como testar). Não use dados reais da empresa em nenhum arquivo: os exemplos são fictícios (ver o `AGENTS.md`).
@@ -126,7 +128,7 @@ Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`
 
 Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-publish` num projeto de verdade. Quase tudo escreve só em `.moiras/` (fora do git). As exceções são o arquivo temporário do passo 4 e o clone do knowledge do passo 6; só o passo 7 escreve no remoto, abrindo um PR.
 
-1. Crie uma pasta de teste fora do repositório (ex.: `~/moiras-teste`) com um `.moiras/sources.json` mínimo; os caminhos são relativos à pasta que contém `.moiras/`. Comece com um repositório:
+1. Crie uma pasta de teste fora do repositório (ex.: `~/moiras-teste`) e rode `/moiras:moiras-init` (ou crie à mão um `.moiras/sources.json` mínimo; os caminhos são relativos à pasta que contém `.moiras/`). Comece com um repositório:
 
    ```json
    {
@@ -135,7 +137,7 @@ Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-pub
    }
    ```
 
-2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as cinco skills.
+2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as seis skills.
 3. **Indexe** com `/moiras:moiras-index` (nada é gravado antes do "sim"). Confira com `node <clone>/plugins/moiras/scripts/knowledge.ts check .moiras/knowledge`: sem achados, `url` sem credencial, `local_path` relativo e nenhum trecho de código.
 4. **Reindexe**: sem mudanças, volta `unchanged`. Para ver `changed`, crie um arquivo em `src/` do repositório, rode de novo, **responda "não" à gravação** e apague o arquivo. Prefira um clone descartável se o repositório tiver alterações suas.
 5. **Audite** com `/moiras:moiras-audit glossary`: sem achados graves. Para ver o aviso de glossário velho, copie o arquivo, ponha um `indexed_at` de mais de 6 meses e rode de novo (ela só sugere `moiras-index`); **restaure a cópia antes do passo 7**.

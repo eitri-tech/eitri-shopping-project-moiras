@@ -80,7 +80,10 @@ const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.dir
 const maxFileBytes = 1024 * 1024;
 const maxDepth = 32;
 const maxLineLength = 8192;
-const placeholder = (value: string) => /^(?:<[^>]+>|x{4,}|\*{4,})$/i.test(value);
+/** Pseudonyms accepted for `approved_by`, `chosen_by` and `audit.auditors`. */
+export const pseudonymPattern = /^(?:Fulano|Beltrana|Sicrano|(?:person|user|reviewer|pseudonym|pessoa|usuario|revisor)[-_][a-z0-9_-]+)$/i;
+
+export const placeholder = (value: string) => /^(?:<[^>]+>|x{4,}|\*{4,})$/i.test(value);
 const email = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,190}\.[A-Z]{2,24}\b/i;
 
 // Inspect every path component before resolving; even links within the base are skipped.
@@ -116,7 +119,7 @@ function readSafe(file: string): { text?: string; issue?: string } {
   return { text: bytes.toString('utf8') };
 }
 
-function hasSecret(line: string): boolean {
+export function hasSecret(line: string): boolean {
   const assignments = /\b([A-Z_][A-Z0-9_-]{0,127})\s*[:=]\s*["']?(<[^>]{1,128}>|[^\s"'`;,]{1,2048})/gi;
   for (const match of line.matchAll(assignments)) {
     const [, key = '', value = ''] = match;
@@ -131,7 +134,7 @@ function hasSecret(line: string): boolean {
 }
 
 // What a record must never carry. Matches are reported by rule and line, never echoed.
-const patterns: { rule: string; test: RegExp }[] = [
+export const patterns: { rule: string; test: RegExp }[] = [
   // Machine-specific paths in prose: personal homes and the usual system roots (a route like /home/products is not one).
   { rule: 'absolute-path', test: /(?:(?<![\w.~-])\/(?:home|Users)\/[\w.-]+\/|(?<![\w.~-])\/(?:root|srv|opt|workspaces?|tmp|var|mnt|usr|etc)\/[\w.-]+|(?<![\w.-])~\/[\w.-]+|[A-Za-z]:\\Users\\[\w.-]+)/ },
   // User info in a URL: user:password@ on any scheme, or a bare token@ on http(s).
@@ -196,7 +199,7 @@ export function records(dir: string, only?: Scope): Entry[] {
 }
 
 /** `YYYY-MM-DD` that exists on the calendar (2026-02-30 and 2026-99-99 do not). */
-function isCalendarDate(value: string): boolean {
+export function isCalendarDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
@@ -300,7 +303,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'criterion' && !asText(fields.approved_by)) add('approved-by-missing', 'error');
       for (const name of ['approved_by', 'chosen_by']) {
         const value = asText(fields[name]);
-        if (value && !value.includes('<') && !/^(?:Fulano|Beltrana|Sicrano|(?:person|user|reviewer|pseudonym|pessoa|usuario|revisor)[-_][a-z0-9_-]+)$/i.test(value)) add('pseudonym-required', 'error');
+        if (value && !value.includes('<') && !pseudonymPattern.test(value)) add('pseudonym-required', 'error');
       }
       for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
       if (kind.type === 'criterion' && fields.replaces !== undefined && !Array.isArray(fields.replaces)) add('replaces-invalid', 'error');

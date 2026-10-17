@@ -2,7 +2,7 @@
 
 Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do épico no Jira e as conversas relevantes no Slack.
 
-**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar outro épico na conversa, ele tem precedência sobre o da configuração.
+**Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar outro épico na conversa, ele tem precedência sobre o da configuração. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
 
 ## Execução
 
