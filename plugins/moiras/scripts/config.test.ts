@@ -42,7 +42,7 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, epic: 'PROJ-100', epics: ['PROJ-101'] } }), []);
     assert.deepEqual(rules({ jira: { site, epic: 'PROJ-100', epics: ['PROJ-100'] } }), []);
     assert.deepEqual(rules({ jira: { site, epics: ['PROJ-100'], categories: [{ field: 'labels', values: ['checkout'] }] } }), []);
-    assert.deepEqual(rules({ jira: { site, categories: [{ field: 'labels', values: ['checkout'] }, { field: 'customfield_10020', values: ['Sprint 12'] }, { field: 'Story Points', values: ['3'] }, { field: 'Área responsável', values: ['Pagamentos'] }, { field: 'cf[10021]', values: ['x'] }] } }), []);
+    assert.deepEqual(rules({ jira: { site, categories: [{ field: 'labels', values: ['checkout'] }, { field: 'customfield_10020', values: ['Sprint 12'] }, { field: 'Story Points', values: ['3'] }, { field: 'Área responsável', values: ['Pagamentos'] }, { field: 'A\u0301rea responsa\u0301vel', values: ['Pagamentos'] }, { field: 'cf[10021]', values: ['x'] }] } }), []);
     assert.deepEqual(rules({ jira: { site, jql: 'project = PROJ AND type = Bug' } }), []);
   });
 

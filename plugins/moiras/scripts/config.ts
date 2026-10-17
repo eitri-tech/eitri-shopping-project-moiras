@@ -27,7 +27,7 @@ const scopes = new Set(['local', 'project', 'group', 'global']);
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
 const host = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 /** Field for a category: a name (`labels`, `Story Points`, `Área responsável`), a REST id (`customfield_10020`) or the JQL id `cf[10020]`. The Clotho quotes names, so no quotes or control characters. */
-const jiraField = /^(?:cf\[\d+\]|[\p{L}\p{N}_][\p{L}\p{N} _.-]{0,63})$/u;
+const jiraField = /^(?:cf\[\d+\]|[\p{L}\p{N}_][\p{L}\p{M}\p{N} _.-]{0,63})$/u;
 /** Category value (a label, component or option name): quoted by the Clotho, so no double quote, backslash or control character. */
 const jiraValue = /^[^"\\\u0000-\u001f]{1,128}$/;
 const slackUser = /^[UW][A-Z0-9]{8,}$/;
@@ -110,7 +110,7 @@ export function validate(config: unknown): Finding[] {
       else (jira.categories as Json[]).forEach((category, index) => {
         const path = `jira.categories[${index}]`;
         if (!isText(category.field)) add(`${path}.field`, 'field-missing');
-        else if (!jiraField.test(category.field)) add(`${path}.field`, 'field-invalid');
+        else if (!jiraField.test(category.field.normalize('NFC'))) add(`${path}.field`, 'field-invalid');
         if (!Array.isArray(category.values) || category.values.length === 0) add(`${path}.values`, 'not-a-list');
         else category.values.forEach((value, position) => {
           if (!isText(value) || !jiraValue.test(value)) add(`${path}.values[${position}]`, 'value-invalid');
