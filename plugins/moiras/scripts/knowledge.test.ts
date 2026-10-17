@@ -774,6 +774,22 @@ describe('security regressions', () => {
     });
   });
 
+  it('blocks additions beneath a shared folder that is a link', t => {
+    const { dir, local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'x'));
+    write('elsewhere', 'b.md', criterion('b'));
+    mkdirSync(shared, { recursive: true });
+    symlinkSync(join(dir, 'elsewhere'), join(shared, 'criteria'));
+    const { items, remove } = plan(local, shared);
+    assert.deepEqual(items.filter(item => item.path.startsWith('criteria')), [
+      { path: 'criteria', action: 'conflict', reason: 'shared:symlink' },
+      { path: 'criteria/a.md', action: 'conflict', reason: 'shared:symlink' },
+    ]);
+    assert.ok(items.some(item => item.path === 'learnings/patterns/p.md' && item.action === 'add'));
+    assert.deepEqual(remove, []);
+  });
+
   it('resolves the base once, so a symlinked base hashes like the real one, and missing or file bases fail', t => {
     const { dir, local, write } = workspace(t);
     write('local', 'src/a.ts', 'a');

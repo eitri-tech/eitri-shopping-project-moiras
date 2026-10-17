@@ -456,11 +456,13 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
     covered.add(local.path);
     const { path, kind, text, doc } = local;
     const item = (action: Item['action'], reason: string) => items.push({ path, action, reason });
+    // A shared kind folder that is a link or not a directory is reported once under its own path; everything
+    // beneath it is blocked too, so no `add` can write through it.
+    const sharedIssue = shared.get(path)?.issue ?? shared.get(kind.dir)?.issue;
     if (local.issue) item('conflict', local.issue);
-    else if (shared.get(path)?.issue) item('conflict', `shared:${shared.get(path)!.issue}`);
+    else if (sharedIssue) item('conflict', `shared:${sharedIssue}`);
     else {
-      const other = shared.get(path)!;
-      const item = (action: Item['action'], reason: string) => items.push({ path, action, reason });
+      const other = shared.get(path);
       if (!other) item('add', 'new');
       else if (other.text === text) item('skip', 'unchanged');
       else if (kind.type === 'solution' && doc && other.doc && sameExceptResult(doc, other.doc)) {
