@@ -339,6 +339,10 @@ describe('check', () => {
     assert.deepEqual(check(local, 'glossary').findings, []);
     write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${'A'.repeat(40)}`, 'indexed_commit_date: ontem', 'indexed_branch: ../escape', 'indexed_tag: /abs', 'indexed_dirty: maybe']));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule).sort(), ['absolute-path', 'indexed-commit-date-invalid', 'indexed-commit-invalid', 'indexed-dirty-invalid', 'ref-invalid', 'ref-invalid']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`]));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
     write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_branch: main']));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
   });
@@ -704,6 +708,24 @@ describe('provenance', () => {
     const cwd = repository(t);
     writeFileSync(join(cwd, '.git', 'index'), 'not an index');
     assert.deepEqual(provenance(cwd), { git: false, reason: 'status-unreadable' });
+  });
+
+  it('does not run the clean filters of .gitattributes either', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'filter-ran');
+    const script = join(cwd, '..', 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    writeFileSync(join(cwd, '.gitattributes'), '*.txt filter=probe\n');
+    run(cwd, 'config', 'filter.probe.clean', script);
+    run(cwd, 'config', 'filter.probe.process', script);
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'with filter');
+    rmSync(marker, { force: true });
+    writeFileSync(join(cwd, 'a.txt'), 'two');
+    writeFileSync(join(cwd, 'a.txt'), 'one');
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
   });
 
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {

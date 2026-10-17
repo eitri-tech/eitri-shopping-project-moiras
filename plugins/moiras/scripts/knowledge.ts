@@ -360,7 +360,9 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'repository') {
         const commit = asText(fields.indexed_commit);
         if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
-        if (!commit && provenanceFields.some(name => asText(fields[name]))) add('provenance-incomplete', 'error');
+        // A commit alone does not say when it was made or whether the tree matched it; branch and tag may legitimately be empty.
+        const incomplete = commit ? !asText(fields.indexed_commit_date) || !asText(fields.indexed_dirty) : provenanceFields.some(name => asText(fields[name]));
+        if (incomplete) add('provenance-incomplete', 'error');
         const commitDate = asText(fields.indexed_commit_date);
         if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
         for (const name of ['indexed_branch', 'indexed_tag']) {
@@ -535,8 +537,13 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   // Variables that point Git at another repository, work tree or index would make the answer describe something else.
   const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
-  // core.fsmonitor can name an executable that `git status` would run: reading a repository must not run its scripts.
-  const run = (...args: string[]) => spawnSync('git', ['-C', repository, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env, maxBuffer });
+  // core.fsmonitor and the clean/process commands of .gitattributes filters are executables that `git status` would run: reading a
+  // repository must not run its scripts. Filters are emptied one by one; the dirty state may then be reported a little too eagerly
+  // (a file whose clean filter changes its content looks modified), never missed.
+  const base = ['-C', repository, '-c', 'core.fsmonitor=false'];
+  const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
+  const filters = listed.status === 0 ? listed.stdout.split('\n').filter(Boolean).flatMap(key => ['-c', `${key}=`]) : [];
+  const run = (...args: string[]) => spawnSync('git', [...base, ...filters, ...args], { encoding: 'utf8', env, maxBuffer });
   const git = (...args: string[]) => {
     const result = run(...args);
     return result.status === 0 ? result.stdout.trim() : undefined;
@@ -549,7 +556,8 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   if (!commit || !commitSha.test(commit)) return { git: false };
   const result: Provenance = { git: true, indexed_commit: commit };
   const date = git('log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd');
-  if (date && isCalendarDate(date)) result.indexed_commit_date = date;
+  if (!date || !isCalendarDate(date)) return { git: false, reason: 'commit-date-unreadable' };
+  result.indexed_commit_date = date;
   const omitted: string[] = [];
   for (const [field, value] of [['indexed_branch', git('symbolic-ref', '--short', '-q', 'HEAD')], ['indexed_tag', git('describe', '--tags', '--exact-match', 'HEAD')]] as const) {
     if (!value) continue;
