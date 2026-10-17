@@ -456,6 +456,23 @@ describe('plan', () => {
     assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' }], 'other sources on the same day');
   });
 
+  it('still sees real content changes in a glossary record that shares its sources_hash', t => {
+    const { local, shared, write } = workspace(t);
+    const withLine = (line: string, hash = sha) => glossary('2026-10-06', hash).replace('platform: vtex', `platform: vtex\n${line}`);
+    write('shared', 'glossary/acme-shop-checkout.md', withLine('keywords: [a, b]'));
+    write('local', 'glossary/acme-shop-checkout.md', withLine('keywords: [b, a]'));
+    assert.equal(plan(local, shared).items[0]?.action, 'conflict', 'a reordered list is a different record');
+    write('local', 'glossary/acme-shop-checkout.md', withLine('apps: [home]'));
+    assert.equal(plan(local, shared).items[0]?.action, 'conflict');
+    write('shared', 'glossary/acme-shop-checkout.md', withLine('indexed_branch: main\nindexed_tag: v1').replace(/^indexed_at: .*\n/m, 'indexed_at: 2026-10-01\n'));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
+    assert.equal(plan(local, shared).items[0]?.reason, 'unchanged', 'old branch and tag fields do not count');
+    const empty = '';
+    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-01', empty));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', empty));
+    assert.equal(plan(local, shared).items[0]?.reason, 'newer-index', 'an empty hash proves nothing');
+  });
+
   it('removes only the shared criteria that a local criterion replaces', t => {
     const { local, shared, write } = workspace(t);
     write('shared', 'criteria/a.md', criterion('a'));

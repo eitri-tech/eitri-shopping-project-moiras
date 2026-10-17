@@ -33,8 +33,8 @@ Ela copia do knowledge `local` (`<local-dir>`) para um clone do destino, num bra
 | Ação | Quando | O que a skill faz |
 |---|---|---|
 | `add` | o registro não existe no destino | oferece para publicar |
-| `update` | solução com a mesma `id` que só avançou em `result` ou na observação (a observação do destino é mantida e o resultado final do destino não é trocado); ou glossário com `indexed_at` mais novo | oferece para publicar, mostrando o que mudou |
-| `skip` | já é igual, ou o destino tem o glossário igual ou mais novo | não faz nada |
+| `update` | solução com a mesma `id` que só avançou em `result` ou na observação (a observação do destino é mantida e o resultado final do destino não é trocado); ou glossário com `indexed_at` mais novo e `sources_hash` diferente | oferece para publicar, mostrando o que mudou |
+| `skip` | já é igual, ou o destino tem o glossário igual ou mais novo, ou o glossário tem o mesmo `sources_hash` e conteúdo e só difere em `indexed_at`, commit, data do commit ou `indexed_dirty` | não faz nada |
 | `conflict` | a mesma `id` com conteúdo diferente em aprendizado (só acréscimo) ou critério (só muda por regeneração); ou solução cuja cópia local está velha (o destino já tem um resultado final diferente do local, ou a observação do destino não foi mantida); ou glossário reindexado no mesmo dia (`indexed_at` igual e conteúdo diferente) | **não publica**; explica ao usuário e sugere um critério novo com `replaces`, ou um `id` novo |
 | `remove` | critério do destino que um critério novo do local substitui (`replaces`) | oferece a remoção **no mesmo PR**, junto com o critério novo |
 
