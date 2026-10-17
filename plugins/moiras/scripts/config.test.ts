@@ -1,17 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { init, main, validate } from './config.ts';
+import type { Finding } from './config.ts';
 
 const script = join(import.meta.dirname, 'config.ts');
 const example = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'config', 'sources.example.json'), 'utf8'));
 
 function workspace(t: TestContext) {
-  const dir = mkdtempSync(join(tmpdir(), 'moiras-config-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'moiras-config-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return { dir, target: join(dir, '.moiras') };
 }
@@ -222,6 +223,12 @@ describe('init', () => {
     }
     assert.deepEqual(readdirSync(outside), []);
     rmSync(target);
+    // A link anywhere above the folder, even outside the working directory, is refused too.
+    symlinkSync(outside, join(dir, 'link'));
+    const above = init(minimal(), join(dir, 'link', 'project', '.moiras'));
+    assert.deepEqual(above.created, []);
+    assert.deepEqual(above.findings.map(finding => `${finding.rule}:${finding.path}`), [`symlink-refused:${join(dir, 'link')}`]);
+    assert.deepEqual(readdirSync(outside), []);
     // A link above the folder is refused too when it lives under the working directory.
     const nested = join(process.cwd(), `.moiras-link-test-${process.pid}`);
     t.after(() => rmSync(nested, { force: true }));
@@ -244,6 +251,28 @@ describe('init', () => {
     assert.ok(invalid.findings.some(finding => finding.severity === 'error'));
     assert.deepEqual(init(minimal(), target, true).created, []);
     assert.ok(!existsSync(target));
+  });
+});
+
+describe('check storage', () => {
+  const rulesOf = (file: string) => (JSON.parse(main(['check', file]).output).findings as Finding[]).map(finding => `${finding.rule}:${finding.severity}`);
+
+  it('warns about a configuration Git would commit, tracks, or reach through a link', t => {
+    const { dir, target } = workspace(t);
+    const git = (...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    if (git('init', '-q').status !== 0) return t.skip('git is not available');
+    mkdirSync(target);
+    const file = join(target, 'sources.json');
+    writeFileSync(file, `${JSON.stringify(minimal())}\n`);
+    assert.deepEqual(rulesOf(file), ['not-ignored:warning']);
+    writeFileSync(join(target, '.gitignore'), '*\n');
+    assert.deepEqual(rulesOf(file), []);
+    assert.equal(git('add', '-f', '.moiras/sources.json').status, 0);
+    assert.deepEqual(rulesOf(file), ['sources-tracked:warning']);
+    assert.equal(main(['check', file]).code, 0);
+    git('rm', '-q', '--cached', '.moiras/sources.json');
+    symlinkSync(target, join(dir, 'link'));
+    assert.deepEqual(rulesOf(join(dir, 'link', 'sources.json')), ['symlink-refused:warning']);
   });
 });
 

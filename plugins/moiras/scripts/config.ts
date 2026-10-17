@@ -202,23 +202,31 @@ function ignoresEverything(rules: string): boolean {
   return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
 }
 
-/** True when Git tracks the path: ignore rules do not apply to tracked files. No Git, or outside a repository, means no. */
-function isTracked(file: string): boolean {
+/** Runs Git read-only at the nearest existing ancestor of `file`; undefined when Git is missing or `file` is outside a repository. */
+function git(file: string, ...args: string[]): number | undefined {
   let base = dirname(resolve(file));
   while (!existsSync(base) && dirname(base) !== base) base = dirname(base);
-  const result = spawnSync('git', ['-C', base, 'ls-files', '--error-unmatch', '--', resolve(file)], { stdio: 'ignore' });
-  return result.status === 0;
+  if (spawnSync('git', ['-C', base, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' }).status !== 0) return undefined;
+  return spawnSync('git', ['-C', base, ...args, '--', resolve(file)], { stdio: 'ignore' }).status ?? undefined;
 }
 
-/** The folder and every component between the working directory and it (all of it when outside); system links above stay allowed. */
-function symlinkScope(dir: string): string[] {
-  const root = resolve('.');
-  const scope: string[] = [];
-  for (let current = resolve(dir); ; current = dirname(current)) {
-    scope.push(current);
-    if (dirname(current) === current || dirname(current) === root || !current.startsWith(`${root}${sep}`)) break;
+/**
+ * Whether the configuration file sits where the user approved and where nothing commits it by accident, for `init` (errors,
+ * before writing) and `check` (warnings, on an existing file):
+ * - no symlink in any existing component of its path, nor in `extra` (the sibling ignore file), since writes would land elsewhere;
+ * - not tracked by Git (ignore rules do not apply to tracked paths, even when the file is gone from disk);
+ * - with `ignored`, ignored by Git (no Git, or outside a repository, means nothing to report).
+ */
+function storageFindings(file: string, severity: Finding['severity'], { ignored = false, extra = [] as string[] } = {}): Finding[] {
+  const findings: Finding[] = [];
+  const parts = resolve(file).split(sep).filter(Boolean);
+  const paths = parts.map((_, index) => `${sep}${parts.slice(0, index + 1).join(sep)}`);
+  for (const path of [...paths, ...extra]) {
+    if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) findings.push({ path, rule: 'symlink-refused', severity });
   }
-  return scope;
+  if (git(file, 'ls-files', '--error-unmatch') === 0) findings.push({ path: file, rule: 'sources-tracked', severity });
+  else if (ignored && git(file, 'check-ignore', '-q') === 1) findings.push({ path: file, rule: 'not-ignored', severity });
+  return findings;
 }
 
 /** Creates the configuration folder and file; refuses to touch an existing file. */
@@ -229,12 +237,8 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   // refuse before writing anything (the dry run reports it too).
   if (existsSync(ignore) && !ignoresEverything(readFileSync(ignore, 'utf8'))) findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'error' });
   const file = join(dir, 'sources.json');
-  // Writes must land where the user approved: a symlinked folder or file would send them (and a `*` ignore file) elsewhere.
-  for (const target of [...symlinkScope(dir), ignore, file]) {
-    if (lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) findings.push({ path: target, rule: 'symlink-refused', severity: 'error' });
-  }
-  // A tracked path keeps showing up as modified even when the folder is ignored: refuse to recreate it.
-  if (!existsSync(file) && isTracked(file)) findings.push({ path: file, rule: 'sources-tracked', severity: 'error' });
+  // Writes must land where the user approved, and the file must not already be tracked (see storageFindings).
+  findings.push(...storageFindings(file, 'error', { extra: [ignore] }));
   if (hasErrors(findings)) return { created: [], findings };
   if (existsSync(file)) throw new Error(`${file} already exists; edit it by hand or remove it first.`);
   if (dryRun) return { created: [], findings };
@@ -271,7 +275,7 @@ export function main(argv: string[], input?: string): { output: string; code: nu
     const file = rest[0] ?? join(defaultDir, 'sources.json');
     let config: unknown;
     try { config = JSON.parse(readFileSync(file, 'utf8')); } catch { throw new Error(`${file} is missing or is not valid JSON.`); }
-    const findings = validate(config);
+    const findings = [...validate(config), ...storageFindings(file, 'warning', { ignored: true, extra: [join(dirname(resolve(file)), '.gitignore')] })];
     return { output: JSON.stringify({ findings }), code: hasErrors(findings) ? 1 : 0 };
   }
   throw new Error(usage);
