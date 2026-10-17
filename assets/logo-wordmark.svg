@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 270" width="520" height="270" role="img" aria-labelledby="title" aria-describedby="description">
+  <title id="title">Moiras: Cloto fia, Láquesis mede e Átropos corta</title>
+  <desc id="description">Três irmãs junto aos medalhões Κ, Λ e Α: Cloto fia, Láquesis mede e Átropos corta um fio contínuo.</desc>
+  <defs>
+    <linearGradient id="thread" gradientUnits="userSpaceOnUse" x1="12" y1="84" x2="488" y2="84">
+      <stop offset="0" stop-color="#5CC8B0"/>
+      <stop offset="0.5" stop-color="#9C9AF5"/>
+      <stop offset="1" stop-color="#F0708A"/>
+    </linearGradient>
+  </defs>
+  <!-- Silhuetas fora dos medalhões; mãos sobre o fio. -->
+  <g fill="#5CC8B0">
+    <circle cx="128" cy="43" r="11"/>
+    <path d="M128 59 C115 59 111 81 107 134 H149 C145 81 141 59 128 59Z"/>
+    <path d="M120 66 L109 78 L102 83 L106 90 L119 84 L129 74Z M136 66 L148 76 L157 80 L154 88 L141 83 L130 74Z"/>
+  </g>
+  <g fill="#9C9AF5">
+    <circle cx="286" cy="43" r="11"/>
+    <path d="M286 59 C273 59 269 81 265 134 H307 C303 81 299 59 286 59Z"/>
+    <path d="M278 65 L262 79 L254 80 L254 88 L266 88 L287 73Z M294 65 L309 79 L318 80 L318 88 L305 88 L285 73Z"/>
+  </g>
+  <g fill="#F0708A">
+    <circle cx="444" cy="43" r="11"/>
+    <path d="M444 59 C431 59 427 81 423 134 H465 C461 81 457 59 444 59Z"/>
+    <path d="M436 65 L422 77 L414 79 L416 87 L428 85 L445 74Z M452 65 L466 88 L473 95 L478 89 L472 80 L455 64Z"/>
+  </g>
+  <!-- Um único fio, interrompido pelo corte final. -->
+  <path d="M12 84 C35 68 78 100 104 84 C121 75 140 75 157 84 S190 97 220 84 S245 84 256 84 H316 C337 84 351 73 378 84 S402 91 416 84 S456 77 478 84" fill="none" stroke="url(#thread)" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M490 86 L505 90" fill="none" stroke="#F0708A" stroke-width="4.5" stroke-linecap="round"/>
+  <g>
+    <circle cx="62" cy="84" r="36" fill="#5CC8B0"/>
+    <circle cx="220" cy="84" r="36" fill="#9C9AF5"/>
+    <circle cx="378" cy="84" r="36" fill="#F0708A"/>
+  </g>
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="53" fill="#0F0D14" text-anchor="middle">
+    <text x="62" y="102">Κ</text>
+    <text x="220" y="102">Λ</text>
+    <text x="378" y="102">Α</text>
+  </g>
+  <!-- Cloto: fuso dourado e fio enrolado. -->
+  <g fill="none" stroke="#D4AF5A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M153 56 L161 109 M150 67 L160 65 M151 73 L161 71 M152 79 L162 77 M153 85 L163 83 M154 91 L164 89"/>
+    <!-- Láquesis: régua sob o trecho esticado entre as mãos. -->
+    <path d="M256 97 H316 M256 97 V104 M266 97 V102 M276 97 V104 M286 97 V102 M296 97 V104 M306 97 V102 M316 97 V104"/>
+    <!-- Átropos: tesoura aberta no ponto de corte. -->
+    <circle cx="468" cy="106" r="5"/>
+    <circle cx="482" cy="106" r="5"/>
+    <path d="M470 101 L487 71 M480 101 L468 71"/>
+  </g>
+  <g fill="#5CC8B0"><circle cx="104" cy="84" r="4"/><circle cx="156" cy="83" r="4"/></g>
+  <g fill="#9C9AF5"><circle cx="256" cy="84" r="4"/><circle cx="316" cy="84" r="4"/></g>
+  <g fill="#F0708A"><circle cx="416" cy="84" r="4"/><circle cx="470" cy="96" r="4"/></g>
+  <text x="260" y="207" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="58" fill="#1B1726">Moiras</text>
+  <text x="260" y="246" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="1" fill="#3F3A52">cloto · láquesis · átropos</text>
+</svg>

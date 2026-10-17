@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Moiras: Cloto fia, Láquesis mede e Átropos corta" width="480">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-wordmark-dark.svg">
+    <img src="assets/logo-wordmark.svg" alt="Moiras: Cloto fia, Láquesis mede e Átropos corta" width="480">
+  </picture>
 </p>
 
 # Moiras
