@@ -18,15 +18,15 @@ Cloto (coleta Jira e Slack) → Láquesis (classifica, acha duplicados) → Átr
 ## Instalação
 
 ```
-/plugin marketplace add <owner>/<repo>
+/plugin marketplace add eitri-tech/eitri-shopping-project-moiras
 /plugin install moiras@moiras
 ```
 
 **Outros agentes** (Codex, Cursor, Copilot, opencode, Antigravity etc.): use o [`npx skills`](https://github.com/vercel-labs/skills), que copia ou liga as skills na pasta de cada agente.
 
 ```bash
-npx skills add <owner>/<repo> --list                  # lista as seis skills
-npx skills add <owner>/<repo> -a codex -s moiras-triage   # instala uma skill num agente
+npx skills add eitri-tech/eitri-shopping-project-moiras --list                      # lista as seis skills
+npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
 O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts` e `scripts/config.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.

@@ -168,7 +168,7 @@ Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl
 ## Instalação
 
 ```
-/plugin marketplace add <owner>/<repo>
+/plugin marketplace add eitri-tech/eitri-shopping-project-moiras
 /plugin install moiras@moiras
 ```
 
