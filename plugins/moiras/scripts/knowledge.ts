@@ -2,6 +2,7 @@
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
  * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
+ * node knowledge.ts provenance ../acme-shop-checkout
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -11,15 +12,16 @@
  * parameter properties) and import siblings with the .ts extension.
  */
 import { isUtf8 } from 'node:buffer';
+import { spawnSync } from 'node:child_process';
 import { hash as digest } from 'node:crypto';
-import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isIgnoredParts, layerOf } from './gitignore.ts';
 import type { IgnoreLayer } from './gitignore.ts';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>] | provenance <repository>';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -76,6 +78,9 @@ const required: Record<string, string[]> = {
   pattern: ['repositories', 'issues'],
   decision: ['source'],
 };
+/** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
+const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
+const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
 const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.direnv']);
@@ -355,6 +360,19 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
+      if (kind.type === 'repository') {
+        const commit = asText(fields.indexed_commit);
+        if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
+        // A commit alone does not say when it was made or whether the tree matched it.
+        const incomplete = commit ? !asText(fields.indexed_commit_date) || !asText(fields.indexed_dirty) : provenanceFields.some(name => asText(fields[name]));
+        if (incomplete) add('provenance-incomplete', 'error');
+        const commitDate = asText(fields.indexed_commit_date);
+        if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
+        const dirty = asText(fields.indexed_dirty);
+        if (dirty && dirty !== 'true' && dirty !== 'false') add('indexed-dirty-invalid', 'error');
+        // Branch and tag names are not recorded: they can be internal and say nothing the commit does not.
+        if ('indexed_branch' in fields || 'indexed_tag' in fields) add('indexed-ref-unsupported', 'error');
+      }
       if (/\bTODO\b/.test(doc.body)) add('todo-content', 'warning');
     }
 
@@ -393,7 +411,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
     for (const { open, close, size } of blocks) {
       if (size > maxSnippetLines) add('code-too-long', 'error', open + 1);
       const around = lines.slice(Math.max(0, open - 3), close + 4).filter(line => line.length <= maxLineLength).join('\n');
-      if (!/(?:^|[\s`(])[A-Za-z0-9_.-]{1,128}\/(?:[A-Za-z0-9_.-]{1,128}\/)*[A-Za-z0-9_.-]{1,128}@[0-9a-f]{7,40}(?=$|[\s`)])/m.test(around)) add('code-without-reference', 'error', open + 1);
+      if (!/(?:^|[\s`(])[A-Za-z0-9_.-]{1,128}\/(?:[A-Za-z0-9_.-]{1,128}\/)*[A-Za-z0-9_.-]{1,128}@[0-9a-f]{7,64}(?=$|[\s`)])/m.test(around)) add('code-without-reference', 'error', open + 1);
     }
   }
   return { checked: all.length, findings };
@@ -420,6 +438,12 @@ function staleOutcome(local: Doc, shared: Doc): string | null {
   return observation(local).startsWith(observation(shared)) ? null : 'shared-observation-not-kept';
 }
 
+/** Two glossary records are the same index when they were built from the same sources: the `sources_hash` is the only thing compared. */
+function sameSources(a: Doc, b: Doc): boolean {
+  const hash = asText(a.fields.sources_hash);
+  return hash !== '' && hash === asText(b.fields.sources_hash);
+}
+
 export function plan(localDir: string, sharedDir: string, sharedName?: string): Plan {
   const shared = new Map(records(sharedDir).filter(entry => !entry.issue).map(entry => [entry.path, entry]));
   const items: Item[] = [];
@@ -435,6 +459,7 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       if (stale) item('conflict', stale);
       else item('update', 'result-or-observation');
     }
+    else if (kind.type === 'repository' && doc && other.doc && sameSources(doc, other.doc)) item('skip', 'unchanged');
     else if (kind.type === 'repository' && doc && other.doc) {
       const [mine, theirs] = [asText(doc.fields.indexed_at), asText(other.doc.fields.indexed_at)];
       if (mine > theirs) item('update', 'newer-index');
@@ -554,6 +579,83 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
   throw new Error(`Invalid --only. ${usage}`);
 };
 
+/** Variables that point Git at another repository, work tree or index would make the answer describe something else. */
+function gitEnv(): NodeJS.ProcessEnv {
+  // Replacement refs would make the commit, its date and its tree describe another commit than HEAD.
+  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' };
+  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
+  return env;
+}
+
+export interface Provenance {
+  git: boolean;
+  /** Why `git` is false when it is more than "not a repository": the dirty state could not be read. */
+  reason?: string;
+  indexed_commit?: string;
+  indexed_commit_date?: string;
+  indexed_dirty?: boolean;
+}
+
+/**
+ * Where an indexed repository was when it was read: HEAD, the date of that commit (UTC) and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
+ */
+export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Provenance {
+  const env = gitEnv();
+  // core.fsmonitor and the clean/process commands of .gitattributes filters are executables that `git status` would run: reading a
+  // repository must not run its scripts. Filters are emptied one by one; the dirty state may then be reported a little too eagerly
+  // (a file whose clean filter changes its content looks modified), never missed.
+  // `log.showSignature` would make `git log` run the signature verifier the repository configures.
+  // `core.checkStat=minimal` with `core.trustctime=false` (and `core.ignoreStat`) make `git status` trust size and mtime alone, so an edit
+  // that keeps both would read as clean; the defaults also compare ctime, which an edit cannot keep. `core.ignoreCase=true` on a
+  // case-sensitive disk folds `foo` into a tracked `Foo`, so the untracked file would not show up.
+  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.checkStat=default', '-c', 'core.trustctime=true', '-c', 'core.ignoreStat=false', '-c', 'core.ignoreCase=false'];
+  const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
+  // Exit 1 is "no filter configured". A listing that was cut short (buffer overflow, which still reports exit 0, or a killed process) is
+  // only part of the filters: going on would let `git status` run the ones that are missing, so the answer is no provenance. A missing
+  // Git binary falls through to `{ git: false }`.
+  if ((listed.error || listed.status === null) && (listed.error as NodeJS.ErrnoException | undefined)?.code !== 'ENOENT') return { git: false, reason: 'filters-unreadable' };
+  const filters = listed.status === 0 ? listed.stdout.split('\n').filter(Boolean).flatMap(key => ['-c', `${key}=`]) : [];
+  const run = (...args: string[]) => spawnSync('git', [...base, ...filters, ...args], { encoding: 'utf8', env, maxBuffer });
+  const git = (...args: string[]) => {
+    const result = run(...args);
+    return result.status === 0 ? result.stdout.trim() : undefined;
+  };
+  // A folder that only sits inside another work tree would answer with the parent's HEAD: the path must be the repository's own root.
+  const top = git('rev-parse', '--show-toplevel');
+  let own = false;
+  try { own = top !== undefined && realpathSync(top) === realpathSync(repository); } catch { /* A path that does not resolve is not a repository. */ }
+  const commit = own ? git('rev-parse', '--verify', '-q', 'HEAD') : undefined;
+  if (!commit || !commitSha.test(commit)) return { git: false };
+  const result: Provenance = { git: true, indexed_commit: commit };
+  const date = git('log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd');
+  if (!date || !isCalendarDate(date)) return { git: false, reason: 'commit-date-unreadable' };
+  result.indexed_commit_date = date;
+  // Submodules are not entered: their own config (filters) would run, and the indexer reads the main repository, not their content.
+  const status = run('status', '--porcelain', '--untracked-files=normal', '--ignore-submodules=all');
+  if (status.status === 0) result.indexed_dirty = status.stdout.trim() !== '';
+  // So many changes that the output overflowed the buffer: whatever arrived already proves the tree is not clean.
+  else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;
+  // Any other failure (a corrupt index, say): without the dirty state the commit does not say what was read, so no provenance at all.
+  else return { git: false, reason: 'status-unreadable' };
+  // `--ignore-submodules=all` also hides a staged gitlink update (`git add libs/sub`); index against HEAD compares object ids only,
+  // so it counts that without entering the submodule or reading any content.
+  if (result.indexed_dirty === false) {
+    const staged = run('diff-index', '--cached', '--ignore-submodules=none', '--name-only', 'HEAD');
+    if (staged.status !== 0) return { git: false, reason: 'index-unreadable' };
+    if (staged.stdout.trim() !== '') result.indexed_dirty = true;
+  }
+  // `assume-unchanged` and `skip-worktree` entries hide edits from `git status`. `ls-files -v` marks them (lowercase tag, or `S`)
+  // without comparing content, so no filter runs. A skip-worktree file that is not on disk (sparse checkout) is not read by the indexer.
+  if (result.indexed_dirty === false) {
+    const flags = run('ls-files', '-v', '-z');
+    const overflow = (flags.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS';
+    if (flags.status !== 0 && !overflow) return { git: false, reason: 'index-unreadable' };
+    const hidden = flags.stdout.split('\0').some(entry => /^[a-z] /.test(entry) || (entry.startsWith('S ') && existsSync(join(repository, entry.slice(2)))));
+    if (hidden || overflow) result.indexed_dirty = true;
+  }
+  return result;
+}
+
 export function main(argv: string[]): { output: string; code: number } {
   let parsed;
   try {
@@ -585,6 +687,10 @@ export function main(argv: string[]): { output: string; code: number } {
   if (command === 'issues') {
     if (!rest.length || Object.keys(values).length) throw new Error(usage);
     return { output: JSON.stringify(issues(rest)), code: 0 };
+  }
+  if (command === 'provenance') {
+    if (rest.length !== 1 || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(provenance(rest[0]!)), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);

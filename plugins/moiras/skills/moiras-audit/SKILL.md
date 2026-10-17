@@ -34,6 +34,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 | Achado | Onde | Ajuste possível |
 |---|---|---|
 | Glossário com `indexed_at` de mais de 6 meses, vazio ou com `TODO` | `glossary/` | só sugerir rodar `moiras-index`; a skill não edita o glossário |
+| Glossário com `indexed_commit`: o repositório (`local_path`) já está em outro commit | `glossary/` | rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" provenance <base>/<local_path>` (só leitura; `local_path` é relativo à pasta que contém o `.moiras/`, a `<base>`, e não à pasta atual) e compare: `indexed_commit` diferente é só uma linha informativa no relatório, com as duas `indexed_commit_date`, e não sugere `moiras-index` por si só (estar em outra branch não quer dizer glossário velho); `indexed_dirty: true` no registro também só informa. A idade continua sendo a de `indexed_at`: a proveniência não a substitui |
 | Solução com `result: pending` há muito tempo | `learnings/solutions/` | perguntar o desfecho e atualizar `result` e a observação |
 | Solução com `result: not-resolved` e sem observação do que mudou | `learnings/solutions/` | pedir a observação |
 | Soluções resolvidas que se repetem | `learnings/solutions/` | só sugerir no relatório; criar padrão ou decisão é com a Átropos, numa triagem |
