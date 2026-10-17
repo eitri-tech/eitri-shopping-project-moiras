@@ -700,6 +700,12 @@ describe('provenance', () => {
     assert.equal(provenance(cwd, 100).indexed_dirty, true);
   });
 
+  it('refuses provenance when the working tree status cannot be read', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, '.git', 'index'), 'not an index');
+    assert.deepEqual(provenance(cwd), { git: false, reason: 'status-unreadable' });
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');

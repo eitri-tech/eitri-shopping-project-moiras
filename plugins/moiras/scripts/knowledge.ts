@@ -516,6 +516,8 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
 
 export interface Provenance {
   git: boolean;
+  /** Why `git` is false when it is more than "not a repository": the dirty state could not be read. */
+  reason?: string;
   indexed_commit?: string;
   indexed_commit_date?: string;
   indexed_branch?: string;
@@ -558,6 +560,8 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   if (status.status === 0) result.indexed_dirty = status.stdout.trim() !== '';
   // So many changes that the output overflowed the buffer: whatever arrived already proves the tree is not clean.
   else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;
+  // Any other failure (a corrupt index, say): without the dirty state the commit does not say what was read, so no provenance at all.
+  else return { git: false, reason: 'status-unreadable' };
   if (omitted.length) result.omitted = omitted;
   return result;
 }
