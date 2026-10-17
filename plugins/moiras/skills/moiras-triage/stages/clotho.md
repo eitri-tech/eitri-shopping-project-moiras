@@ -10,7 +10,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
 ### A. Jira
 
-0. Monte o **escopo**. A configuração traz épicos e/ou categorias; não há consulta livre (`jira.jql` não é lida).
+0. Monte o **escopo**. A configuração traz épicos e/ou categorias; não há consulta livre. Uma `jira.jql` que sobrou no arquivo é recusada pelo `config.ts` (`jql-unsupported`): não a use, avise o usuário e encerre pedindo que a remova.
 
    As partes presentes (`jira.epics`, `jira.epic`, `jira.categories`) valem juntas (AND), então a categoria estreita os épicos.
 

@@ -117,6 +117,8 @@ export function validate(config: unknown): Finding[] {
         });
       });
     }
+    // The free-form query is gone. Ignoring a leftover one would quietly widen the scope (the epics alone, or nothing, would apply), so say so.
+    if (jira.jql !== undefined) add('jira.jql', 'jql-unsupported');
     if ([jira.epic, jira.epics, jira.categories].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');
     if (jira.agency_field !== undefined && !isText(jira.agency_field)) add('jira.agency_field', 'field-invalid');
