@@ -62,6 +62,20 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), interactions: { enabled: true, auto_types: ['reaction'], jira: { comment: false }, slack: { reaction: 'eyes' } } }), []);
   });
 
+  it('requires file-name-safe names for repositories and knowledges', () => {
+    const config = {
+      ...minimal(),
+      knowledge: [{ name: 'local', scope: 'local', dir: '.moiras/knowledge' }, { name: '../criteria', scope: 'group', dir: '../x' }],
+      index: { repositories: [{ name: '../criteria/x', path: '../a' }, { name: 'a/b', path: '../b' }, { name: '..', path: '../c' }, { name: 'acme.shop-checkout_2', path: '../d' }] },
+    };
+    assert.deepEqual(rules(config), [
+      'knowledge[1].name:name-invalid:error',
+      'index.repositories[0].name:name-invalid:error',
+      'index.repositories[1].name:name-invalid:error',
+      'index.repositories[2].name:name-invalid:error',
+    ]);
+  });
+
   it('checks the knowledge list', () => {
     const config = {
       ...minimal(),
@@ -117,6 +131,8 @@ describe('validate', () => {
     assert.deepEqual(rules({ ...minimal(), github: { repositories: ['acme/acme-shop-checkout'] } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { token: 'synthetic', nested: { Password: 'synthetic' } } }), ['github.token:secret:error', 'github.nested.Password:secret:error']);
     assert.deepEqual(rules({ ...minimal(), github: { token: '<token>' } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { api_keys: ['plain-value'], credentials: { value: 'plain-value', list: [{ k: 'x' }] } } }), ['github.api_keys[0]:secret:error', 'github.credentials.value:secret:error', 'github.credentials.list[0].k:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { credentials: { value: '<token>' } } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
     assert.deepEqual(rules({ ...minimal(), agencies: [{ channel: '#a' }], slack: 3 }), ['agencies[0].name:field-missing:error', 'slack:not-an-object:error']);
@@ -141,28 +157,25 @@ describe('init', () => {
     assert.equal(readFileSync(join(target, 'sources.json'), 'utf8'), '{"mine":true}\n');
   });
 
-  it('keeps an existing .gitignore', t => {
+  it('keeps a protecting .gitignore and refuses one that does not protect the folder', t => {
     const { target } = workspace(t);
     init(minimal(), target);
-    writeFileSync(join(target, '.gitignore'), 'custom\n');
+    writeFileSync(join(target, '.gitignore'), '# mine\n*\n');
     rmSync(join(target, 'sources.json'));
-    const result = init(minimal(), target);
-    assert.deepEqual(result.created, [join(target, 'sources.json')]);
-    assert.deepEqual(result.findings, [{ path: join(target, '.gitignore'), rule: 'gitignore-not-protecting', severity: 'warning' }]);
-    assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), 'custom\n');
-  });
-
-  it('warns when a later negation re-includes sources.json', t => {
-    const { target } = workspace(t);
-    init(minimal(), target);
-    const warns = (rules: string) => {
+    assert.deepEqual(init(minimal(), target).created, [join(target, 'sources.json')]);
+    assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), '# mine\n*\n');
+    const refused = (rules: string, dryRun = false) => {
       writeFileSync(join(target, '.gitignore'), rules);
-      rmSync(join(target, 'sources.json'));
-      return init(minimal(), target).findings.map(finding => finding.rule);
+      rmSync(join(target, 'sources.json'), { force: true });
+      const result = init(minimal(), target, dryRun);
+      assert.deepEqual(result.created, []);
+      assert.ok(!existsSync(join(target, 'sources.json')));
+      assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), rules);
+      return result.findings.map(finding => `${finding.rule}:${finding.severity}`);
     };
-    assert.deepEqual(warns('*\n!sources.json\n'), ['gitignore-not-protecting']);
-    assert.deepEqual(warns('# keep\n!sources.json\n*\n'), []);
-    assert.deepEqual(warns('sources.json\n'), ['gitignore-not-protecting']);
+    assert.deepEqual(refused('custom\n'), ['gitignore-not-protecting:error']);
+    assert.deepEqual(refused('*\n!sources.json\n'), ['gitignore-not-protecting:error']);
+    assert.deepEqual(refused('custom\n', true), ['gitignore-not-protecting:error']);
   });
 
   it('writes nothing when there are errors or on a dry run', t => {

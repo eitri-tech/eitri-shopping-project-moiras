@@ -34,6 +34,8 @@ const absolutePath = patterns.find(entry => entry.rule === 'absolute-path')!.tes
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string' && value.trim() !== '';
+/** Names become file names (`glossary/<name>.md`) and `knowledge:<name>/...` references: no separators, no `.`/`..`. */
+const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 
 /** Rule-by-rule check of a parsed configuration. */
 export function validate(config: unknown): Finding[] {
@@ -53,16 +55,14 @@ export function validate(config: unknown): Finding[] {
     else if (isObject(value)) for (const [key, item] of Object.entries(value)) scan(item, path ? `${path}.${key}` : key);
   };
   scan(config, '');
-  // A value under a key that names a credential (token, password...) is a secret even when it looks harmless.
+  // Any string under a key that names a credential (token, password...), at any depth, is a secret even when it looks harmless.
   const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
-  const scanKeys = (value: unknown, path: string) => {
-    if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`));
+  const scanKeys = (value: unknown, path: string, underCredential = false) => {
+    if (typeof value === 'string') {
+      if (underCredential && value.trim() !== '' && !placeholder(value.trim())) add(path, 'secret');
+    } else if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`, underCredential));
     else if (isObject(value)) {
-      for (const [key, item] of Object.entries(value)) {
-        const here = path ? `${path}.${key}` : key;
-        if (credentialKey.test(key) && typeof item === 'string' && item.trim() !== '' && !placeholder(item.trim())) add(here, 'secret');
-        else scanKeys(item, here);
-      }
+      for (const [key, item] of Object.entries(value)) scanKeys(item, path ? `${path}.${key}` : key, underCredential || credentialKey.test(key));
     }
   };
   scanKeys(config, '');
@@ -132,6 +132,7 @@ export function validate(config: unknown): Finding[] {
   list(config.knowledge, 'knowledge').forEach((entry, index) => {
     const path = `knowledge[${index}]`;
     if (!isText(entry.name)) add(`${path}.name`, 'field-missing');
+    else if (!safeName.test(entry.name)) add(`${path}.name`, 'name-invalid');
     else if (names.has(entry.name)) add(`${path}.name`, 'name-duplicate');
     else names.add(entry.name);
     if (typeof entry.scope !== 'string' || !scopes.has(entry.scope)) add(`${path}.scope`, 'scope-invalid');
@@ -150,6 +151,7 @@ export function validate(config: unknown): Finding[] {
       list(index.repositories, 'index.repositories').forEach((repository, position) => {
         const path = `index.repositories[${position}]`;
         for (const field of ['name', 'path']) if (!isText(repository[field])) add(`${path}.${field}`, 'field-missing');
+        if (isText(repository.name) && !safeName.test(repository.name)) add(`${path}.name`, 'name-invalid');
         for (const field of ['url', 'owner', 'agency', 'platform']) if (repository[field] !== undefined && !isText(repository[field])) add(`${path}.${field}`, 'field-invalid');
       });
     }
@@ -186,6 +188,10 @@ function ignoresEverything(rules: string): boolean {
 /** Creates the configuration folder and file; refuses to touch an existing file. */
 export function init(config: unknown, dir = defaultDir, dryRun = false): { created: string[]; findings: Finding[] } {
   const findings = validate(config);
+  const ignore = join(dir, '.gitignore');
+  // An existing ignore file that does not cover the folder would leave IDs and names open to an accidental commit:
+  // refuse before writing anything (the dry run reports it too).
+  if (existsSync(ignore) && !ignoresEverything(readFileSync(ignore, 'utf8'))) findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'error' });
   if (hasErrors(findings)) return { created: [], findings };
   const file = join(dir, 'sources.json');
   if (existsSync(file)) throw new Error(`${file} already exists; edit it by hand or remove it first.`);
@@ -194,12 +200,9 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
   const created = [file];
   // The folder ignores itself, so nothing in it (IDs, knowledge, memory, reports) is committed by accident.
-  const ignore = join(dir, '.gitignore');
   if (!existsSync(ignore)) {
     writeFileSync(ignore, '*\n', { flag: 'wx' });
     created.push(ignore);
-  } else if (!ignoresEverything(readFileSync(ignore, 'utf8'))) {
-    findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'warning' }); // kept as is; the user decides
   }
   return { created, findings };
 }
