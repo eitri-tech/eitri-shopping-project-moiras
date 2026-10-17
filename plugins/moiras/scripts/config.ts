@@ -53,6 +53,19 @@ export function validate(config: unknown): Finding[] {
     else if (isObject(value)) for (const [key, item] of Object.entries(value)) scan(item, path ? `${path}.${key}` : key);
   };
   scan(config, '');
+  // A value under a key that names a credential (token, password...) is a secret even when it looks harmless.
+  const credentialKey = /(?:secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i;
+  const scanKeys = (value: unknown, path: string) => {
+    if (Array.isArray(value)) value.forEach((item, index) => scanKeys(item, `${path}[${index}]`));
+    else if (isObject(value)) {
+      for (const [key, item] of Object.entries(value)) {
+        const here = path ? `${path}.${key}` : key;
+        if (credentialKey.test(key) && typeof item === 'string' && item.trim() !== '' && !placeholder(item.trim())) add(here, 'secret');
+        else scanKeys(item, here);
+      }
+    }
+  };
+  scanKeys(config, '');
 
   const list = (value: unknown, path: string): Json[] => {
     if (value === undefined) return [];
@@ -62,7 +75,8 @@ export function validate(config: unknown): Finding[] {
 
   // jira
   const jira = config.jira;
-  if (!isObject(jira)) add('jira', 'field-missing');
+  if (jira === undefined) add('jira', 'jira-missing', 'warning'); // only the triage needs it; index, sync and publish do not
+  else if (!isObject(jira)) add('jira', 'not-an-object');
   else {
     if (!isText(jira.site) || !host.test(jira.site)) add('jira.site', 'site-invalid');
     if (jira.epic === undefined) add('jira.epic', 'epic-missing', 'warning');
@@ -102,6 +116,8 @@ export function validate(config: unknown): Finding[] {
     if (!isObject(interactions)) add('interactions', 'not-an-object');
     else {
       if (interactions.enabled !== undefined && typeof interactions.enabled !== 'boolean') add('interactions.enabled', 'field-invalid');
+      if (interactions.jira !== undefined && !(isObject(interactions.jira) && (interactions.jira.comment === undefined || typeof interactions.jira.comment === 'boolean'))) add('interactions.jira.comment', 'field-invalid');
+      if (interactions.slack !== undefined && !(isObject(interactions.slack) && (interactions.slack.reaction === undefined || isText(interactions.slack.reaction)))) add('interactions.slack.reaction', 'field-invalid');
       const auto = interactions.auto_types;
       if (auto !== undefined) {
         if (!Array.isArray(auto) || auto.some(type => typeof type !== 'string')) add('interactions.auto_types', 'not-a-list');
@@ -175,6 +191,8 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   if (!existsSync(ignore)) {
     writeFileSync(ignore, '*\n', { flag: 'wx' });
     created.push(ignore);
+  } else if (!readFileSync(ignore, 'utf8').split(/\r?\n/).some(line => line.trim() === '*')) {
+    findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'warning' }); // kept as is; the user decides
   }
   return { created, findings };
 }

@@ -15,7 +15,7 @@ Cria o `.moiras/sources.json` que as outras skills leem. O usuário pode (e deve
 
 ## Passos
 
-1. **Ver se já existe.** Se `<base>/.moiras/sources.json` existe, **não escreva nada**: rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/config.ts" check <base>/.moiras/sources.json` e relate só caminho e regra de cada achado. Com `--check`, pare aqui mesmo sem achados. Sem `--check`, diga que a edição é à mão (ou que ele remova o arquivo para criar outro) e encerre.
+1. **Ver se já existe.** Se `<base>/.moiras/sources.json` existe, **não escreva nada**: rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/config.ts" check <base>/.moiras/sources.json` e relate só caminho e regra de cada achado; depois diga que a edição é à mão (ou que ele remova o arquivo para criar outro) e encerre. Com `--check`, a skill **só verifica**, exista o arquivo ou não: sem arquivo, diga que ainda não há configuração, sugira rodar a skill sem `--check` e encerre.
 2. **Descobrir e propor.** Pergunte em blocos curtos, só o que falta, e nunca invente um valor. Os conectores servem para **ler** e propor; confirme cada valor com o usuário:
    - **Jira** (obrigatório): `site` (só o host, ex.: `example.atlassian.net`), o épico (`epic`, ex.: `PROJ-100`) e a data fim (`project_end`, `AAAA-MM-DD`). Com o conector do Jira, confirme que o épico existe e leia a data fim dele. `agency_field` só se parte das tasks é gerida por agência.
    - **Slack** (contexto, opcional): canais e pessoas a monitorar, com os IDs (`C…` e `U…`). Com o conector do Slack, procure cada nome e proponha o ID; sem ele, explique onde achá-lo (perfil da pessoa, detalhes do canal). `lookback_days` só se quiser mudar o padrão.

@@ -29,9 +29,15 @@ describe('validate', () => {
   });
 
   it('reports a missing jira section, a bad site and a bad epic', () => {
-    assert.deepEqual(rules({}), ['jira:field-missing:error']);
+    assert.deepEqual(rules({}), ['jira:jira-missing:warning']);
+    assert.deepEqual(rules({ jira: 3 }), ['jira:not-an-object:error']);
     assert.deepEqual(rules({ jira: { site: 'https://example.atlassian.net/x', epic: 'proj-1' } }), ['jira.site:site-invalid:error', 'jira.epic:epic-invalid:error']);
     assert.deepEqual(rules({ jira: { site: 'example.atlassian.net' } }), ['jira.epic:epic-missing:warning']);
+  });
+
+  it('accepts a configuration without Jira for the skills that do not triage', () => {
+    const config = { knowledge: minimal().knowledge, index: { roots: ['../acme'], repositories: [{ name: 'acme-shop-checkout', path: '../acme-shop-checkout' }] } };
+    assert.deepEqual(rules(config), ['jira:jira-missing:warning']);
   });
 
   it('checks dates, Slack ids and the lookback', () => {
@@ -52,6 +58,8 @@ describe('validate', () => {
   it('never lets a comment run without approval', () => {
     assert.deepEqual(rules({ ...minimal(), interactions: { enabled: true, auto_types: ['reaction', 'comment'] } }), ['interactions.auto_types:auto-type-not-allowed:error']);
     assert.deepEqual(rules({ ...minimal(), interactions: { enabled: 'sim' } }), ['interactions.enabled:field-invalid:error']);
+    assert.deepEqual(rules({ ...minimal(), interactions: { jira: { comment: 'false' }, slack: { reaction: 42 } } }), ['interactions.jira.comment:field-invalid:error', 'interactions.slack.reaction:field-invalid:error']);
+    assert.deepEqual(rules({ ...minimal(), interactions: { enabled: true, auto_types: ['reaction'], jira: { comment: false }, slack: { reaction: 'eyes' } } }), []);
   });
 
   it('checks the knowledge list', () => {
@@ -107,6 +115,8 @@ describe('validate', () => {
 
   it('keeps blocks of other sources, still scanning them, and rejects a non-object', () => {
     assert.deepEqual(rules({ ...minimal(), github: { repositories: ['acme/acme-shop-checkout'] } }), []);
+    assert.deepEqual(rules({ ...minimal(), github: { token: 'synthetic', nested: { Password: 'synthetic' } } }), ['github.token:secret:error', 'github.nested.Password:secret:error']);
+    assert.deepEqual(rules({ ...minimal(), github: { token: '<token>' } }), []);
     assert.deepEqual(rules({ ...minimal(), github: { url: 'https://user:hunter2@github.com/acme' } }), ['github.url:url-credentials:error']);
     assert.deepEqual(rules([]), [':not-an-object:error']);
     assert.deepEqual(rules({ ...minimal(), agencies: [{ channel: '#a' }], slack: 3 }), ['agencies[0].name:field-missing:error', 'slack:not-an-object:error']);
@@ -138,6 +148,7 @@ describe('init', () => {
     rmSync(join(target, 'sources.json'));
     const result = init(minimal(), target);
     assert.deepEqual(result.created, [join(target, 'sources.json')]);
+    assert.deepEqual(result.findings, [{ path: join(target, '.gitignore'), rule: 'gitignore-not-protecting', severity: 'warning' }]);
     assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), 'custom\n');
   });
 

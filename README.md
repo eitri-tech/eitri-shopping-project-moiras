@@ -35,7 +35,7 @@ Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou serv
 
 ## Uso
 
-Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (usa os conectores só para ler e propor, como os IDs do Slack), mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim". Nunca sobrescreve um existente, e você pode editar o arquivo à vontade; `node plugins/moiras/scripts/config.ts check .moiras/sources.json` valida. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes. Um exemplo enxuto, com os endereços (caminhos relativos à pasta que contém `.moiras/`; o modelo completo está em `plugins/moiras/config/sources.example.json`):
+Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (usa os conectores só para ler e propor, como os IDs do Slack), mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim". Nunca sobrescreve um existente, e você pode editar o arquivo à vontade; `/moiras:moiras-init --check` valida. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes. Um exemplo enxuto, com os endereços (caminhos relativos à pasta que contém `.moiras/`; o modelo completo está em `plugins/moiras/config/sources.example.json`):
 
 ```json
 {

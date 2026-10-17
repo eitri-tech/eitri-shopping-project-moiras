@@ -33,7 +33,7 @@ Esta skill é a única que escreve em `glossary/`. O glossário é derivado do c
 - `roots`: pastas cujas subpastas com `.git` são descobertas como repositórios. O nome do repositório é o nome da pasta.
 - `repositories`: repositórios explícitos. `name` e `path` são obrigatórios; `url`, `owner`, `agency` e `platform` são opcionais e **valem mais que o detectado**, porque dono e agência não saem do código.
 - `agency`, quando existir, precisa ser um `name` de `agencies`. Se não for, avise e deixe o campo vazio.
-- Caminhos relativos valem a partir da pasta onde está o `.moiras/`. Sem `index`, pergunte em qual pasta estão os repositórios e proponha a configuração; só grave `sources.json` se o usuário pedir.
+- Caminhos relativos valem a partir da pasta onde está o `.moiras/`. Sem `index`, pergunte em qual pasta estão os repositórios e proponha a configuração, mas não grave o `sources.json`: indique `/moiras:moiras-init` (se o arquivo não existe) ou a edição à mão.
 
 Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all` (o padrão quando não há nome).
 
