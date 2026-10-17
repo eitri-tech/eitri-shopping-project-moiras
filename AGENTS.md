@@ -39,6 +39,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Sem nomes reais de clientes, repositórios, sites, projetos do Jira, canais ou pessoas, nem URLs internas.
 - Exemplos usam um universo fictício: empresa Acme, repositório `acme-shop-checkout`, issues `PROJ-123`, pessoas Fulano, Beltrana e Sicrano, canal `#proj-squad`.
 - O knowledge real fica fora daqui: local em `.moiras/` (no `.gitignore`) ou em repositórios privados criados a partir do template público de knowledge.
+- A regra vale também fora dos arquivos: título e corpo de PR, mensagens de commit e comentários não levam link, chave de issue nem domínio de tracker da empresa. A convenção de repositórios privados do time (link do Jira no corpo do PR) **não** vale aqui. O GitHub guarda o histórico de edição do texto, então apagar depois não basta: não escreva.
 
 ## Regras do domínio
 
