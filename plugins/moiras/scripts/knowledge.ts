@@ -516,6 +516,25 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
   throw new Error(`Invalid --only. ${usage}`);
 };
 
+/** Variables that point Git at another repository, work tree or index would make the answer describe something else. */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
+  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
+  return env;
+}
+
+/**
+ * The explicit source files that Git ignores (and does not track): a `.gitignore`d file is not part of the recorded commit and may
+ * hold what the repository chose to keep out of it, so it must not become evidence. Folders are only listed by name and not checked.
+ */
+export function ignoredSources(base: string, paths: string[]): string[] {
+  const env = gitEnv();
+  return paths.filter(path => {
+    try { if (!lstatSync(resolve(base, path)).isFile()) return false; } catch { return false; }
+    return spawnSync('git', ['-C', base, 'check-ignore', '-q', '--', path], { env }).status === 0;
+  });
+}
+
 export interface Provenance {
   git: boolean;
   /** Why `git` is false when it is more than "not a repository": the dirty state could not be read. */
@@ -534,9 +553,7 @@ export interface Provenance {
  * on one, and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
  */
 export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Provenance {
-  // Variables that point Git at another repository, work tree or index would make the answer describe something else.
-  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
-  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
+  const env = gitEnv();
   // core.fsmonitor and the clean/process commands of .gitattributes filters are executables that `git status` would run: reading a
   // repository must not run its scripts. Filters are emptied one by one; the dirty state may then be reported a little too eagerly
   // (a file whose clean filter changes its content looks modified), never missed.
@@ -605,6 +622,8 @@ export function main(argv: string[]): { output: string; code: number } {
   const { positionals: [command, ...rest], values } = parsed;
   if (command === 'hash') {
     if (values.base === undefined || !rest.length) throw new Error(usage);
+    const ignored = ignoredSources(values.base, rest);
+    if (ignored.length) throw new Error(`Git-ignored files cannot be sources: ${ignored.join(', ')}`);
     return { output: sourcesHash(values.base, rest, values.meta === undefined ? undefined : JSON.parse(values.meta)), code: 0 };
   }
   if (command === 'check') {

@@ -771,6 +771,18 @@ describe('provenance', () => {
     assert.equal(provenance(cwd).indexed_dirty, true);
   });
 
+  it('refuses a Git-ignored file as a source but accepts tracked files and folders', t => {
+    const cwd = repository(t);
+    writeFileSync(join(cwd, '.gitignore'), 'config.json\nbuild/\n');
+    writeFileSync(join(cwd, 'config.json'), '{}');
+    mkdirSync(join(cwd, 'build'));
+    assert.throws(() => main(['hash', '--base', cwd, 'README.md', 'config.json']), /Git-ignored files cannot be sources: config\.json/);
+    assert.equal(typeof main(['hash', '--base', cwd, 'README.md', 'build']).output, 'string');
+    const { dir, write } = workspace(t);
+    write('plain', 'config.json', '{}');
+    assert.equal(typeof main(['hash', '--base', join(dir, 'plain'), 'config.json']).output, 'string');
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');
