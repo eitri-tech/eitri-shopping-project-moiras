@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isIgnored, parseIgnore } from './gitignore.ts';
+import { isIgnored, layerOf, parseIgnore } from './gitignore.ts';
 import type { IgnoreLayer } from './gitignore.ts';
 
-const layer = (text: string, dir = ''): IgnoreLayer => ({ dir, rules: parseIgnore(text) });
+const layer = (text: string, dir = ''): IgnoreLayer => layerOf(dir, text);
 const ignored = (text: string, path: string, isDirectory = false, dir = '') => isIgnored([layer(text, dir)], path, isDirectory);
 
 describe('parseIgnore', () => {

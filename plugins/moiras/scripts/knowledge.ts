@@ -15,7 +15,7 @@ import { hash as digest } from 'node:crypto';
 import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { isIgnored, parseIgnore } from './gitignore.ts';
+import { isIgnoredParts, layerOf } from './gitignore.ts';
 import type { IgnoreLayer } from './gitignore.ts';
 import { hash } from './memory.ts';
 
@@ -472,7 +472,7 @@ function canonical(value: unknown): string {
 function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
   try {
     const { text } = readSafe(join(resolve(base), dir, '.gitignore'));
-    return text === undefined ? undefined : { dir: dir.split(sep).join('/'), rules: parseIgnore(text) };
+    return text === undefined ? undefined : layerOf(dir.split(sep).join('/'), text);
   } catch {
     return undefined;
   }
@@ -481,7 +481,7 @@ function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
 export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
   const entries: string[] = [];
   const visited = new Set<string>();
-  const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[]) => {
+  const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], parts: Buffer[]) => {
     const issue = pathIssue(base, path);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
@@ -491,21 +491,27 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       if (visited.has(real)) return;
       visited.add(real);
       let layers = inherited;
+      let here = parts;
       if (explicit) {
         // A path named on its own still obeys the .gitignore of the folders between it and the base (never above the base).
-        const parts = relative(resolve(base), full).split(sep).filter(Boolean);
+        const names = relative(resolve(base), full).split(sep).filter(Boolean);
+        here = names.map(name => Buffer.from(name, 'utf8'));
         layers = [];
-        for (let depth = 0; depth < parts.length; depth += 1) {
-          const above = ignoreLayer(base, parts.slice(0, depth).join(sep));
+        for (let depth = 0; depth < names.length; depth += 1) {
+          const above = ignoreLayer(base, names.slice(0, depth).join(sep));
           if (above) layers.push(above);
         }
       }
-      const own = ignoreLayer(base, relative(resolve(base), full));
-      if (own) layers = [...layers, own];
-      for (const child of readdirSync(full, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-        const relativeChild = relative(resolve(base), join(full, child.name)).split(sep).join('/');
-        if (isIgnored(layers, relativeChild, child.isDirectory())) continue;
-        walk(join(path, child.name), false, layers);
+      const children = readdirSync(full, { withFileTypes: true });
+      // Only a folder that holds a .gitignore pays for reading one.
+      if (children.some(child => child.name === '.gitignore')) {
+        const own = ignoreLayer(base, relative(resolve(base), full));
+        if (own) layers = [...layers, own];
+      }
+      for (const child of children.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        const childParts = layers.length ? [...here, Buffer.from(child.name, 'utf8')] : here;
+        if (layers.length && isIgnoredParts(layers, childParts, child.isDirectory())) continue;
+        walk(join(path, child.name), false, layers, childParts);
       }
     } else {
       const { issue } = readSafe(full);
@@ -513,7 +519,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
     }
   };
-  for (const path of paths) walk(path, true, []);
+  for (const path of paths) walk(path, true, [], []);
   if (meta !== undefined) entries.push(`meta:${canonical(meta)}`);
   return hash([...new Set(entries)].sort().join('\n'));
 }

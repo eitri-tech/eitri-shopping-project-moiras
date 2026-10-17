@@ -31,12 +31,21 @@ export interface IgnoreRule {
   /** The pattern held a slash: it matches from the folder of its `.gitignore`, not at any depth. */
   anchored: boolean;
   segments: Segment[];
+  /** A plain name with no wildcard, at any depth: compared byte for byte, the cheapest and most common rule. */
+  literal?: Buffer;
 }
 
 /** The rules of one `.gitignore`, and the folder it sits in (relative to the base, `/`-separated; empty for the base itself). */
 export interface IgnoreLayer {
   dir: string;
+  /** How many folders `dir` has (0 for the base). */
+  depth: number;
   rules: IgnoreRule[];
+}
+
+/** The layer for the `.gitignore` with this text, in `dir` (relative to the base, `/`-separated). */
+export function layerOf(dir: string, text: string): IgnoreLayer {
+  return { dir, depth: dir === '' ? 0 : dir.split('/').length, rules: parseIgnore(text) };
 }
 
 const maxLineLength = 1024;
@@ -232,31 +241,44 @@ export function parseIgnore(text: string): IgnoreRule[] {
       segments.push(made);
     }
     if (pieces > maxPieces) return [];
-    if (valid && segments.length) rules.push({ negated, dirOnly, anchored, segments });
+    if (valid && segments.length) {
+      const only = segments[0];
+      const rule: IgnoreRule = { negated, dirOnly, anchored, segments };
+      if (!anchored && Array.isArray(only) && only.every(piece => piece.kind === 'char')) rule.literal = Buffer.from(only.map(piece => (piece as { byte: number }).byte));
+      rules.push(rule);
+    }
     if (rules.length > maxRules) return [];
   }
   return rules;
 }
 
-/**
- * Whether `relativePath` (relative to the base, `/`-separated) is ignored. `layers` go from the outermost folder to the innermost, and
- * the last rule that matches wins, so a deeper `.gitignore` can re-include what a shallower one excluded. A path inside an ignored folder
- * is the caller's to skip: it must not descend into a folder this returns true for.
- */
-export function isIgnored(layers: IgnoreLayer[], relativePath: string, isDirectory: boolean): boolean {
-  let ignored = false;
-  for (const { dir, rules } of layers) {
-    let local = relativePath;
-    if (dir !== '') {
-      if (!relativePath.startsWith(`${dir}/`)) continue;
-      local = relativePath.slice(dir.length + 1);
-    }
-    const path = local.split('/').map(part => Buffer.from(part, 'utf8'));
-    for (const rule of rules) {
-      if (rule.dirOnly && !isDirectory) continue;
-      const matches = rule.anchored ? segmentsMatch(rule.segments, path) : nameMatches(rule.segments[0] as Piece[], path.at(-1)!);
-      if (matches) ignored = !rule.negated;
-    }
+function apply(layer: IgnoreLayer, parts: Buffer[], isDirectory: boolean, ignored: boolean): boolean {
+  let result = ignored;
+  let local: Buffer[] | undefined;
+  for (const rule of layer.rules) {
+    if (rule.dirOnly && !isDirectory) continue;
+    let matches: boolean;
+    if (rule.literal) matches = parts[parts.length - 1]!.equals(rule.literal);
+    else if (rule.anchored) { local ??= layer.depth === 0 ? parts : parts.slice(layer.depth); matches = segmentsMatch(rule.segments, local); }
+    else matches = nameMatches(rule.segments[0] as Piece[], parts[parts.length - 1]!);
+    if (matches) result = !rule.negated;
   }
+  return result;
+}
+
+/**
+ * Whether the path made of `parts` (the names from the base down, as bytes) is ignored by `layers`, which must all be folders on the
+ * way to it, outermost first. The last rule that matches wins, so a deeper `.gitignore` can re-include what a shallower one excluded.
+ * A path inside an ignored folder is the caller's to skip: it must not descend into a folder this returns true for.
+ */
+export function isIgnoredParts(layers: IgnoreLayer[], parts: Buffer[], isDirectory: boolean): boolean {
+  let ignored = false;
+  for (const layer of layers) ignored = apply(layer, parts, isDirectory, ignored);
   return ignored;
+}
+
+/** Same as `isIgnoredParts`, for a `/`-separated path relative to the base; layers of folders that are not above the path are skipped. */
+export function isIgnored(layers: IgnoreLayer[], relativePath: string, isDirectory: boolean): boolean {
+  const parts = relativePath.split('/').map(part => Buffer.from(part, 'utf8'));
+  return isIgnoredParts(layers.filter(layer => layer.dir === '' || relativePath.startsWith(`${layer.dir}/`)), parts, isDirectory);
 }
