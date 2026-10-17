@@ -121,7 +121,7 @@ O `run_id` é a referência persistente ao relatório completo `<runs.dir>/<run_
 
 Ao retomar, consulte também os relatórios anteriores: um veredito posterior da mesma issue não encerra uma escolha pendente anterior. Apresente cada conjunto por `(run_id, key)` e registre a escolha com o `run_id` do conjunto exibido, preservando a numeração. Guarde também `choice` (e o `id` do aprendizado, quando houver) no item desse relatório ao registrar a escolha, sem alterar o veredito ou as soluções; ao listar pendências, exclua os conjuntos já escolhidos. Assim a consulta do último registro por issue não perde o estado das outras execuções. Relatório ausente, ilegível ou sem soluções completas gera `pending-report-unavailable:<run_id>:<key>`: não reconstrua a escolha pelo resumo; ofereça nova triagem sem registrar escolha para aquele conjunto.
 
-`choice` é `null` até o usuário escolher. Quando escolher, grave um novo registro da mesma chave com `choice` = número da solução ou `"none"` e, se for uma solução, o `id` do registro criado no aprendizado.
+`choice` é `null` até o usuário escolher. Quando escolher, grave um novo registro da mesma chave com `choice` = número da solução ou `"none"` e, se for uma solução, o `id` do registro criado no aprendizado. O script recusa registro incoerente: `action` fora de `duplicate | blocked | ready-for-dev | needs-info | close`, `mode` fora de `interactive | auto`, `choice` numerado sem a lista `solutions` ou fora desse intervalo, e `id` sem a escolha correspondente.
 
 ## 7. Aprendizado
 
