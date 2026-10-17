@@ -69,6 +69,35 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, jql: 'summary ~ "order by date" AND labels = \'order by\'' } }), []);
   });
 
+  it('warns when the JQL contradicts the filters the Clotho adds, but not for compatible ones', () => {
+    const site = 'example.atlassian.net';
+    for (const [jql, rule] of [
+      ['project = PROJ AND status = Done', 'jql-state-contradicts'],
+      ['project = PROJ and statuscategory="Done"', 'jql-state-contradicts'],
+      ['project = PROJ AND status = "Concluído"', 'jql-state-contradicts'],
+      ['project = PROJ AND resolution != EMPTY', 'jql-state-contradicts'],
+      ['project = PROJ AND resolution is not EMPTY', 'jql-state-contradicts'],
+      ['project = PROJ AND resolution = Fixed', 'jql-state-contradicts'],
+      ['project = PROJ AND assignee = Fulano', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee != EMPTY', 'jql-assignee-contradicts'],
+      ['project = PROJ AND assignee is not empty', 'jql-assignee-contradicts'],
+    ] as [string, string][]) {
+      assert.deepEqual(rules({ jira: { site, jql } }), [`jira.jql:${rule}:warning`], jql);
+    }
+    for (const jql of [
+      'project = PROJ',
+      'project = PROJ AND status != Done AND statusCategory != Done',
+      'project = PROJ AND status IN ("Done", "To Do")',
+      'project = PROJ AND status = "Aprovado"',
+      'project = PROJ AND resolution = EMPTY',
+      'project = PROJ AND assignee IS EMPTY',
+      'project = PROJ AND labels = "Done" AND summary ~ "status report about Done"',
+      'project = PROJ AND "Story Points" = "Done asks"',
+    ]) {
+      assert.deepEqual(rules({ jira: { site, jql } }), [], jql);
+    }
+  });
+
   it('accepts a configuration without Jira for the skills that do not triage', () => {
     const config = { knowledge: minimal().knowledge, index: { roots: ['../acme'], repositories: [{ name: 'acme-shop-checkout', path: '../acme-shop-checkout' }] } };
     assert.deepEqual(rules(config), ['jira:jira-missing:warning']);

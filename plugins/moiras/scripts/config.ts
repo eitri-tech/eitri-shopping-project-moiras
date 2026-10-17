@@ -120,8 +120,15 @@ export function validate(config: unknown): Finding[] {
     // The fragment is read-only by nature (a search), but the Clotho owns the ORDER BY, so a second one would break the query (words inside quoted text do not count).
     if (jira.jql !== undefined) {
       if (!isText(jira.jql)) add('jira.jql', 'field-invalid');
-      else if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
-      else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
+      else {
+        if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
+        else if (/\border\s+by\b/i.test(jira.jql.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""'))) add('jira.jql', 'jql-order-by');
+        // The Clotho adds `assignee IS EMPTY AND statusCategory != Done`; a query pinning Done, a resolvable
+        // state or an assignee would always return nothing (multi-word quoted text is out of the scan).
+        const searchable = jira.jql.replace(/"(?:[^"\\]*\s[^"\\]*)"/g, '""').replace(/'(?:[^'\\]*\s[^'\\]*)'/g, "''");
+        if (/\bstatus(?:Category)?\s*=\s*["']?\s*(?:done|conclu[íi]d[oa])\b/i.test(searchable) || /\bresolution\s*(?:=\s*(?![\s"']*(?:empty|null)\b)|(?:!=|is\s+not)\s*["']?\s*empty\b)/i.test(searchable)) add('jira.jql', 'jql-state-contradicts', 'warning');
+        if (/\bassignee\s*(?:=\s*(?![\s"']*(?:empty|null)\b)\S|(?:!=|is\s+not)\s*["']?\s*empty\b)/i.test(searchable)) add('jira.jql', 'jql-assignee-contradicts', 'warning');
+      }
     }
     if (jira.jql !== undefined && [jira.epic, jira.epics, jira.categories].some(part => part !== undefined)) add('jira.jql', 'scope-conflict');
     if ([jira.epic, jira.epics, jira.categories, jira.jql].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
