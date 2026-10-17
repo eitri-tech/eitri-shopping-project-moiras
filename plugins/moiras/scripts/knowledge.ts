@@ -214,7 +214,8 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       const fields = entry.doc?.fields;
       if (!fields || entry.issue) continue;
       if (typeof fields.id === 'string' && fields.id) ids.add(fields.id);
-      if (invalid.has(entry.path)) continue;
+      // Empty and TODO records are not evidence (see moiras-triage), so they do not cover an issue.
+      if (invalid.has(entry.path) || !entry.doc!.body.trim() || /\bTODO\b/.test(entry.doc!.body)) continue;
       const id = stem;
       const raw = entry.kind.type === 'solution' ? fields.issue : entry.kind.type === 'pattern' ? fields.issues : undefined;
       const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);

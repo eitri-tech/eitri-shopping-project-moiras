@@ -115,11 +115,13 @@ describe('issues', () => {
     const { local, shared, write } = workspace(t);
     write('local', 'learnings/solutions/PROJ-2-1.md', solution('resolved').replace('id: PROJ-1-1', 'id: PROJ-9-1').replace('issue: PROJ-1', 'issue: PROJ-2'));
     write('local', 'learnings/solutions/broken.md', '---\nid: broken\ntype: pattern\nissue: PROJ-4\n---\n');
+    write('local', 'learnings/patterns/empty.md', `${patternHead('empty').join('\n')}\n`);
+    write('local', 'learnings/patterns/todo.md', patternDoc('todo', 'TODO'));
     write('local', 'learnings/patterns/scalar.md', patternDoc('scalar', '# P').replace('issues: [PROJ-1]', 'issues: PROJ-5'));
     write('shared', 'learnings/patterns/team.md', patternDoc('team', '# P').replace('issues: [PROJ-1]', 'issues: [PROJ-6]'));
     assert.deepEqual(issues([local, shared]), {
       issues: { 'PROJ-5': { solutions: [], patterns: ['scalar'] }, 'PROJ-6': { solutions: [], patterns: ['team'] } },
-      ids: ['PROJ-2-1', 'PROJ-9-1', 'broken', 'scalar', 'team'],
+      ids: ['PROJ-2-1', 'PROJ-9-1', 'broken', 'empty', 'scalar', 'team', 'todo'],
     });
   });
 
