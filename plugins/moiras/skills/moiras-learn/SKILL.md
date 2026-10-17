@@ -1,7 +1,7 @@
 ---
 name: moiras-learn
-description: "Aprende com o histórico: lê as issues já concluídas do épico no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
-argument-hint: "[EPIC] [--since AAAA-MM-DD] [--limit N]"
+description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos, categorias, consulta) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
+argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N]"
 allowed-tools: Bash(node:*)
 ---
 
@@ -17,22 +17,22 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 ## O que ela lê e o que ela escreve
 
-- **Lê** o Jira, só leitura: as issues concluídas do épico, o comentário que fechou cada uma e os PRs ligados a ela (links do desenvolvimento ou links remotos). Segue as regras de leitura de `stages/clotho.md` (paralelo, `agency_field` opcional, falha de fonte sem inventar dados). Não lê o Slack.
+- **Lê** o Jira, só leitura: as issues concluídas do escopo, o comentário que fechou cada uma e os PRs ligados a ela (links do desenvolvimento ou links remotos). Segue as regras de leitura de `stages/clotho.md` (paralelo, `agency_field` opcional, falha de fonte sem inventar dados). Não lê o Slack.
 - **Lê** o knowledge (glossário e critérios) para achar repositório e componente, como a Láquesis, e o `learnings/` local para não repetir o que já existe.
 - **Escreve** só `learnings/{solutions,patterns,decisions}/<id>.md` no knowledge de escopo `local`, depois do "sim". Nada em `glossary/` (só o `moiras-index`), `criteria/`, Jira, Slack ou repositórios, e nada na memória das etapas.
 - O caminho para um knowledge compartilhado continua sendo o `moiras-publish`, por PR.
 
 ## Passos
 
-1. **Período e épico.** O épico vem do argumento ou de `jira.epic`. `--since` limita pela data de resolução; sem ele, **pergunte** o recorte (sugestão: os últimos 90 dias) e quantas issues no máximo (`--limit`, sugestão 30 por rodada). Não leia o épico inteiro sem o usuário pedir.
-2. **Coletar (Cloto, só leitura).** Busque as issues concluídas do épico, da mais recente para a mais antiga:
+1. **Período e escopo.** O escopo vem dos argumentos (um ou mais épicos, que substituem os da configuração) ou de `jira`: `epic`, `epics`, `categories` e `jql`, montados como na Cloto (`stages/clotho.md`, passo 0). `--since` limita pela data de resolução; sem ele, **pergunte** o recorte (sugestão: os últimos 90 dias) e quantas issues no máximo (`--limit`, sugestão 30 por rodada). Não leia o épico inteiro sem o usuário pedir.
+2. **Coletar (Cloto, só leitura).** Busque as issues concluídas do escopo, da mais recente para a mais antiga:
 
    ```
-   parent = <EPIC> AND statusCategory = Done AND resolved >= "<AAAA-MM-DD>"
+   <ESCOPO> AND statusCategory = Done AND resolved >= "<AAAA-MM-DD>"
    ORDER BY resolved DESC
    ```
 
-   (`"Epic Link" = <EPIC>` nos projetos que ainda usam o campo antigo.) Peça resumo, tipo, resolução, `resolved_at` e `agency` (quando configurado). Para cada issue, leia o comentário de fechamento e os PRs ligados (repositório e número). Issue sem PR **e** sem comentário de fechamento fica de fora com o motivo `no-evidence`.
+   (`"Epic Link" in (...)` nos projetos que ainda usam o campo antigo.) Peça resumo, tipo, resolução, `resolved_at` e `agency` (quando configurado). Para cada issue, leia o comentário de fechamento e os PRs ligados (repositório e número). Issue sem PR **e** sem comentário de fechamento fica de fora com o motivo `no-evidence`.
 3. **Pular o que o knowledge já cobre.** Rode:
 
    ```bash

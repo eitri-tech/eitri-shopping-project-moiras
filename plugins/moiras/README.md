@@ -9,8 +9,8 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
 Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
 
-- Cloto (fia): configuração + épico → issues pendentes sem responsável, outras issues do épico e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
-- Láquesis (mede): issue + evidências + outras issues do épico, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
+- Cloto (fia): configuração + escopo (épicos, categorias, consulta) → issues pendentes sem responsável, outras issues do escopo e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
+- Láquesis (mede): issue + evidências + outras issues do escopo, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
 - Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
 
 As ações são `duplicate`, `blocked`, `ready-for-dev`, `needs-info` e `close`.
@@ -142,7 +142,7 @@ Para revisar o knowledge fora de uma triagem, use a skill `moiras-audit`: ela ap
 
 Rode `/moiras:moiras-init` no projeto onde vai rodar a triagem: ela pergunta o que falta, mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim" (e nunca sobrescreve um existente). Para validar um arquivo editado à mão: `/moiras:moiras-init --check`. Se preferir montar à mão, copie `config/sources.example.json` para `.moiras/sources.json`. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes (ver `stages/clotho.md`). Os campos:
 
-- `jira`: site, épico e data fim do projeto; opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task; sem valor nele, usa-se `agency` do glossário, recalculado inclusive para issues `unchanged`;
+- `jira`: site, o escopo e a data fim do projeto. O escopo é um ou vários épicos (`epics`; `epic` aceita um só), categorias (`categories`: lista de `field` e `values`, como `labels`, `component` ou um campo customizado) e/ou uma consulta própria (`jql`, um filtro do Jira sem `ORDER BY`, que a Cloto só lê). As partes presentes valem juntas (AND), então sem épico inclua o `project` numa categoria ou na `jql`. Cada issue usa a data fim do próprio épico; sem épico, vale `project_end`. Opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task; sem valor nele, usa-se `agency` do glossário, recalculado inclusive para issues `unchanged`;
 - `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse que só o usuário envia; o plugin apenas prepara o rascunho;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
 - `interactions` (opcional, desligado por padrão): deixa a Cloto reagir no Slack (emoji `slack.reaction`) e comentar no Jira que a issue foi citada, sempre depois do seu "sim" à lista; no `--auto` só as reações (`auto_types`) são aplicadas sem perguntar, e o comentário fica no relatório; comentários nunca vão para issues com agência ou agência ambígua;

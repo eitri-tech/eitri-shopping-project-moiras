@@ -26,6 +26,10 @@ export const defaultDir = '.moiras';
 const scopes = new Set(['local', 'project', 'group', 'global']);
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
 const host = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
+/** Field name or id for a category (`labels`, `component`, `customfield_10020`, `Team`): quoted by the Clotho, so no quotes or control characters. */
+const jiraField = /^[A-Za-z0-9_][A-Za-z0-9 _.-]{0,63}$/;
+/** Category value (a label, component or option name): quoted by the Clotho, so no double quote, backslash or control character. */
+const jiraValue = /^[^"\\\u0000-\u001f]{1,128}$/;
 const slackUser = /^[UW][A-Z0-9]{8,}$/;
 const slackChannel = /^[CG][A-Z0-9]{8,}$/;
 const userInfo = patterns.find(entry => entry.rule === 'url-credentials')!.test;
@@ -91,8 +95,36 @@ export function validate(config: unknown): Finding[] {
   else if (!isObject(jira)) add('jira', 'not-an-object');
   else {
     if (!isText(jira.site) || !host.test(jira.site)) add('jira.site', 'site-invalid');
-    if (jira.epic === undefined) add('jira.epic', 'epic-missing', 'warning');
-    else if (typeof jira.epic !== 'string' || !jiraKey.test(jira.epic)) add('jira.epic', 'epic-invalid');
+    // The scope of the triage: epics, categories (field + values) and a JQL fragment, ANDed by the Clotho. `epic` stays as the single-epic shorthand.
+    if (jira.epic !== undefined && (typeof jira.epic !== 'string' || !jiraKey.test(jira.epic))) add('jira.epic', 'epic-invalid');
+    const epics = new Set<string>(typeof jira.epic === 'string' && jiraKey.test(jira.epic) ? [jira.epic] : []);
+    if (jira.epics !== undefined) {
+      if (!Array.isArray(jira.epics) || jira.epics.length === 0) add('jira.epics', 'not-a-list');
+      else jira.epics.forEach((epic, index) => {
+        if (typeof epic !== 'string' || !jiraKey.test(epic)) add(`jira.epics[${index}]`, 'epic-invalid');
+        else if (epics.has(epic)) add(`jira.epics[${index}]`, 'epic-duplicate');
+        else epics.add(epic);
+      });
+    }
+    if (jira.categories !== undefined) {
+      if (!Array.isArray(jira.categories) || jira.categories.length === 0 || jira.categories.some(item => !isObject(item))) add('jira.categories', 'not-a-list');
+      else (jira.categories as Json[]).forEach((category, index) => {
+        const path = `jira.categories[${index}]`;
+        if (!isText(category.field)) add(`${path}.field`, 'field-missing');
+        else if (!jiraField.test(category.field)) add(`${path}.field`, 'field-invalid');
+        if (!Array.isArray(category.values) || category.values.length === 0) add(`${path}.values`, 'not-a-list');
+        else category.values.forEach((value, position) => {
+          if (!isText(value) || !jiraValue.test(value)) add(`${path}.values[${position}]`, 'value-invalid');
+        });
+      });
+    }
+    // The fragment is read-only by nature (a search), but the Clotho owns the ORDER BY, so a second one would break the query.
+    if (jira.jql !== undefined) {
+      if (!isText(jira.jql)) add('jira.jql', 'field-invalid');
+      else if (jira.jql.length > 2000) add('jira.jql', 'jql-too-long');
+      else if (/\border\s+by\b/i.test(jira.jql)) add('jira.jql', 'jql-order-by');
+    }
+    if ([jira.epic, jira.epics, jira.categories, jira.jql].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');
     if (jira.agency_field !== undefined && !isText(jira.agency_field)) add('jira.agency_field', 'field-invalid');
   }

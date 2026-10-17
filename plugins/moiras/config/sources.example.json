@@ -1,7 +1,9 @@
 {
   "jira": {
     "site": "example.atlassian.net",
-    "epic": "PROJ-100",
+    "epics": ["PROJ-100", "PROJ-101"],
+    "categories": [{ "field": "labels", "values": ["checkout"] }],
+    "jql": "issuetype != Epic",
     "project_end": "2026-12-15",
     "agency_field": "Agency"
   },

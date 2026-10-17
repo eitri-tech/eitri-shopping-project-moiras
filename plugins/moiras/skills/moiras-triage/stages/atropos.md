@@ -93,7 +93,7 @@ Como calibrar:
 
 ## 5. Saída para o usuário
 
-Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, folga até o fim do épico, ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas. Em seguida, as sugestões de glossário (`glossary_suggestions`) agrupadas por repositório e as de critérios (`criteria_suggestions`). Por fim, as saídas completas em JSON.
+Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, folga até a data fim (do épico da issue, ou do projeto quando ela não tem épico), ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas. Em seguida, as sugestões de glossário (`glossary_suggestions`) agrupadas por repositório e as de critérios (`criteria_suggestions`). Por fim, as saídas completas em JSON.
 
 Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
 
