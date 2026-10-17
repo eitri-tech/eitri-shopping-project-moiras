@@ -739,6 +739,15 @@ describe('security regressions', () => {
     assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
   });
 
+  it('resolves the base once, so a symlinked base hashes like the real one, and missing or file bases fail', t => {
+    const { dir, local, write } = workspace(t);
+    write('local', 'src/a.ts', 'a');
+    symlinkSync(local, join(dir, 'alias'));
+    assert.equal(sourcesHash(join(dir, 'alias'), ['src']), sourcesHash(local, ['src']));
+    assert.throws(() => sourcesHash(join(dir, 'never-was'), ['src']), /not found/);
+    assert.throws(() => sourcesHash(join(local, 'src/a.ts'), ['src']), /not a base directory/);
+  });
+
   it('bounds regex scanning of long lines', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/patterns/p.md', patternDoc('p', 'a'.repeat(100000) + '@abcdef0'));
