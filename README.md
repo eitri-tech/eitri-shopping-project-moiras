@@ -6,6 +6,15 @@ Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do
 Cloto (coleta Jira e Slack) → Láquesis (classifica, acha duplicados) → Átropos (veredito e de 3 a 5 soluções com % de confiança)
 ```
 
+## Sumário
+
+- [Instalação](#instalação)
+- [Uso](#uso)
+- [Segurança](#segurança)
+- [Documentação](#documentação)
+- [Desenvolvimento](#desenvolvimento)
+- [Teste real das skills de knowledge](#teste-real-das-skills-de-knowledge)
+
 ## Instalação
 
 ```
@@ -52,7 +61,7 @@ Sem glossário nem critérios, a Láquesis usa categorias padrão (ou `unknown`)
 
 ## Segurança
 
-- Só lê e sugere no Jira e no Slack; nada é escrito sem o "sim" à lista exata. A exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira), desligadas por padrão.
+- Só lê e sugere no Jira e no Slack; nada é escrito sem o "sim" à lista exata. A exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira), desligadas por padrão (`interactions.enabled`). Com elas ligadas, só a reação autorizada em `interactions.auto_types` roda no `--auto` sem o "sim"; comentário sempre pede aprovação.
 - O knowledge fica fora deste repositório: local (`.moiras/knowledge/`, fora do git) ou em repositórios privados criados a partir de um template público. Nunca guarda cópia de código nem segredos.
 - A memória das etapas é local, só de acréscimo, e guarda hash e metadados, nunca o texto bruto.
 - `moiras-publish` sempre abre PR num branch novo: nunca faz push na principal, `force push` nem merge.
