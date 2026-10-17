@@ -1,6 +1,7 @@
 /* Usage:
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
+ * node knowledge.ts issues .moiras/knowledge
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -16,7 +17,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir> | plan --local <dir> --shared <dir> [--shared-name <name>]';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -196,6 +197,32 @@ export function records(dir: string, only?: Scope): Entry[] {
           return { path, kind, text, doc: result.issue ? null : parseDoc(text), issue: result.issue };
         });
     });
+}
+
+export function issues(dir: string): { issues: Record<string, { solutions: string[]; patterns: string[] }>; ids: string[] } {
+  const ids = new Set<string>();
+  const mentions = new Map<string, { solutions: Set<string>; patterns: Set<string> }>();
+  for (const entry of records(dir, 'learnings').filter(entry => !entry.issue)) {
+    if (!entry.doc) continue;
+    const fields = entry.doc.fields;
+    const id = typeof fields.id === 'string' && fields.id ? fields.id : entry.path.split('/').at(-1)!.slice(0, -3);
+    ids.add(id);
+    const keys = entry.kind.type === 'solution' && typeof fields.issue === 'string'
+      ? [fields.issue]
+      : entry.kind.type === 'pattern' && Array.isArray(fields.issues) ? fields.issues : [];
+    for (const key of keys.filter(Boolean)) {
+      const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
+      group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
+      mentions.set(key, group);
+    }
+  }
+  return {
+    issues: Object.fromEntries([...mentions.keys()].sort().map(key => {
+      const group = mentions.get(key)!;
+      return [key, { solutions: [...group.solutions].sort(), patterns: [...group.patterns].sort() }];
+    })),
+    ids: [...ids].sort(),
+  };
 }
 
 /** `YYYY-MM-DD` that exists on the calendar (2026-02-30 and 2026-99-99 do not). */
@@ -482,6 +509,10 @@ export function main(argv: string[]): { output: string; code: number } {
     if (rest.length !== 1) throw new Error(usage);
     const result = check(rest[0]!, scopeOf(values.only));
     return { output: JSON.stringify(result), code: result.findings.some(f => f.severity === 'error') ? 1 : 0 };
+  }
+  if (command === 'issues') {
+    if (rest.length !== 1 || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(issues(rest[0]!)), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
+import { check, issues, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -77,6 +77,46 @@ describe('parseDoc', () => {
     assert.equal(doc?.bodyLine, 7);
     assert.equal(parseDoc('# no frontmatter'), null);
     assert.equal(parseDoc('---\nid: a\n'), null);
+  });
+});
+
+describe('issues', () => {
+  it('indexes learning mentions and ids in a stable order without bodies', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/solutions/z.md', solution('resolved'));
+    write('local', 'learnings/solutions/a.md', solution('resolved').replace('id: PROJ-1-1', 'id: a'));
+    write('local', 'learnings/patterns/z.md', patternDoc('z', 'Corpo privado').replace('issues: [PROJ-1]', 'issues: [PROJ-2, PROJ-1, PROJ-1]'));
+    write('local', 'learnings/patterns/b.md', patternDoc('b', '# P'));
+    write('local', 'learnings/decisions/decision.md', '---\ntype: decision\nissue: PROJ-3\nissues: [PROJ-3]\n---\nCorpo privado');
+    write('local', 'criteria/ignored.md', criterion('ignored'));
+    const expected = {
+      issues: {
+        'PROJ-1': { solutions: ['PROJ-1-1', 'a'], patterns: ['b', 'z'] },
+        'PROJ-2': { solutions: [], patterns: ['z'] },
+      },
+      ids: ['PROJ-1-1', 'a', 'b', 'decision', 'z'],
+    };
+    assert.deepEqual(issues(local), expected);
+    assert.deepEqual(main(['issues', local]), { output: JSON.stringify(expected), code: 0 });
+  });
+
+  it('returns empty collections for an empty directory and skips unreadable or unparsed records', t => {
+    const { dir, local, write } = workspace(t);
+    assert.deepEqual(issues(dir), { issues: {}, ids: [] });
+    write('local', 'learnings/solutions/no-frontmatter.md', '# Invalid');
+    write('local', 'learnings/solutions/unclosed.md', '---\nid: invalid');
+    write('local', 'learnings/solutions/binary.md', '\0');
+    write('local', 'learnings/solutions/large.md', 'x'.repeat(2 * 1024 * 1024));
+    symlinkSync(dir, join(local, 'learnings/solutions/link.md'));
+    assert.deepEqual(issues(local), { issues: {}, ids: [] });
+  });
+
+  it('uses the CLI success and usage error paths', t => {
+    const { dir } = workspace(t);
+    assert.deepEqual(main(['issues', dir]), { output: '{"issues":{},"ids":[]}', code: 0 });
+    for (const args of [['issues'], ['issues', dir, dir], ['issues', dir, '--only', 'learnings']]) {
+      assert.throws(() => main(args), /Usage:/);
+    }
   });
 });
 
