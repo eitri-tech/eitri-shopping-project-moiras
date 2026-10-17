@@ -584,6 +584,20 @@ describe('cli', () => {
     assert.deepEqual(JSON.parse(run.stdout).findings, [{ path: 'criteria/sem-front.md', rule: 'frontmatter-missing', severity: 'error' }]);
   });
 
+  it('fails instead of reporting a clean run when the knowledge directory is missing or not a directory', t => {
+    const { dir, write } = workspace(t);
+    const missing = join(dir, 'nunca-existiu');
+    for (const call of [() => check(missing), () => issues(missing), () => plan(missing, dir), () => plan(dir, missing)]) {
+      assert.throws(call, /not found/);
+    }
+    const notDir = join(dir, 'nao-e-pasta');
+    writeFileSync(notDir, '');
+    for (const call of [() => check(notDir), () => issues(notDir)]) assert.throws(call, /not a knowledge directory/);
+    const run = spawnSync(process.execPath, [script, 'check', missing], { encoding: 'utf8' });
+    assert.equal(run.status, 2);
+    assert.match(run.stderr, /not found/);
+  });
+
   it('exits 0 for a clean knowledge and 2 for bad usage', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/regra-a.md', criterion('regra-a'));
