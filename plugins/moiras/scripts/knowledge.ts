@@ -564,7 +564,8 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
     if (refName.test(value) && !hasSecret(value) && !email.test(value) && !patterns.some(({ test }) => test.test(value))) result[field] = value;
     else omitted.push(field);
   }
-  const status = run('status', '--porcelain', '--untracked-files=normal');
+  // Submodules are not entered: their own config (filters) would run, and the indexer reads the main repository, not their content.
+  const status = run('status', '--porcelain', '--untracked-files=normal', '--ignore-submodules=all');
   if (status.status === 0) result.indexed_dirty = status.stdout.trim() !== '';
   // So many changes that the output overflowed the buffer: whatever arrived already proves the tree is not clean.
   else if ((status.error as NodeJS.ErrnoException | undefined)?.code === 'ENOBUFS' && status.stdout) result.indexed_dirty = true;

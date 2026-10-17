@@ -728,6 +728,29 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
   });
 
+  it('does not enter submodules, so their filters never run', t => {
+    const { dir, write } = workspace(t);
+    write('sub', 'a.txt', 'one');
+    const sub = join(dir, 'sub');
+    run(sub, 'init', '-q', '-b', 'main');
+    writeFileSync(join(sub, '.gitattributes'), '*.txt filter=probe\n');
+    run(sub, 'add', '.');
+    run(sub, 'commit', '-q', '-m', 'sub');
+    write('sup', 'README.md', 'acme');
+    const sup = join(dir, 'sup');
+    run(sup, 'init', '-q', '-b', 'main');
+    run(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'libs/sub');
+    run(sup, 'add', '.');
+    run(sup, 'commit', '-q', '-m', 'sup');
+    const marker = join(dir, 'filter-ran');
+    const script = join(dir, 'clean.sh');
+    writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 });
+    run(join(sup, 'libs', 'sub'), 'config', 'filter.probe.clean', script);
+    writeFileSync(join(sup, 'libs', 'sub', 'a.txt'), 'two');
+    assert.equal(provenance(sup).indexed_dirty, false);
+    assert.equal(existsSync(marker), false);
+  });
+
   it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
     const cwd = repository(t);
     const marker = join(cwd, '..', 'fsmonitor-ran');
