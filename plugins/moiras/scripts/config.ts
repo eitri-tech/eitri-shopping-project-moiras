@@ -176,6 +176,13 @@ export function validate(config: unknown): Finding[] {
 
 const hasErrors = (findings: Finding[]) => findings.some(finding => finding.severity === 'error');
 
+/** True when a `*` rule is not re-included by a later negation such as `!sources.json`. */
+function ignoresEverything(rules: string): boolean {
+  const lines = rules.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  const last = lines.lastIndexOf('*');
+  return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
+}
+
 /** Creates the configuration folder and file; refuses to touch an existing file. */
 export function init(config: unknown, dir = defaultDir, dryRun = false): { created: string[]; findings: Finding[] } {
   const findings = validate(config);
@@ -191,7 +198,7 @@ export function init(config: unknown, dir = defaultDir, dryRun = false): { creat
   if (!existsSync(ignore)) {
     writeFileSync(ignore, '*\n', { flag: 'wx' });
     created.push(ignore);
-  } else if (!readFileSync(ignore, 'utf8').split(/\r?\n/).some(line => line.trim() === '*')) {
+  } else if (!ignoresEverything(readFileSync(ignore, 'utf8'))) {
     findings.push({ path: ignore, rule: 'gitignore-not-protecting', severity: 'warning' }); // kept as is; the user decides
   }
   return { created, findings };

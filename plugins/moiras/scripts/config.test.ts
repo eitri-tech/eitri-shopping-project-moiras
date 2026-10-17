@@ -152,6 +152,19 @@ describe('init', () => {
     assert.equal(readFileSync(join(target, '.gitignore'), 'utf8'), 'custom\n');
   });
 
+  it('warns when a later negation re-includes sources.json', t => {
+    const { target } = workspace(t);
+    init(minimal(), target);
+    const warns = (rules: string) => {
+      writeFileSync(join(target, '.gitignore'), rules);
+      rmSync(join(target, 'sources.json'));
+      return init(minimal(), target).findings.map(finding => finding.rule);
+    };
+    assert.deepEqual(warns('*\n!sources.json\n'), ['gitignore-not-protecting']);
+    assert.deepEqual(warns('# keep\n!sources.json\n*\n'), []);
+    assert.deepEqual(warns('sources.json\n'), ['gitignore-not-protecting']);
+  });
+
   it('writes nothing when there are errors or on a dry run', t => {
     const { target } = workspace(t);
     const invalid = init({ ...minimal(), jira: {} }, target);

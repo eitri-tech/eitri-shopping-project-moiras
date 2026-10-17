@@ -65,7 +65,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 |---|---|
 | `id` | nome do repositório, igual ao nome do arquivo |
 | `type` | sempre `repository` |
-| `url` | `index.repositories[].url` ou o `origin` do git, sempre sem usuário, senha ou token na URL |
+| `url` | `index.repositories[].url` ou o `origin` do git, sempre sem usuário, senha ou token na URL; `git@host:org/repo.git` vira `https://host/org/repo` |
 | `local_path` | caminho relativo (ex.: `../acme-shop-checkout`); nunca absoluto nem com a pasta pessoal |
 | `platform` | `vtex`, `wake`, `shopify` ou `other`, pelas dependências e pela configuração; se não der para confirmar, deixe vazio |
 | `apps` | pastas de aplicativo ou de views encontradas |
