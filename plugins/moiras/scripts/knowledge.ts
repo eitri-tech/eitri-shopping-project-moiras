@@ -15,6 +15,8 @@ import { hash as digest } from 'node:crypto';
 import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
+import { isIgnored, parseIgnore } from './gitignore.ts';
+import type { IgnoreLayer } from './gitignore.ts';
 import { hash } from './memory.ts';
 
 export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
@@ -456,7 +458,9 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
 /**
  * Fingerprint of what a record was derived from: the content of files, and only the names
  * inside directories. A path that does not exist is ignored, so an optional file does not
- * change the hash until it shows up.
+ * change the hash until it shows up. Walking a directory leaves out what the `.gitignore` of
+ * the base, of the folders above it and of every folder on the way excludes: ignored folders
+ * are not even read. A path named explicitly is always read.
  */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -464,10 +468,20 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)!;
 }
 
+/** The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, a link, too large or not UTF-8 text. */
+function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
+  try {
+    const { text } = readSafe(join(resolve(base), dir, '.gitignore'));
+    return text === undefined ? undefined : { dir: dir.split(sep).join('/'), rules: parseIgnore(text) };
+  } catch {
+    return undefined;
+  }
+}
+
 export function sourcesHash(base: string, paths: string[], meta?: unknown): string {
   const entries: string[] = [];
   const visited = new Set<string>();
-  const walk = (path: string, explicit: boolean) => {
+  const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[]) => {
     const issue = pathIssue(base, path);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
@@ -476,14 +490,30 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       const real = realpathSync(full);
       if (visited.has(real)) return;
       visited.add(real);
-      for (const name of readdirSync(full).sort()) walk(join(path, name), false);
+      let layers = inherited;
+      if (explicit) {
+        // A path named on its own still obeys the .gitignore of every folder above it.
+        const parts = relative(resolve(base), full).split(sep).filter(Boolean);
+        layers = [];
+        for (let depth = 0; depth < parts.length; depth += 1) {
+          const above = ignoreLayer(base, parts.slice(0, depth).join(sep));
+          if (above) layers.push(above);
+        }
+      }
+      const own = ignoreLayer(base, relative(resolve(base), full));
+      if (own) layers = [...layers, own];
+      for (const child of readdirSync(full, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        const relativeChild = relative(resolve(base), join(full, child.name)).split(sep).join('/');
+        if (isIgnored(layers, relativeChild, child.isDirectory())) continue;
+        walk(join(path, child.name), false, layers);
+      }
     } else {
       const { issue } = readSafe(full);
       if (issue) return;
       entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
     }
   };
-  for (const path of paths) walk(path, true);
+  for (const path of paths) walk(path, true, []);
   if (meta !== undefined) entries.push(`meta:${canonical(meta)}`);
   return hash([...new Set(entries)].sort().join('\n'));
 }
