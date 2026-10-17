@@ -435,8 +435,8 @@ describe('plan', () => {
     ]);
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', 'platform: wake'));
     assert.deepEqual(plan(local, shared).items, [
-      { path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' },
-    ]);
+      { path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' },
+    ], 'same sources_hash: the rest of the record does not count');
   });
 
   it('ignores when and where a glossary record was indexed when the sources are the same', t => {
@@ -450,26 +450,26 @@ describe('plan', () => {
     assert.deepEqual(plan(local, shared).items, unchanged, 'a later index of the same sources');
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha));
     assert.deepEqual(plan(local, shared).items, unchanged, 'a record from before the provenance existed');
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', sha, at('b', '2026-10-15')).replace('# acme-shop-checkout', '# acme-shop-checkout\n\nNova linha.'));
-    assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'update', reason: 'newer-index' }], 'other content follows the date rule');
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', `sha256:${'b'.repeat(64)}`, at('a', '2026-10-01')));
     assert.deepEqual(plan(local, shared).items, [{ path: 'glossary/acme-shop-checkout.md', action: 'conflict', reason: 'same-date-different-index' }], 'other sources on the same day');
   });
 
-  it('still sees real content changes in a glossary record that shares its sources_hash', t => {
+  it('compares glossary records by sources_hash alone', t => {
     const { local, shared, write } = workspace(t);
     const withLine = (line: string, hash = sha) => glossary('2026-10-06', hash).replace('platform: vtex', `platform: vtex\n${line}`);
+    const unchanged = [{ path: 'glossary/acme-shop-checkout.md', action: 'skip', reason: 'unchanged' }];
     write('shared', 'glossary/acme-shop-checkout.md', withLine('keywords: [a, b]'));
-    write('local', 'glossary/acme-shop-checkout.md', withLine('keywords: [b, a]'));
-    assert.equal(plan(local, shared).items[0]?.action, 'conflict', 'a reordered list is a different record');
-    write('local', 'glossary/acme-shop-checkout.md', withLine('apps: [home]'));
-    assert.equal(plan(local, shared).items[0]?.action, 'conflict');
+    write('local', 'glossary/acme-shop-checkout.md', withLine('keywords: [b, a]\napps: [home]'));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'same sources_hash: other fields do not matter');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20').replace('# acme-shop-checkout', '# acme-shop-checkout\n\nOutro texto.'));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'nor does the body');
     write('shared', 'glossary/acme-shop-checkout.md', withLine('indexed_branch: main\nindexed_tag: v1').replace(/^indexed_at: .*\n/m, 'indexed_at: 2026-10-01\n'));
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
-    assert.equal(plan(local, shared).items[0]?.reason, 'unchanged', 'old branch and tag fields do not count');
-    const empty = '';
-    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-01', empty));
-    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', empty));
+    assert.deepEqual(plan(local, shared).items, unchanged, 'old branch and tag fields do not count');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-20', `sha256:${'b'.repeat(64)}`));
+    assert.equal(plan(local, shared).items[0]?.reason, 'newer-index', 'another sources_hash follows the date rule');
+    write('shared', 'glossary/acme-shop-checkout.md', glossary('2026-10-01', ''));
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06', ''));
     assert.equal(plan(local, shared).items[0]?.reason, 'newer-index', 'an empty hash proves nothing');
   });
 

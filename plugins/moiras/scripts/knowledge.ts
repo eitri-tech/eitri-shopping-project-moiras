@@ -431,14 +431,10 @@ function staleOutcome(local: Doc, shared: Doc): string | null {
   return observation(local).startsWith(observation(shared)) ? null : 'shared-observation-not-kept';
 }
 
-/** When and where a repository was read: it says when the index was made, not what it found, so it never decides an update. */
-const indexingFields = new Set(['indexed_at', 'indexed_commit', 'indexed_commit_date', 'indexed_dirty', 'indexed_branch', 'indexed_tag']);
-
-/** Two glossary records built from the same sources (same `sources_hash`) that differ only in when and where they were indexed. */
-function sameIndexedContent(a: Doc, b: Doc): boolean {
-  if (!asText(a.fields.sources_hash) || asText(a.fields.sources_hash) !== asText(b.fields.sources_hash)) return false;
-  const content = (doc: Doc) => JSON.stringify(Object.entries(doc.fields).filter(([name]) => !indexingFields.has(name)).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
-  return content(a) === content(b) && a.body.trim() === b.body.trim();
+/** Two glossary records are the same index when they were built from the same sources: the `sources_hash` is the only thing compared. */
+function sameSources(a: Doc, b: Doc): boolean {
+  const hash = asText(a.fields.sources_hash);
+  return hash !== '' && hash === asText(b.fields.sources_hash);
 }
 
 export function plan(localDir: string, sharedDir: string, sharedName?: string): Plan {
@@ -456,7 +452,7 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       if (stale) item('conflict', stale);
       else item('update', 'result-or-observation');
     }
-    else if (kind.type === 'repository' && doc && other.doc && sameIndexedContent(doc, other.doc)) item('skip', 'unchanged');
+    else if (kind.type === 'repository' && doc && other.doc && sameSources(doc, other.doc)) item('skip', 'unchanged');
     else if (kind.type === 'repository' && doc && other.doc) {
       const [mine, theirs] = [asText(doc.fields.indexed_at), asText(other.doc.fields.indexed_at)];
       if (mine > theirs) item('update', 'newer-index');
