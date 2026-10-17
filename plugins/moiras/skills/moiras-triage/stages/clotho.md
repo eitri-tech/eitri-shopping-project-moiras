@@ -101,7 +101,7 @@ Regras:
 3. **Texto.** Uma linha em português, começando com `Moiras:`, por exemplo `Moiras: esta issue foi citada no Slack em 03/10 (<link>)`. Nada de texto bruto de issues ou conversas, segredos ou dados pessoais.
 4. **Agência.** Issue com `agency` (do Jira ou do glossário, já resolvida pela Láquesis) ou com o aviso `agency-ambiguous` (a agência não pôde ser definida, então a issue é tratada como se tivesse agência) nunca recebe comentário no Jira, porque ele pode ser visível a externos e o repasse à agência é um rascunho que o usuário envia. Para ela só vale a reação no Slack.
 5. **Chaves liga/desliga.** `interactions.jira.comment: false` desliga a proposta de comentários no Jira; `interactions.slack.reaction` define o emoji, e, sem ele, o padrão é `eyes`.
-6. **Sem repetir.** Antes de propor, consulte `query clotho --key interaction:<source>:<alvo>:<tipo>`; se já existe, pule. Depois de aplicar com sucesso, registre essa chave com `record clotho` (`content` = tipo, texto e link, que vira hash). Esses registros não contam para o `change` das issues.
+6. **Sem repetir.** Antes de propor, consulte `query clotho --key interaction:<id>`, com o `id` da interação na saída e o prefixo `interaction:` (ex.: `interaction:slack:C0123456789:1696341120.000100:reaction`); se já existe, pule. Depois de aplicar com sucesso, registre essa chave com `record clotho` (`content` = tipo, texto e link, que vira hash). Esses registros não contam para o `change` das issues.
 7. **Falha.** Conector sem permissão de escrita ou erro da API: marque a interação como `failed`, acrescente o aviso `interaction-failed:<fonte>` e siga a triagem. Não tente de novo na mesma execução.
 8. **Nunca**: editar ou apagar conteúdo, atribuir ou transicionar issue, criar issue, postar mensagem nova no Slack, nem qualquer ação fora da tabela acima.
 
@@ -175,7 +175,7 @@ Regras:
 
 ## Memória
 
-Depois da coleta, registre **cada interação** numa única chamada `record clotho`, um objeto por item:
+Depois da coleta, registre **cada item coletado** numa única chamada `record clotho`, um objeto por item (cada issue e cada mensagem):
 
 ```json
 [
@@ -202,6 +202,7 @@ Depois da coleta, registre **cada interação** numa única chamada `record clot
 - Inclua `agency` em `content` das issues só quando houver valor: trocar a agência conta como `changed`. A inclusão de `created_at` provoca uma única mudança de hash nos registros antigos, mesmo sem agência.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
 - No modo automático (sem `--full`), issues `new` ou `changed` seguem para a Láquesis. Uma `unchanged` só pode ser pulada com conclusão comprovada em relatório completo para o mesmo `ticket` (sem `change`), a mesma entrada da Láquesis e o mesmo `knowledge_fingerprint` (ver `SKILL.md`). Sem essa prova, inclusive após falha de contrato ou mudança no knowledge ou em `siblings`, tente novamente e mantenha `change: unchanged`: coleta e conclusão são coisas distintas.
+- Cada interação aplicada tem registro próprio, consultável pela regra 6: a chave é `interaction:` + o `id` da interação na saída (ex.: `interaction:slack:C0123456789:1696341120.000100:reaction`), com `content` = tipo, texto e link. Os registros desta seção são dos itens coletados, não das interações.
 
 ## Entrada da Láquesis
 
