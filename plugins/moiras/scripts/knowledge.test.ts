@@ -584,6 +584,20 @@ describe('cli', () => {
     assert.deepEqual(JSON.parse(run.stdout).findings, [{ path: 'criteria/sem-front.md', rule: 'frontmatter-missing', severity: 'error' }]);
   });
 
+  it('fails instead of reporting a clean run when the knowledge directory is missing or not a directory', t => {
+    const { dir, write } = workspace(t);
+    const missing = join(dir, 'nunca-existiu');
+    for (const call of [() => check(missing), () => issues(missing), () => plan(missing, dir), () => plan(dir, missing)]) {
+      assert.throws(call, /not found/);
+    }
+    const notDir = join(dir, 'nao-e-pasta');
+    writeFileSync(notDir, '');
+    for (const call of [() => check(notDir), () => issues(notDir)]) assert.throws(call, /not a knowledge directory/);
+    const run = spawnSync(process.execPath, [script, 'check', missing], { encoding: 'utf8' });
+    assert.equal(run.status, 2);
+    assert.match(run.stderr, /not found/);
+  });
+
   it('exits 0 for a clean knowledge and 2 for bad usage', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/regra-a.md', criterion('regra-a'));
@@ -639,7 +653,7 @@ describe('security regressions', () => {
     assert.ok(result.some(f => f.path.endsWith('/total.md') && f.rule === 'code-total-too-long'));
   });
 
-  it('skips symlinks including cycles, binary and oversized files in hash and plan; check reports them', t => {
+  it('keeps symlinks out of hash and plan, fingerprints unreadable files by name, and reports them in check', t => {
     const { dir, local, shared, write } = workspace(t);
     write('local', 'criteria/good.md', criterion('good'));
     write('shared', 'criteria/good.md', criterion('good'));
@@ -647,9 +661,12 @@ describe('security regressions', () => {
     symlinkSync(join(local, 'criteria/good.md'), join(local, 'criteria/link.md'));
     symlinkSync(local, join(local, 'cycle'));
     symlinkSync(local, join(local, 'criteria/cycle.md'));
+    assert.equal(sourcesHash(local, ['.']), initial, 'symlinks stay outside the fingerprint');
     write('local', 'criteria/huge.md', 'a'.repeat(1024 * 1024 + 1));
     write('local', 'criteria/binary.md', '\0binary');
-    assert.equal(sourcesHash(local, ['.']), initial);
+    assert.notEqual(sourcesHash(local, ['.']), initial, 'unreadable files still change the hash when they appear');
+    assert.throws(() => sourcesHash(local, ['criteria/huge.md']), /file-too-large/);
+    assert.throws(() => sourcesHash(local, ['criteria/binary.md']), /binary-file/);
     assert.equal(plan(local, shared).items.length, 1);
     const result = check(local).findings;
     assert.equal(result.filter(f => f.rule === 'symlink').length, 2);

@@ -180,6 +180,9 @@ export interface Entry {
 
 /** The markdown records of a knowledge, in a stable order. `.gitkeep` and other files are ignored. */
 export function records(dir: string, only?: Scope): Entry[] {
+  const root = lstatSync(dir, { throwIfNoEntry: false });
+  if (root === undefined) throw new Error(`Knowledge directory not found: ${dir}`);
+  if (root.isFile()) throw new Error(`${dir}: not a knowledge directory`);
   return kinds
     .filter(kind => only === undefined || kind.scope === only)
     .flatMap(kind => {
@@ -532,7 +535,11 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
       }
     } else {
       const { issue } = readSafe(full);
-      if (issue) return;
+      if (issue) {
+        if (explicit) throw new Error(`${path}: ${issue}`);
+        entries.push(`name:${relative(base, full)}`);
+        return;
+      }
       entries.push(explicit ? `file:${path}:${digest('sha256', readFileSync(full))}` : `name:${relative(base, full)}`);
     }
   };
