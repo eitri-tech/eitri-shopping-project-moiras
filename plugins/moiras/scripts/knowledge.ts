@@ -534,10 +534,15 @@ export function provenance(repository: string): Provenance {
   const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
   const git = (...args: string[]) => {
-    const result = spawnSync('git', ['-C', repository, ...args], { encoding: 'utf8', env });
+    // core.fsmonitor can name an executable that `git status` would run: reading a repository must not run its scripts.
+    const result = spawnSync('git', ['-C', repository, '-c', 'core.fsmonitor=false', ...args], { encoding: 'utf8', env });
     return result.status === 0 ? result.stdout.trim() : undefined;
   };
-  const commit = git('rev-parse', '--verify', '-q', 'HEAD');
+  // A folder that only sits inside another work tree would answer with the parent's HEAD: the path must be the repository's own root.
+  const top = git('rev-parse', '--show-toplevel');
+  let own = false;
+  try { own = top !== undefined && realpathSync(top) === realpathSync(repository); } catch { /* A path that does not resolve is not a repository. */ }
+  const commit = own ? git('rev-parse', '--verify', '-q', 'HEAD') : undefined;
   if (!commit || !commitSha.test(commit)) return { git: false };
   const result: Provenance = { git: true, indexed_commit: commit };
   const date = git('log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd');

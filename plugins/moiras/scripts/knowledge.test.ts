@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -692,6 +692,18 @@ describe('provenance', () => {
     delete process.env.GIT_WORK_TREE;
     run(cwd, 'checkout', '-q', '-b', `ghp_${'a'.repeat(30)}`);
     assert.deepEqual(provenance(cwd).omitted, ['indexed_branch']);
+  });
+
+  it('does not run a configured fsmonitor and refuses a folder inside another repository', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'fsmonitor-ran');
+    const hook = join(cwd, '..', 'hook.sh');
+    writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    run(cwd, 'config', 'core.fsmonitor', hook);
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
+    mkdirSync(join(cwd, 'src'));
+    assert.deepEqual(provenance(join(cwd, 'src')), { git: false });
   });
 
   it('reports git: false without a repository or a commit and prints through the CLI', t => {
