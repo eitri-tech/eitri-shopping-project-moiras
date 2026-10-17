@@ -79,7 +79,7 @@ O corpo tem uma ou duas frases sobre o que o repositório faz e a lista de compo
 
 ## Limites
 
-- Nada de cópia de código: o glossário diz **onde** está o código (pasta, arquivo), nunca o código. Se um trecho ajudar mesmo, no máximo 20 linhas, com referência (repositório, caminho, commit).
+- Nada de cópia de código: o glossário diz **onde** está o código (pasta, arquivo), nunca o código. Se um trecho ajudar mesmo, no máximo um trecho de 20 linhas, com referência (repositório, caminho, commit).
 - Sem segredos, tokens, conteúdo de `.env`, dados pessoais ou texto bruto de issue e de conversa.
 - Não edita o glossário à mão, não apaga registros e não sobrescreve arquivo de outro escritor.
 - Conteúdo antigo é sinalizado: glossário com `indexed_at` de mais de 6 meses é velho para a triagem.

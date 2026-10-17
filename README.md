@@ -181,7 +181,7 @@ echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "n
 echo '{"key":"jira:PROJ-1","content":{"a":1}}' | node $S record clotho      # "unchanged"
 echo '{"key":"jira:PROJ-1","content":{"a":2}}' | node $S record clotho      # "changed"
 node $S query clotho                                                    # último registro de cada chave
-cat .moiras/memory/clotho.jsonl                                         # só hash, nunca o texto bruto
+cat .moiras/memory/clotho.jsonl                                         # hash e metadados da etapa, nunca o texto bruto
 ```
 
 ### Testar o plugin no Claude Code
@@ -233,7 +233,7 @@ Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-pub
    { "name": "team", "scope": "project", "repository": "<url-do-knowledge-privado>", "dir": "../moiras-knowledge-team" }
    ```
 
-8. **Publique:** `/moiras:moiras-publish team`. A skill confere que o destino é o `repository` configurado e é privado, mostra a lista exata, só copia depois do "sim", cria o branch `moiras/index-<AAAA-MM-DD>` e abre o PR (com o `gh`, ou mostrando o endereço de comparação). Nada na `main`, nenhum merge. Feche o PR e apague o branch se não quiser manter o glossário de teste.
+8. **Publique:** `/moiras:moiras-publish team`. A skill confere que o destino é o `repository` configurado e é privado, mostra a lista exata, só copia depois do "sim", cria o branch `moiras/index-<AAAA-MM-DD>` e abre o PR com o `gh` (sem o `gh`, a skill para e explica). Nada na `main`, nenhum merge. Feche o PR e apague o branch se não quiser manter o glossário de teste.
 9. **Triagem (opcional):** com Jira e Slack conectados, siga o passo 1 de "Testar o plugin no Claude Code" e confira se a Láquesis cita `knowledge:local/glossary/...`.
 
 Ao testar, anote onde a skill perguntou o que a documentação não prevê (ou não perguntou onde devia), campos do glossário errados ou inventados e mensagens de erro, sem colar conteúdo de repositório ou de issue. Limpeza: apague a pasta de teste e o clone do knowledge.

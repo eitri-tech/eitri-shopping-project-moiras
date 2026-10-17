@@ -83,6 +83,6 @@ Ao achar segredo, token, dado pessoal ou texto bruto num registro, o relatório 
 - Aprendizado não é apagado nem reescrito: só `result` e a observação mudam. A observação ganha uma linha no formato `Auditoria AAAA-MM-DD, <auditor>: <o que mudou>`.
 - Critérios só mudam por regeneração (`replaces`), com o "sim" do auditor.
 - O glossário vem do código: a skill nunca o edita, só sugere a reindexação.
-- O knowledge nunca recebe cópia de código: trechos de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
+- O knowledge nunca recebe cópia de código: no máximo um trecho por registro, de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - A auditoria não cria aprendizado (`solutions/`, `patterns/` ou `decisions/`); o critério regenerado leva `created_at` em formato de data; o glossário leva `indexed_at`, mas só a indexação o grava.
 - Identificadores (campos, valores fixos, pastas) em inglês; justificativas e relatórios em português.
