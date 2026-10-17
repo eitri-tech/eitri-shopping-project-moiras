@@ -365,6 +365,8 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
         const dirty = asText(fields.indexed_dirty);
         if (dirty && dirty !== 'true' && dirty !== 'false') add('indexed-dirty-invalid', 'error');
+        // Branch and tag names are not recorded: they can be internal and say nothing the commit does not.
+        if ('indexed_branch' in fields || 'indexed_tag' in fields) add('indexed-ref-unsupported', 'error');
       }
       if (/\bTODO\b/.test(doc.body)) add('todo-content', 'warning');
     }
@@ -404,7 +406,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
     for (const { open, close, size } of blocks) {
       if (size > maxSnippetLines) add('code-too-long', 'error', open + 1);
       const around = lines.slice(Math.max(0, open - 3), close + 4).filter(line => line.length <= maxLineLength).join('\n');
-      if (!/(?:^|[\s`(])[A-Za-z0-9_.-]{1,128}\/(?:[A-Za-z0-9_.-]{1,128}\/)*[A-Za-z0-9_.-]{1,128}@[0-9a-f]{7,40}(?=$|[\s`)])/m.test(around)) add('code-without-reference', 'error', open + 1);
+      if (!/(?:^|[\s`(])[A-Za-z0-9_.-]{1,128}\/(?:[A-Za-z0-9_.-]{1,128}\/)*[A-Za-z0-9_.-]{1,128}@[0-9a-f]{7,64}(?=$|[\s`)])/m.test(around)) add('code-without-reference', 'error', open + 1);
     }
   }
   return { checked: all.length, findings };
@@ -519,7 +521,8 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
 
 /** Variables that point Git at another repository, work tree or index would make the answer describe something else. */
 function gitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' };
+  // Replacement refs would make the commit, its date and its tree describe another commit than HEAD.
+  const env: NodeJS.ProcessEnv = { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1' };
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES']) delete env[name];
   return env;
 }
@@ -541,7 +544,8 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   // core.fsmonitor and the clean/process commands of .gitattributes filters are executables that `git status` would run: reading a
   // repository must not run its scripts. Filters are emptied one by one; the dirty state may then be reported a little too eagerly
   // (a file whose clean filter changes its content looks modified), never missed.
-  const base = ['-C', repository, '-c', 'core.fsmonitor=false'];
+  // `log.showSignature` would make `git log` run the signature verifier the repository configures.
+  const base = ['-C', repository, '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false'];
   const listed = spawnSync('git', [...base, 'config', '--name-only', '--get-regexp', '^filter\\..+\\.(clean|process)$'], { encoding: 'utf8', env, maxBuffer });
   const filters = listed.status === 0 ? listed.stdout.split('\n').filter(Boolean).flatMap(key => ['-c', `${key}=`]) : [];
   const run = (...args: string[]) => spawnSync('git', [...base, ...filters, ...args], { encoding: 'utf8', env, maxBuffer });

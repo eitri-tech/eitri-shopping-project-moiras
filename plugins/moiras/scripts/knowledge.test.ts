@@ -267,6 +267,7 @@ describe('check', () => {
     record('ok', `${reference}\n\n${fence(20)}`);
     record('longo', `${reference}\n\n${fence(21)}`);
     record('sem-ref', fence(3));
+    record('sha256', `\`acme-shop-checkout/src/a.ts@${'a'.repeat(64)}\`\n\n${fence(2)}`);
     record('dois', `${reference}\n\n${fence(2)}\n\n${fence(2)}`);
     record('aberto', `${reference}\n\n\`\`\`ts\nconst a = 1;`);
     assert.deepEqual(rules(local), [
@@ -345,6 +346,8 @@ describe('check', () => {
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
     write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_dirty: false']));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_dirty: false', 'indexed_branch: main', 'indexed_tag: v1']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['indexed-ref-unsupported'], 'branch and tag names are not accepted');
   });
 
   it('limits the scan with --only', t => {
@@ -829,6 +832,34 @@ describe('provenance', () => {
     assert.equal(existsSync(marker), false);
     mkdirSync(join(cwd, 'src'));
     assert.deepEqual(provenance(join(cwd, 'src')), { git: false });
+  });
+
+  it('describes HEAD itself when a replacement ref points at another commit', t => {
+    const cwd = repository(t);
+    const head = run(cwd, 'rev-parse', 'HEAD');
+    const tree = run(cwd, 'rev-parse', 'HEAD^{tree}');
+    const other = spawnSync('git', ['-C', cwd, 'commit-tree', tree, '-m', 'other'], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'Fulano', GIT_AUTHOR_EMAIL: 'f@example.test', GIT_COMMITTER_NAME: 'Fulano', GIT_COMMITTER_EMAIL: 'f@example.test', GIT_COMMITTER_DATE: '2026-01-02T12:00:00+00:00', GIT_AUTHOR_DATE: '2026-01-02T12:00:00+00:00' } }).stdout.trim();
+    run(cwd, 'replace', head, other);
+    const result = provenance(cwd);
+    assert.deepEqual([result.indexed_commit, result.indexed_commit_date], [head, '2026-10-06']);
+  });
+
+  it('does not run the signature verifier a repository configures', t => {
+    const cwd = repository(t);
+    const marker = join(cwd, '..', 'verifier-ran');
+    const verifier = join(cwd, '..', 'verifier.sh');
+    writeFileSync(verifier, `#!/bin/sh\ntouch '${marker}'\nexit 1\n`, { mode: 0o755 });
+    const tree = run(cwd, 'rev-parse', 'HEAD^{tree}');
+    const parent = run(cwd, 'rev-parse', 'HEAD');
+    const raw = `tree ${tree}\nparent ${parent}\nauthor Fulano <f@example.test> 1790000000 +0000\ncommitter Fulano <f@example.test> 1790000000 +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n abc\n -----END PGP SIGNATURE-----\n\nsigned\n`;
+    const made = spawnSync('git', ['-C', cwd, 'hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], { input: raw, encoding: 'utf8' }).stdout.trim();
+    run(cwd, 'update-ref', 'HEAD', made);
+    run(cwd, 'config', 'log.showSignature', 'true');
+    run(cwd, 'config', 'gpg.program', verifier);
+    assert.equal(provenance(cwd).git, true);
+    assert.equal(existsSync(marker), false);
+    spawnSync('git', ['-C', cwd, 'log', '-1'], { encoding: 'utf8' });
+    assert.equal(existsSync(marker), true, 'the setup does make Git call the verifier');
   });
 
   it('reports git: false without a repository or a commit and prints through the CLI', t => {
