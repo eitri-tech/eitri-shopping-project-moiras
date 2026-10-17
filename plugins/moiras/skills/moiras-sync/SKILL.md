@@ -1,6 +1,6 @@
 ---
 name: moiras-sync
-description: Traz para a máquina o que foi mergeado nos repositórios de knowledge compartilhados (projeto, grupo, global), só avançando o clone local, e mostra o que chegou. Nunca envia nada. Use antes de uma triagem quando algum knowledge tiver `repository`, ou quando o usuário pedir para sincronizar (ex.: "sincroniza o knowledge do time", "traz as novidades do knowledge").
+description: "Traz para a máquina o que foi mergeado nos repositórios de knowledge compartilhados (projeto, grupo, global), só avançando o clone local, e mostra o que chegou. Nunca envia nada. Use antes de uma triagem quando algum knowledge tiver `repository`, ou quando o usuário pedir para sincronizar (ex.: \"sincroniza o knowledge do time\", \"traz as novidades do knowledge\")."
 argument-hint: "[knowledge...] [--auto]"
 allowed-tools: Bash(node:*)
 ---

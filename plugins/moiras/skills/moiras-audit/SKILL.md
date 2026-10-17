@@ -1,6 +1,6 @@
 ---
 name: moiras-audit
-description: Permite que uma pessoa auditora revise o knowledge do time (glossário, critérios e aprendizado) e faça ajustes com aprovação, como a avaliação que o usuário faz no fim da triagem. Aponta registros velhos, pendentes, conflitantes ou fora das regras do knowledge e propõe cada ajuste. Use quando o usuário pedir para auditar, revisar ou corrigir o knowledge (ex.: "audita os critérios", "revisa os aprendizados pendentes").
+description: "Permite que uma pessoa auditora revise o knowledge do time (glossário, critérios e aprendizado) e faça ajustes com aprovação, como a avaliação que o usuário faz no fim da triagem. Aponta registros velhos, pendentes, conflitantes ou fora das regras do knowledge e propõe cada ajuste. Use quando o usuário pedir para auditar, revisar ou corrigir o knowledge (ex.: \"audita os critérios\", \"revisa os aprendizados pendentes\")."
 argument-hint: "[glossary|criteria|learnings|all] [--since AAAA-MM-DD]"
 allowed-tools: Bash(node:*)
 ---

@@ -1,6 +1,6 @@
 ---
 name: moiras-triage
-description: Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
+description: "Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro)."
 argument-hint: "[EPIC] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
