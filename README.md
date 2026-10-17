@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="Moiras: Cloto fia, Láquesis mede e Átropos corta" width="480">
+</p>
+
 # Moiras
 
 Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
