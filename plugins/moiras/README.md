@@ -131,7 +131,7 @@ Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,p
 
 Como o knowledge circula:
 
-1. `moiras-index` gera o glossário a partir do código e grava em `glossary/` do knowledge local, depois do seu "sim".
+1. `moiras-index` gera o glossário a partir do código e grava em `glossary/` do knowledge local, depois do seu "sim". Cada registro diz até onde o repositório foi lido: `indexed_commit` (com a data do commit em `indexed_commit_date`), `indexed_branch`, `indexed_tag` e `indexed_dirty`. Esses campos não entram no `sources_hash`; se só o commit mudou, a reindexação propõe `refreshed` (renova só a proveniência).
 2. `moiras-sync` (opcional) avança os clones dos knowledges compartilhados, sem enviar nada.
 3. A triagem e a auditoria escrevem no knowledge local.
 4. `moiras-publish` abre um PR num knowledge compartilhado privado, no branch `moiras/index-<YYYY-MM-DD>` (com sufixo `-2`, `-3`… se existir), com o que é novo; quem revisa o repositório faz o merge. Antes, cada registro passa em `scripts/knowledge.ts check` (sem segredos, caminhos pessoais ou código acima de 20 linhas).

@@ -42,26 +42,33 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
 2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge ou, sem ele (como num knowledge recém-criado), com o "Modelo de reserva" abaixo (ver "O que vai em cada campo").
-4. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:
+4. **Registrar até onde o repositório foi lido (proveniência).** Rode, para cada repositório (só comandos de leitura do Git, por dentro do script):
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" provenance <repositório>
+   ```
+
+   A saída traz `indexed_commit` (o `HEAD` completo), `indexed_commit_date` (data desse commit, em UTC), `indexed_branch` (some em HEAD solto), `indexed_tag` (só se o `HEAD` estiver exatamente numa tag) e `indexed_dirty` (`true` com alteração não commitada). Copie os campos que vierem para o frontmatter. `{ "git": false }` (sem repositório Git ou sem commit): **omita** os cinco campos e avise `no-git` no relatório. Branch ou tag que o script devolve em `omitted` (nome fora do formato seguro ou parecido com segredo ou e-mail) fica de fora, com o aviso `ref-omitted`. Nunca use `--meta` nem inclua esses campos no hash: a proveniência diz *onde* a leitura foi feita, o `sources_hash` diz *o que* mudou.
+5. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
    ```
 
-5. **Comparar** com o arquivo existente: mesmo `sources_hash` é `unchanged` e o arquivo não é tocado (nem o `indexed_at`); hash diferente é `changed`; sem arquivo é `new`.
-6. **Mostrar** a lista numerada (`new`, `changed`, `unchanged`, `missing`), com o caminho de cada `glossary/<id>.md`.
-7. **Gravar** só o que o usuário aprovou, depois do "sim" à lista exata. Item que surgir depois precisa de novo "sim".
-8. **Conferir** o que foi gravado e corrigir o que falhar:
+6. **Comparar** com o arquivo existente: mesmo `sources_hash` **e** mesma proveniência é `unchanged`, e o arquivo não é tocado (nem o `indexed_at`); mesmo `sources_hash` com commit ou `indexed_dirty` diferente (ou um registro antigo sem proveniência) é `refreshed`: só os campos de proveniência e o `indexed_at` mudam, o resto do arquivo fica como está; hash diferente é `changed` (todos os campos são refeitos); sem arquivo é `new`.
+7. **Mostrar** a lista numerada (`new`, `changed`, `refreshed`, `unchanged`, `missing`), com o caminho de cada `glossary/<id>.md`.
+8. **Gravar** só o que o usuário aprovou, depois do "sim" à lista exata. Item que surgir depois precisa de novo "sim".
+9. **Conferir** o que foi gravado e corrigir o que falhar:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only glossary
    ```
 
-9. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados e inalterados, o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
+10. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados, só com a proveniência renovada e inalterados, o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
 
 ## Modelo de reserva
 
-Use o `_templates/glossary.md` do knowledge quando existir; senão, este modelo, com os mesmos campos e corpo. Os valores são fictícios: troque todos pelos dados reais, e o `sources_hash` pelo hash do passo 4 (o `check` recusa outro formato). `platform` é um só valor entre `vtex`, `wake`, `shopify` e `other`, ou fica vazio quando não dá para confirmar (nunca invente `other`); `agency` fica vazio sem agência.
+Use o `_templates/glossary.md` do knowledge quando existir; senão, este modelo, com os mesmos campos e corpo. Os valores são fictícios: troque todos pelos dados reais, os campos de proveniência pelos do passo 4 e o `sources_hash` pelo hash do passo 5 (o `check` recusa outro formato). `platform` é um só valor entre `vtex`, `wake`, `shopify` e `other`, ou fica vazio quando não dá para confirmar (nunca invente `other`); `agency` fica vazio sem agência.
 
 ```markdown
 ---
@@ -75,6 +82,11 @@ keywords: [carrinho, checkout, frete]
 owner: "@acme/squad-checkout"
 agency:
 indexed_at: 2026-01-15
+indexed_commit: 0000000000000000000000000000000000000000
+indexed_commit_date: 2026-01-14
+indexed_branch: main
+indexed_tag:
+indexed_dirty: false
 sources_hash: sha256:1111111111111111111111111111111111111111111111111111111111111111
 ---
 
@@ -102,7 +114,12 @@ Loja virtual da Acme: vitrine, carrinho e checkout.
 | `owner` | `index.repositories[].owner`, ou o time (`@org/time`) do `CODEOWNERS`; nunca uma pessoa |
 | `agency` | só `index.repositories[].agency`; vazio se não houver |
 | `indexed_at` | data da indexação (AAAA-MM-DD) |
-| `sources_hash` | o hash do passo 4 |
+| `indexed_commit` | SHA completo do `HEAD` lido (passo 4); o `check` recusa outro formato |
+| `indexed_commit_date` | data (AAAA-MM-DD, UTC) desse commit: até onde o repositório tinha sido alterado quando foi lido |
+| `indexed_branch` | branch atual; vazio em HEAD solto |
+| `indexed_tag` | tag exata do `HEAD`; vazio se não houver |
+| `indexed_dirty` | `true` se havia alteração não commitada (o commit então não descreve tudo o que foi lido), senão `false` |
+| `sources_hash` | o hash do passo 5 |
 
 O corpo tem uma ou duas frases sobre o que o repositório faz e a lista de componentes (`nome`: pasta). O que não puder ser confirmado fica vazio ou como `?`: não invente.
 

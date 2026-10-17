@@ -2,6 +2,7 @@
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
  * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
  * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
+ * node knowledge.ts provenance ../acme-shop-checkout
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
  *
  * Read-only helpers for moiras-index, moiras-audit and moiras-publish. They never write
@@ -11,13 +12,14 @@
  * parameter properties) and import siblings with the .ts extension.
  */
 import { isUtf8 } from 'node:buffer';
+import { spawnSync } from 'node:child_process';
 import { hash as digest } from 'node:crypto';
 import { readdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>]';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>] | provenance <repository>';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
@@ -74,6 +76,11 @@ const required: Record<string, string[]> = {
   pattern: ['repositories', 'issues'],
   decision: ['source'],
 };
+/** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
+const provenanceFields = ['indexed_commit_date', 'indexed_branch', 'indexed_tag', 'indexed_dirty'];
+const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+/** A branch or tag name safe to record: no path-like start, no `..`, no characters outside the usual ref set. */
+const refName = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._\/-]{0,99}$/;
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
 const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.direnv']);
@@ -350,6 +357,19 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
+      if (kind.type === 'repository') {
+        const commit = asText(fields.indexed_commit);
+        if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
+        if (!commit && provenanceFields.some(name => asText(fields[name]))) add('provenance-incomplete', 'error');
+        const commitDate = asText(fields.indexed_commit_date);
+        if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
+        for (const name of ['indexed_branch', 'indexed_tag']) {
+          const ref = asText(fields[name]);
+          if (ref && !refName.test(ref)) add('ref-invalid', 'error');
+        }
+        const dirty = asText(fields.indexed_dirty);
+        if (dirty && dirty !== 'true' && dirty !== 'false') add('indexed-dirty-invalid', 'error');
+      }
       if (/\bTODO\b/.test(doc.body)) add('todo-content', 'warning');
     }
 
@@ -494,6 +514,43 @@ const scopeOf = (value: string | undefined): Scope | undefined => {
   throw new Error(`Invalid --only. ${usage}`);
 };
 
+export interface Provenance {
+  git: boolean;
+  indexed_commit?: string;
+  indexed_commit_date?: string;
+  indexed_branch?: string;
+  indexed_tag?: string;
+  indexed_dirty?: boolean;
+  /** Fields left out because their value would not pass `check` (an unsafe branch or tag name). */
+  omitted?: string[];
+}
+
+/**
+ * Where an indexed repository was when it was read: HEAD, the date of that commit (UTC), the branch, the tag when HEAD is exactly
+ * on one, and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
+ */
+export function provenance(repository: string): Provenance {
+  const git = (...args: string[]) => {
+    const result = spawnSync('git', ['-C', repository, ...args], { encoding: 'utf8', env: { ...process.env, TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' } });
+    return result.status === 0 ? result.stdout.trim() : undefined;
+  };
+  const commit = git('rev-parse', '--verify', '-q', 'HEAD');
+  if (!commit || !commitSha.test(commit)) return { git: false };
+  const result: Provenance = { git: true, indexed_commit: commit };
+  const date = git('log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd');
+  if (date && isCalendarDate(date)) result.indexed_commit_date = date;
+  const omitted: string[] = [];
+  for (const [field, value] of [['indexed_branch', git('symbolic-ref', '--short', '-q', 'HEAD')], ['indexed_tag', git('describe', '--tags', '--exact-match', 'HEAD')]] as const) {
+    if (!value) continue;
+    if (refName.test(value) && !hasSecret(value) && !email.test(value)) result[field] = value;
+    else omitted.push(field);
+  }
+  const status = git('status', '--porcelain');
+  if (status !== undefined) result.indexed_dirty = status !== '';
+  if (omitted.length) result.omitted = omitted;
+  return result;
+}
+
 export function main(argv: string[]): { output: string; code: number } {
   let parsed;
   try {
@@ -525,6 +582,10 @@ export function main(argv: string[]): { output: string; code: number } {
   if (command === 'issues') {
     if (!rest.length || Object.keys(values).length) throw new Error(usage);
     return { output: JSON.stringify(issues(rest)), code: 0 };
+  }
+  if (command === 'provenance') {
+    if (rest.length !== 1 || Object.keys(values).length) throw new Error(usage);
+    return { output: JSON.stringify(provenance(rest[0]!)), code: 0 };
   }
   if (command === 'plan') {
     if (values.local === undefined || values.shared === undefined || rest.length) throw new Error(usage);

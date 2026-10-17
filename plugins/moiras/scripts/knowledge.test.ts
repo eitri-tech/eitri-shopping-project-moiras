@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, issues, main, parseDoc, plan, sourcesHash } from './knowledge.ts';
+import { check, issues, main, parseDoc, plan, provenance, sourcesHash } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -331,6 +331,18 @@ describe('check', () => {
     ]);
   });
 
+  it('validates the optional provenance of a glossary record', t => {
+    const { local, write } = workspace(t);
+    const sha40 = 'a'.repeat(40);
+    const withProvenance = (lines: string[]) => glossary('2026-10-06').replace('sources_hash:', `${lines.join('\n')}\nsources_hash:`);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_branch: release/1.2', 'indexed_tag: v1.2.0', 'indexed_dirty: false']));
+    assert.deepEqual(check(local, 'glossary').findings, []);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${'A'.repeat(40)}`, 'indexed_commit_date: ontem', 'indexed_branch: ../escape', 'indexed_tag: /abs', 'indexed_dirty: maybe']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule).sort(), ['absolute-path', 'indexed-commit-date-invalid', 'indexed-commit-invalid', 'indexed-dirty-invalid', 'ref-invalid', 'ref-invalid']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_branch: main']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
+  });
+
   it('limits the scan with --only', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/sem-front.md', 'x');
@@ -620,5 +632,59 @@ describe('security regressions', () => {
     for (const key of Object.keys(meta)) assert.notEqual(sourcesHash(base, ['a.txt'], { ...meta, [key]: 'changed' }), first);
     assert.equal(sourcesHash(base, ['a.txt'], { a: { z: 1, b: 2 } }), sourcesHash(base, ['a.txt'], { a: { b: 2, z: 1 } }));
     assert.throws(() => main(['hash', '--base', base, '--meta', '{', 'a.txt']));
+  });
+});
+
+describe('provenance', () => {
+  const run = (cwd: string, ...args: string[]) => {
+    const env = { ...process.env, GIT_AUTHOR_NAME: 'Fulano', GIT_AUTHOR_EMAIL: 'fulano@example.test', GIT_COMMITTER_NAME: 'Fulano', GIT_COMMITTER_EMAIL: 'fulano@example.test', GIT_COMMITTER_DATE: '2026-10-05T23:30:00-03:00', GIT_AUTHOR_DATE: '2026-10-05T23:30:00-03:00' };
+    const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const repository = (t: TestContext) => {
+    const { dir, write } = workspace(t);
+    write('repo', 'README.md', 'acme');
+    const cwd = join(dir, 'repo');
+    run(cwd, 'init', '-q', '-b', 'main');
+    run(cwd, 'add', '.');
+    run(cwd, 'commit', '-q', '-m', 'init');
+    return cwd;
+  };
+
+  it('reports the commit, its UTC date, the branch and a clean tree', t => {
+    const cwd = repository(t);
+    assert.deepEqual(provenance(cwd), { git: true, indexed_commit: run(cwd, 'rev-parse', 'HEAD'), indexed_commit_date: '2026-10-06', indexed_branch: 'main', indexed_dirty: false });
+  });
+
+  it('adds the tag only when HEAD is exactly on it and flags a dirty tree', t => {
+    const cwd = repository(t);
+    run(cwd, 'tag', 'v1.0.0');
+    writeFileSync(join(cwd, 'new.txt'), 'x');
+    assert.deepEqual([provenance(cwd).indexed_tag, provenance(cwd).indexed_dirty], ['v1.0.0', true]);
+    writeFileSync(join(cwd, 'README.md'), 'acme 2');
+    run(cwd, 'commit', '-q', '-am', 'second');
+    assert.equal(provenance(cwd).indexed_tag, undefined);
+  });
+
+  it('leaves the branch out on a detached HEAD and omits an unsafe branch name', t => {
+    const cwd = repository(t);
+    run(cwd, 'checkout', '-q', '--detach');
+    assert.equal(provenance(cwd).indexed_branch, undefined);
+    run(cwd, 'checkout', '-q', '-b', 'feat/ana@example.com');
+    const result = provenance(cwd);
+    assert.deepEqual([result.indexed_branch, result.omitted], [undefined, ['indexed_branch']]);
+  });
+
+  it('reports git: false without a repository or a commit and prints through the CLI', t => {
+    const { dir, write } = workspace(t);
+    write('plain', 'a.txt', 'x');
+    assert.deepEqual(provenance(join(dir, 'plain')), { git: false });
+    const empty = join(dir, 'empty');
+    mkdirSync(empty);
+    run(empty, 'init', '-q');
+    assert.deepEqual(provenance(empty), { git: false });
+    assert.deepEqual(JSON.parse(main(['provenance', join(dir, 'plain')]).output), { git: false });
+    assert.throws(() => main(['provenance']), /Usage/);
   });
 });

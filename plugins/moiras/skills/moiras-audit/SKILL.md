@@ -34,6 +34,7 @@ O primeiro argumento limita a pasta (`glossary`, `criteria`, `learnings` ou `all
 | Achado | Onde | Ajuste possível |
 |---|---|---|
 | Glossário com `indexed_at` de mais de 6 meses, vazio ou com `TODO` | `glossary/` | só sugerir rodar `moiras-index`; a skill não edita o glossário |
+| Glossário com `indexed_commit`: o repositório (`local_path`) já está à frente dele | `glossary/` | só informar quantos commits (`git -C <local_path> rev-list --count <indexed_commit>..HEAD`, só leitura) e sugerir `moiras-index`; commit que o clone não conhece, ou `indexed_dirty: true`, entra como aviso. A idade continua sendo a de `indexed_at`: a proveniência não a substitui |
 | Solução com `result: pending` há muito tempo | `learnings/solutions/` | perguntar o desfecho e atualizar `result` e a observação |
 | Solução com `result: not-resolved` e sem observação do que mudou | `learnings/solutions/` | pedir a observação |
 | Soluções resolvidas que se repetem | `learnings/solutions/` | só sugerir no relatório; criar padrão ou decisão é com a Átropos, numa triagem |
