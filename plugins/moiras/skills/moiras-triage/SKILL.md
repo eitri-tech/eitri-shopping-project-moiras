@@ -1,6 +1,6 @@
 ---
 name: moiras-triage
-description: Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere pelo menos 3 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
+description: Faz a triagem das issues sem responsável de um épico do Jira. Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: "faz a triagem do épico PROJ-100"). Se a chave do épico não vier no pedido nem em .moiras/sources.json, pergunte (no modo --auto, encerre com erro).
 argument-hint: "[EPIC] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
@@ -37,7 +37,7 @@ Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída d
 ```
 Cloto     : configuração + épico     → issues do Jira + mensagens do Slack
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
-Átropos   : issue + classificação    → justificativa, ação e de 3 a 5 soluções com % de confiança
+Átropos   : issue + classificação    → justificativa, ação e normalmente de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
                                       → (se houver agência e o usuário pedir) rascunho de repasse
 ```
@@ -80,7 +80,7 @@ Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
 
 - Aprendizado (`learnings/`): um arquivo por registro, nomeado pelo `id`, sem apagar nem reescrever. Só `result` e a `Observação` podem mudar, pelo `id`, quando o usuário informar o desfecho. Para soluções, a mesma escolha da mesma issue com `result: pending` apenas confirma o registro existente; outra solução ou nova tentativa depois de resultado conhecido cria `<KEY>-<n+1>` (ver Átropos). Para padrões e decisões, procure registros equivalentes antes de criar e reutilize a referência existente, sem reescrevê-los.
 - Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces` contendo IDs simples ou referências `knowledge:<name>/<path>`, e apague apenas os antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; referencie-os em `replaces` com a fonte `knowledge:<name>/<caminho>`.
-- `chosen_by` e `approved_by` usam um pseudônimo não identificável escolhido pela pessoa, nunca nome real, e-mail ou identificador de conta. Use o formato `<prefixo>-<id>` (por exemplo `reviewer-01`, `user-7`): é o que o `scripts/knowledge.ts check` aceita antes de uma publicação. Na auditoria, `audit.auditors` usa esses mesmos pseudônimos; a identificação é declarada, não autenticação. Preserve o pseudônimo nos registros e na observação para rastrear escolhas e aprovações sem dados pessoais.
+- `chosen_by` e `approved_by` usam um pseudônimo não identificável escolhido pela pessoa, nunca nome real, e-mail ou identificador de conta. Use o formato `<prefixo>-<id>` (por exemplo `reviewer-01`, `user-7`), com o prefixo `person`, `user`, `reviewer`, `pseudonym`, `pessoa`, `usuario` ou `revisor` (ou os nomes fictícios Fulano, Beltrana e Sicrano): é o que o `scripts/knowledge.ts check` aceita antes de uma publicação; outro prefixo (como `auditor-01`) é recusado. Na auditoria, `audit.auditors` usa esses mesmos pseudônimos; a identificação é declarada, não autenticação. Preserve o pseudônimo nos registros e na observação para rastrear escolhas e aprovações sem dados pessoais.
 - Nunca grave mais de um trecho por registro, nem trecho maior que 20 linhas, código sem referência (repositório, caminho, commit), segredos, dados pessoais ou texto bruto de issue e de conversa.
 - Levar o aprendizado local para um knowledge compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
 
@@ -97,7 +97,7 @@ Nos exemplos, defina a variável de shell `memory_dir` com o valor de `memory.di
 Cada etapa tem uma memória própria, só de acréscimo, em `<memory.dir>/<stage>.jsonl` (padrão `.moiras/memory/`). Ela é local, por máquina, e nunca vai para um knowledge. É gravada **somente** pelo script do plugin, que calcula o hash SHA-256 do conteúdo e descarta o conteúdo bruto:
 
 ```bash
-# grava (stdin: objeto ou lista com "key" e "content" ou "hash"); devolve new | changed | unchanged
+# grava (stdin: objeto ou lista com "key" e "content" ou "hash"); devolve uma lista JSON de {key, hash, change}, com change = new | changed | unchanged
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" record clotho --dir "${memory_dir}" < records.json
 # hash de um conteúdo, sem gravar
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.ts" hash < content.json
