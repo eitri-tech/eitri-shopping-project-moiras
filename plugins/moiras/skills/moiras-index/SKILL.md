@@ -48,7 +48,7 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" provenance <repositório>
    ```
 
-   A saída traz `indexed_commit` (o `HEAD` completo), `indexed_commit_date` (data desse commit, em UTC), `indexed_branch` (some em HEAD solto), `indexed_tag` (só se o `HEAD` estiver exatamente numa tag) e `indexed_dirty` (`true` com alteração não commitada). Copie os campos que vierem para o frontmatter. `{ "git": false }` (sem repositório Git ou sem commit): **omita** os cinco campos e avise `no-git` no relatório; com `"reason"` (`status-unreadable`: o Git não conseguiu ler o estado da árvore, por exemplo um índice corrompido; `commit-date-unreadable`: sem a data do commit; `index-unreadable`: o Git não leu as marcas do índice), omita igual e relate esse motivo. Com `indexed_commit`, o `check` exige também `indexed_commit_date` e `indexed_dirty`; branch e tag podem faltar. O script não executa filtros nem hooks configurados no repositório (`fsmonitor`, `clean` e `process` do `.gitattributes`): por isso `indexed_dirty` pode vir `true` a mais para um arquivo que um filtro reescreve, nunca `false` a menos. Arquivos marcados no índice com `assume-unchanged`, ou com `skip-worktree` e ainda presentes no disco, escondem edições do Git: contam como sujo. Uma atualização de submódulo já adicionada ao índice (`git add libs/sub`) conta como sujo. Os submódulos não são abertos (a configuração deles também rodaria): o estado deles não entra em `indexed_dirty`, já que a indexação lê o repositório principal e não o conteúdo dos submódulos. Branch ou tag que o script devolve em `omitted` (nome fora do formato seguro ou parecido com segredo ou e-mail) fica de fora, com o aviso `ref-omitted`. Nunca use `--meta` nem inclua esses campos no hash: a proveniência diz *onde* a leitura foi feita, o `sources_hash` diz *o que* mudou.
+   A saída traz `indexed_commit` (o `HEAD` completo), `indexed_commit_date` (data desse commit, em UTC) e `indexed_dirty` (`true` com alteração não commitada). Copie os campos que vierem para o frontmatter. `{ "git": false }` (sem repositório Git ou sem commit): **omita** os três campos e avise `no-git` no relatório; com `"reason"` (`status-unreadable`: o Git não conseguiu ler o estado da árvore, por exemplo um índice corrompido; `commit-date-unreadable`: sem a data do commit; `index-unreadable`: o Git não leu as marcas do índice), omita igual e relate esse motivo. Com `indexed_commit`, o `check` exige também `indexed_commit_date` e `indexed_dirty`. O script não executa filtros nem hooks configurados no repositório (`fsmonitor`, `clean` e `process` do `.gitattributes`): por isso `indexed_dirty` pode vir `true` a mais para um arquivo que um filtro reescreve, nunca `false` a menos. Arquivos marcados no índice com `assume-unchanged`, ou com `skip-worktree` e ainda presentes no disco, escondem edições do Git: contam como sujo. Uma atualização de submódulo já adicionada ao índice (`git add libs/sub`) conta como sujo. Os submódulos não são abertos (a configuração deles também rodaria): o estado deles não entra em `indexed_dirty`, já que a indexação lê o repositório principal e não o conteúdo dos submódulos. Branch e tag nunca são gravadas: o commit já diz onde a leitura estava, e o nome de uma branch ou tag pode ser interno ou apontar para uma linha que não é a principal. Nunca use `--meta` nem inclua esses campos no hash: a proveniência diz *onde* a leitura foi feita, o `sources_hash` diz *o que* mudou.
 5. **Calcular `sources_hash`** com o script, passando o que foi lido (arquivos entram pelo conteúdo, pastas só pelos nomes) e os overrides efetivos desse repositório (`owner`, `agency`, `platform`, `url`) em `--meta`, como um objeto JSON. Inclua só overrides aplicáveis, com `agency` validada; sem overrides, omita `--meta`. O JSON é canonizado e incorporado ao hash, então mudar ou remover um override também provoca atualização:
 
    ```bash
@@ -84,8 +84,6 @@ agency:
 indexed_at: 2026-01-15
 indexed_commit: 0000000000000000000000000000000000000000
 indexed_commit_date: 2026-01-14
-indexed_branch: main
-indexed_tag:
 indexed_dirty: false
 sources_hash: sha256:1111111111111111111111111111111111111111111111111111111111111111
 ---
@@ -116,8 +114,6 @@ Loja virtual da Acme: vitrine, carrinho e checkout.
 | `indexed_at` | data da indexação (AAAA-MM-DD) |
 | `indexed_commit` | SHA completo do `HEAD` lido (passo 4); o `check` recusa outro formato |
 | `indexed_commit_date` | data (AAAA-MM-DD, UTC) desse commit: até onde o repositório tinha sido alterado quando foi lido |
-| `indexed_branch` | branch atual; vazio em HEAD solto |
-| `indexed_tag` | tag exata do `HEAD`; vazio se não houver |
 | `indexed_dirty` | `true` se havia alteração não commitada (o commit então não descreve tudo o que foi lido), senão `false` |
 | `sources_hash` | o hash do passo 5 |
 

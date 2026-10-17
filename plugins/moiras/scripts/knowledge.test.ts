@@ -335,15 +335,15 @@ describe('check', () => {
     const { local, write } = workspace(t);
     const sha40 = 'a'.repeat(40);
     const withProvenance = (lines: string[]) => glossary('2026-10-06').replace('sources_hash:', `${lines.join('\n')}\nsources_hash:`);
-    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_branch: release/1.2', 'indexed_tag: v1.2.0', 'indexed_dirty: false']));
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05', 'indexed_dirty: false']));
     assert.deepEqual(check(local, 'glossary').findings, []);
-    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${'A'.repeat(40)}`, 'indexed_commit_date: ontem', 'indexed_branch: ../escape', 'indexed_tag: /abs', 'indexed_dirty: maybe']));
-    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule).sort(), ['absolute-path', 'indexed-commit-date-invalid', 'indexed-commit-invalid', 'indexed-dirty-invalid', 'ref-invalid', 'ref-invalid']);
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${'A'.repeat(40)}`, 'indexed_commit_date: ontem', 'indexed_dirty: maybe']));
+    assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule).sort(), ['indexed-commit-date-invalid', 'indexed-commit-invalid', 'indexed-dirty-invalid']);
     write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`]));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
     write('local', 'glossary/acme-shop-checkout.md', withProvenance([`indexed_commit: ${sha40}`, 'indexed_commit_date: 2026-10-05']));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
-    write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_branch: main']));
+    write('local', 'glossary/acme-shop-checkout.md', withProvenance(['indexed_dirty: false']));
     assert.deepEqual(check(local, 'glossary').findings.map(finding => finding.rule), ['provenance-incomplete']);
   });
 
@@ -656,31 +656,21 @@ describe('provenance', () => {
     return cwd;
   };
 
-  it('reports the commit, its UTC date, the branch and a clean tree', t => {
+  it('reports the commit, its UTC date and a clean tree', t => {
     const cwd = repository(t);
-    assert.deepEqual(provenance(cwd), { git: true, indexed_commit: run(cwd, 'rev-parse', 'HEAD'), indexed_commit_date: '2026-10-06', indexed_branch: 'main', indexed_dirty: false });
+    assert.deepEqual(provenance(cwd), { git: true, indexed_commit: run(cwd, 'rev-parse', 'HEAD'), indexed_commit_date: '2026-10-06', indexed_dirty: false });
   });
 
-  it('adds the tag only when HEAD is exactly on it and flags a dirty tree', t => {
+  it('flags a dirty tree and never records branch or tag names', t => {
     const cwd = repository(t);
     run(cwd, 'tag', 'v1.0.0');
-    writeFileSync(join(cwd, 'new.txt'), 'x');
-    assert.deepEqual([provenance(cwd).indexed_tag, provenance(cwd).indexed_dirty], ['v1.0.0', true]);
-    writeFileSync(join(cwd, 'README.md'), 'acme 2');
-    run(cwd, 'commit', '-q', '-am', 'second');
-    assert.equal(provenance(cwd).indexed_tag, undefined);
-  });
-
-  it('leaves the branch out on a detached HEAD and omits an unsafe branch name', t => {
-    const cwd = repository(t);
-    run(cwd, 'checkout', '-q', '--detach');
-    assert.equal(provenance(cwd).indexed_branch, undefined);
     run(cwd, 'checkout', '-q', '-b', 'feat/ana@example.com');
-    const result = provenance(cwd);
-    assert.deepEqual([result.indexed_branch, result.omitted], [undefined, ['indexed_branch']]);
+    assert.deepEqual(Object.keys(provenance(cwd)).sort(), ['git', 'indexed_commit', 'indexed_commit_date', 'indexed_dirty']);
+    writeFileSync(join(cwd, 'new.txt'), 'x');
+    assert.equal(provenance(cwd).indexed_dirty, true);
   });
 
-  it('ignores variables that redirect Git, counts untracked files and omits secret-looking refs', t => {
+  it('ignores variables that redirect Git, counts untracked files', t => {
     const cwd = repository(t);
     run(cwd, 'config', 'status.showUntrackedFiles', 'no');
     writeFileSync(join(cwd, 'new.txt'), 'x');
@@ -694,8 +684,6 @@ describe('provenance', () => {
     assert.deepEqual(provenance(join(dir, 'plain')), { git: false });
     delete process.env.GIT_DIR;
     delete process.env.GIT_WORK_TREE;
-    run(cwd, 'checkout', '-q', '-b', `ghp_${'a'.repeat(30)}`);
-    assert.deepEqual(provenance(cwd).omitted, ['indexed_branch']);
   });
 
   it('still reports a dirty tree when the status output overflows the buffer', t => {

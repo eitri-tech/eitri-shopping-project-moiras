@@ -77,10 +77,8 @@ const required: Record<string, string[]> = {
   decision: ['source'],
 };
 /** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
-const provenanceFields = ['indexed_commit_date', 'indexed_branch', 'indexed_tag', 'indexed_dirty'];
+const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-/** A branch or tag name safe to record: no path-like start, no `..`, no characters outside the usual ref set. */
-const refName = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._\/-]{0,99}$/;
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
 const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.direnv']);
@@ -360,15 +358,11 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'repository') {
         const commit = asText(fields.indexed_commit);
         if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
-        // A commit alone does not say when it was made or whether the tree matched it; branch and tag may legitimately be empty.
+        // A commit alone does not say when it was made or whether the tree matched it.
         const incomplete = commit ? !asText(fields.indexed_commit_date) || !asText(fields.indexed_dirty) : provenanceFields.some(name => asText(fields[name]));
         if (incomplete) add('provenance-incomplete', 'error');
         const commitDate = asText(fields.indexed_commit_date);
         if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
-        for (const name of ['indexed_branch', 'indexed_tag']) {
-          const ref = asText(fields[name]);
-          if (ref && !refName.test(ref)) add('ref-invalid', 'error');
-        }
         const dirty = asText(fields.indexed_dirty);
         if (dirty && dirty !== 'true' && dirty !== 'false') add('indexed-dirty-invalid', 'error');
       }
@@ -576,16 +570,11 @@ export interface Provenance {
   reason?: string;
   indexed_commit?: string;
   indexed_commit_date?: string;
-  indexed_branch?: string;
-  indexed_tag?: string;
   indexed_dirty?: boolean;
-  /** Fields left out because their value would not pass `check` (an unsafe branch or tag name). */
-  omitted?: string[];
 }
 
 /**
- * Where an indexed repository was when it was read: HEAD, the date of that commit (UTC), the branch, the tag when HEAD is exactly
- * on one, and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
+ * Where an indexed repository was when it was read: HEAD, the date of that commit (UTC) and whether the working tree had changes. Read-only Git commands only; `{ git: false }` without a repository or a commit.
  */
 export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Provenance {
   const env = gitEnv();
@@ -610,12 +599,6 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
   const date = git('log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd');
   if (!date || !isCalendarDate(date)) return { git: false, reason: 'commit-date-unreadable' };
   result.indexed_commit_date = date;
-  const omitted: string[] = [];
-  for (const [field, value] of [['indexed_branch', git('symbolic-ref', '--short', '-q', 'HEAD')], ['indexed_tag', git('describe', '--tags', '--exact-match', 'HEAD')]] as const) {
-    if (!value) continue;
-    if (refName.test(value) && !hasSecret(value) && !email.test(value) && !patterns.some(({ test }) => test.test(value))) result[field] = value;
-    else omitted.push(field);
-  }
   // Submodules are not entered: their own config (filters) would run, and the indexer reads the main repository, not their content.
   const status = run('status', '--porcelain', '--untracked-files=normal', '--ignore-submodules=all');
   if (status.status === 0) result.indexed_dirty = status.stdout.trim() !== '';
@@ -639,7 +622,6 @@ export function provenance(repository: string, maxBuffer = 64 * 1024 * 1024): Pr
     const hidden = flags.stdout.split('\0').some(entry => /^[a-z] /.test(entry) || (entry.startsWith('S ') && existsSync(join(repository, entry.slice(2)))));
     if (hidden || overflow) result.indexed_dirty = true;
   }
-  if (omitted.length) result.omitted = omitted;
   return result;
 }
 
