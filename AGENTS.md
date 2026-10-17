@@ -17,6 +17,7 @@ O plugin fica em `plugins/moiras/` e é publicado pelo marketplace em `.claude-p
 Estrutura:
 
 - `.claude-plugin/plugin.json`: manifesto
+- `assets/logo.svg`: logo do README (SVG estático, só fontes de sistema, legível em fundo claro e escuro)
 - `skills/moiras-init/SKILL.md`: skill que cria o `.moiras/sources.json` conversando com o usuário (única que o cria, sem nunca sobrescrever)
 - `skills/moiras-triage/SKILL.md`: skill que orquestra as três etapas, em ordem, e define como ler e escrever o knowledge; cada etapa fica em `stages/`
 - `config/sources.example.json`: modelo da configuração lida de `.moiras/sources.json`
