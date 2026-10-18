@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { hash as digestOf } from 'node:crypto';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -216,6 +216,31 @@ describe('query', () => {
     assert.deepEqual(query('clotho', { dir, key: 'A', since: '2026-02-01T00:00:00Z' }), []);
     assert.throws(() => query('clotho', { dir, since: 'yesterday' }), /Invalid date/);
   });
+});
+
+describe('broken symlink', () => {
+  it('is neither an empty memory nor a place to record into', t => {
+    const { dir, file } = fixture(t);
+    symlinkSync('missing.jsonl', file);
+    assert.throws(() => query('clotho', { dir }), /broken symlink/);
+    assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), /broken symlink/);
+    assert.equal(existsSync(join(dir, 'missing.jsonl')), false, 'the target behind the link is not created');
+  });
+});
+
+describe('invalid memory paths', () => {
+  for (const target of ['missing/', 'clotho.jsonl', 'plain/child']) {
+    it(`rejects query and record through ${target}`, t => {
+      const { dir, file } = fixture(t);
+      writeFileSync(join(dir, 'plain'), 'x');
+      symlinkSync(target, file);
+      const expected = target === 'missing/' ? /broken symlink/ : { code: target === 'clotho.jsonl' ? 'ELOOP' : 'ENOTDIR' };
+      assert.throws(() => query('clotho', { dir }), expected);
+      assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), expected);
+      assert.equal(existsSync(join(dir, 'missing')), false);
+      assert.equal(readFileSync(join(dir, 'plain'), 'utf8'), 'x');
+    });
+  }
 });
 
 describe('CLI', () => {

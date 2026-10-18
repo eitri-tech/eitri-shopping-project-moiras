@@ -533,14 +533,20 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)!;
 }
 
-/** The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, a link, too large or not UTF-8 text. */
+/**
+ * The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, a link, too large or not UTF-8 text.
+ * One that exists but cannot be read fails the hash: skipping it would put the files it excludes into the fingerprint unannounced.
+ */
 function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
+  const file = join(base, dir, '.gitignore');
+  let read: { text?: string; issue?: string };
   try {
-    const { text } = readSafe(join(base, dir, '.gitignore'));
-    return text === undefined ? undefined : layerOf(dir.split(sep).join('/'), text);
+    read = readSafe(file);
   } catch {
     return undefined;
   }
+  if (read.issue === 'unreadable') throw new Error(`${join(dir, '.gitignore')}: unreadable`);
+  return read.text === undefined ? undefined : layerOf(dir.split(sep).join('/'), read.text);
 }
 
 export function sourcesHash(base: string, paths: string[], meta?: unknown): string {

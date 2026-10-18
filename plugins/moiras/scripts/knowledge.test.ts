@@ -569,7 +569,7 @@ describe('sourcesHash', () => {
     assert.ok(generated);
   });
 
-  it('reads an explicit file even when a .gitignore names it, and skips an unreadable .gitignore', t => {
+  it('reads an explicit file even when a .gitignore names it, and skips a binary .gitignore', t => {
     const { dir, write } = workspace(t);
     const base = join(dir, 'repo');
     write('repo', '.gitignore', 'secret.txt\n');
@@ -582,6 +582,41 @@ describe('sourcesHash', () => {
     const all = sourcesHash(base, ['src']);
     write('repo', 'src/b.txt', 'x');
     assert.notEqual(sourcesHash(base, ['src']), all, 'a binary .gitignore excludes nothing');
+  });
+
+  it('fails the hash when a .gitignore cannot be read instead of hashing what it excludes', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', '.gitignore', 'hidden/\n');
+    write('repo', 'hidden/a.txt', 'x');
+    write('repo', 'b.txt', 'y');
+    const before = sourcesHash(base, ['.']);
+    chmodSync(join(base, '.gitignore'), 0o000);
+    try {
+      assert.throws(() => sourcesHash(base, ['.']), /\.gitignore: unreadable/);
+    } finally {
+      chmodSync(join(base, '.gitignore'), 0o644);
+    }
+    assert.equal(sourcesHash(base, ['.']), before);
+  });
+
+  it('fails on a nested unreadable .gitignore for directories but still reads explicit files', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/.gitignore', 'hidden/\n');
+    write('repo', 'src/hidden/a.txt', 'x');
+    chmodSync(join(base, 'src/.gitignore'), 0o000);
+    try {
+      for (const path of ['.', 'src', 'src/hidden']) {
+        assert.throws(() => sourcesHash(base, [path]), /src[/\\]\.gitignore: unreadable/);
+      }
+      assert.ok(sourcesHash(base, ['src/hidden/a.txt']));
+      assert.throws(() => sourcesHash(base, ['src/.gitignore']), /unreadable/);
+    } finally {
+      chmodSync(join(base, 'src/.gitignore'), 0o644);
+    }
   });
 
   it('evaluates anchored rules of a nested .gitignore and skips folders under an ignored ancestor', t => {
