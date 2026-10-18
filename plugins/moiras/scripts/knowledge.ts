@@ -566,6 +566,8 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
   // `rel` is the folder relative to the base, `/`-separated; `parts` is the same as bytes, only built once a .gitignore applies.
   const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], rel: string, parts: Buffer[] | undefined) => {
     const issue = pathIssue(root, path);
+    // A path that exists but cannot be inspected must fail the hash, not look like a source that is absent.
+    if (issue === 'unreadable' || issue === 'not-directory') throw new Error(`${path}: ${issue}`);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
     const full = resolve(root, path);

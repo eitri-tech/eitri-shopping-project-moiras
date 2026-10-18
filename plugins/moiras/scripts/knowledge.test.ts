@@ -745,6 +745,20 @@ describe('security regressions', () => {
     assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
   });
 
+  it('fails the hash for a path it cannot traverse instead of treating it as absent', t => {
+    const { local, write } = workspace(t);
+    write('local', 'src/a.txt', 'a');
+    write('local', 'file.txt', 'f');
+    assert.throws(() => sourcesHash(local, ['file.txt/inside']), /not-directory/);
+    if (process.getuid?.() === 0) return;
+    chmodSync(join(local, 'src'), 0o000);
+    try {
+      assert.throws(() => sourcesHash(local, ['src/a.txt']), /unreadable/);
+    } finally {
+      chmodSync(join(local, 'src'), 0o755);
+    }
+  });
+
   it('surfaces broken registries as conflicts instead of dropping from the plan', t => {
     const { local, shared, write } = workspace(t);
     write('local', 'criteria/broken-local.md', 'x'.repeat(1024 * 1024 + 1));
