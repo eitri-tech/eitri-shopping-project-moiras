@@ -1,5 +1,5 @@
 {
   "name": "moiras",
   "description": "Triagem de issues do Jira (épicos e categorias) com Slack e conhecimento do projeto: coleta, classifica, avalia duplicados e sugere de 3 a 5 soluções com % de confiança.",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
