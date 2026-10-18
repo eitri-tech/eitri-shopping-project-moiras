@@ -774,6 +774,38 @@ describe('security regressions', () => {
     });
   });
 
+  it('reports a shared criterion without read permission as a conflict', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/old.md', criterion('old'));
+    write('local', 'criteria/new.md', criterion('new', 'old'));
+    chmodSync(join(shared, 'criteria/old.md'), 0o000);
+    t.after(() => { if (existsSync(join(shared, 'criteria/old.md'))) chmodSync(join(shared, 'criteria/old.md'), 0o644); });
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/new.md', action: 'add', reason: 'new' },
+        { path: 'criteria/old.md', action: 'conflict', reason: 'shared:unreadable' },
+      ],
+      remove: [],
+    });
+  });
+
+  it('reports a shared folder that is a regular file as a conflict', t => {
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'x'));
+    write('shared', 'learnings', 'not a folder');
+    const { items, remove } = plan(local, shared);
+    assert.deepEqual(items.filter(item => item.path.startsWith('learnings')), [
+      { path: 'learnings/decisions', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/patterns', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/patterns/p.md', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/solutions', action: 'conflict', reason: 'shared:not-directory' },
+    ]);
+    assert.deepEqual(items.find(item => item.path === 'criteria/a.md'), { path: 'criteria/a.md', action: 'add', reason: 'new' });
+    assert.deepEqual(remove, []);
+  });
+
   it('blocks additions beneath a shared folder that is a link', t => {
     const { dir, local, shared, write } = workspace(t);
     write('local', 'criteria/a.md', criterion('a'));

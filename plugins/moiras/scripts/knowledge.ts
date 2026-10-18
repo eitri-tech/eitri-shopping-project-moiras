@@ -108,7 +108,9 @@ function pathIssue(base: string, path: string): string | undefined {
     try {
       if (lstatSync(current).isSymbolicLink()) return 'symlink';
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing';
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return 'missing';
+      if (code === 'ENOTDIR') return 'not-directory';
       throw error;
     }
   }
@@ -122,7 +124,14 @@ function readSafe(file: string): { text?: string; issue?: string } {
   const stat = lstatSync(file);
   if (!stat.isFile()) return { issue: 'not-regular-file' };
   if (stat.size > maxFileBytes) return { issue: 'file-too-large' };
-  const bytes = readFileSync(file);
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM') return { issue: 'unreadable' };
+    throw error;
+  }
   if (bytes.includes(0) || !isUtf8(bytes)) return { issue: 'binary-file' };
   return { text: bytes.toString('utf8') };
 }
