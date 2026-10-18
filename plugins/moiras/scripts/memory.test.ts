@@ -228,6 +228,21 @@ describe('broken symlink', () => {
   });
 });
 
+describe('invalid memory paths', () => {
+  for (const target of ['missing/', 'clotho.jsonl', 'plain/child']) {
+    it(`rejects query and record through ${target}`, t => {
+      const { dir, file } = fixture(t);
+      writeFileSync(join(dir, 'plain'), 'x');
+      symlinkSync(target, file);
+      const expected = target === 'missing/' ? /broken symlink/ : { code: target === 'clotho.jsonl' ? 'ELOOP' : 'ENOTDIR' };
+      assert.throws(() => query('clotho', { dir }), expected);
+      assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), expected);
+      assert.equal(existsSync(join(dir, 'missing')), false);
+      assert.equal(readFileSync(join(dir, 'plain'), 'utf8'), 'x');
+    });
+  }
+});
+
 describe('CLI', () => {
   it('rejects invalid arguments with usage', () => {
     for (const args of [[], ['unknown'], ['record'], ['record', 'invalid'], ['hash', 'extra'],
