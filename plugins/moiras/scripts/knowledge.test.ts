@@ -790,6 +790,24 @@ describe('security regressions', () => {
     });
   });
 
+  it('reports a shared kind folder without read permission as a conflict', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('shared', 'criteria/old.md', criterion('old'));
+    chmodSync(join(shared, 'criteria'), 0o000);
+    try {
+      const { items, remove } = plan(local, shared);
+      assert.deepEqual(items.filter(item => item.path.startsWith('criteria')), [
+        { path: 'criteria', action: 'conflict', reason: 'shared:unreadable' },
+        { path: 'criteria/a.md', action: 'conflict', reason: 'shared:unreadable' },
+      ]);
+      assert.deepEqual(remove, []);
+    } finally {
+      chmodSync(join(shared, 'criteria'), 0o755);
+    }
+  });
+
   it('reports a shared folder that is a regular file as a conflict', t => {
     const { local, shared, write } = workspace(t);
     write('local', 'criteria/a.md', criterion('a'));

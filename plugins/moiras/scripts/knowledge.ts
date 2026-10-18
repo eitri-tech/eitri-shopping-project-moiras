@@ -111,6 +111,7 @@ function pathIssue(base: string, path: string): string | undefined {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return 'missing';
       if (code === 'ENOTDIR') return 'not-directory';
+      if (code === 'EACCES' || code === 'EPERM') return 'unreadable';
       throw error;
     }
   }
@@ -205,7 +206,15 @@ export function records(dir: string, only?: Scope): Entry[] {
       if (folderIssue === 'missing') return [];
       if (folderIssue) return [{ path: kind.dir, kind, text: '', doc: null, issue: folderIssue }];
       if (!lstatSync(folder).isDirectory()) return [{ path: kind.dir, kind, text: '', doc: null, issue: 'not-directory' }];
-      return readdirSync(folder)
+      let names: string[];
+      try {
+        names = readdirSync(folder);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'EACCES' || code === 'EPERM') return [{ path: kind.dir, kind, text: '', doc: null, issue: 'unreadable' }];
+        throw error;
+      }
+      return names
         .filter(name => name.endsWith('.md'))
         .sort()
         .map(name => {
