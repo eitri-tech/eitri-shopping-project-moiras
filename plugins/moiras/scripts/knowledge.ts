@@ -108,7 +108,10 @@ function pathIssue(base: string, path: string): string | undefined {
     try {
       if (lstatSync(current).isSymbolicLink()) return 'symlink';
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing';
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return 'missing';
+      if (code === 'ENOTDIR') return 'not-directory';
+      if (code === 'EACCES' || code === 'EPERM') return 'unreadable';
       throw error;
     }
   }
@@ -122,7 +125,14 @@ function readSafe(file: string): { text?: string; issue?: string } {
   const stat = lstatSync(file);
   if (!stat.isFile()) return { issue: 'not-regular-file' };
   if (stat.size > maxFileBytes) return { issue: 'file-too-large' };
-  const bytes = readFileSync(file);
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM') return { issue: 'unreadable' };
+    throw error;
+  }
   if (bytes.includes(0) || !isUtf8(bytes)) return { issue: 'binary-file' };
   return { text: bytes.toString('utf8') };
 }
@@ -196,7 +206,15 @@ export function records(dir: string, only?: Scope): Entry[] {
       if (folderIssue === 'missing') return [];
       if (folderIssue) return [{ path: kind.dir, kind, text: '', doc: null, issue: folderIssue }];
       if (!lstatSync(folder).isDirectory()) return [{ path: kind.dir, kind, text: '', doc: null, issue: 'not-directory' }];
-      return readdirSync(folder)
+      let names: string[];
+      try {
+        names = readdirSync(folder);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'EACCES' || code === 'EPERM') return [{ path: kind.dir, kind, text: '', doc: null, issue: 'unreadable' }];
+        throw error;
+      }
+      return names
         .filter(name => name.endsWith('.md'))
         .sort()
         .map(name => {
@@ -445,38 +463,57 @@ function sameSources(a: Doc, b: Doc): boolean {
 }
 
 export function plan(localDir: string, sharedDir: string, sharedName?: string): Plan {
-  const shared = new Map(records(sharedDir).filter(entry => !entry.issue).map(entry => [entry.path, entry]));
+  // Broken registries (unreadable, too large, not UTF-8) are surfaced as conflicts instead of vanishing
+  // from the plan: `shared:` marks a problem on the shared side, so the publish does not offer an `add`
+  // for a path the shared repository already holds.
+  const shared = new Map(records(sharedDir).map(entry => [entry.path, entry]));
   const items: Item[] = [];
   const remove: Plan['remove'] = [];
-  for (const local of records(localDir).filter(entry => !entry.issue)) {
+  const covered = new Set<string>();
+  for (const local of records(localDir)) {
+    covered.add(local.path);
     const { path, kind, text, doc } = local;
-    const other = shared.get(path);
     const item = (action: Item['action'], reason: string) => items.push({ path, action, reason });
-    if (!other) item('add', 'new');
-    else if (other.text === text) item('skip', 'unchanged');
-    else if (kind.type === 'solution' && doc && other.doc && sameExceptResult(doc, other.doc)) {
-      const stale = staleOutcome(doc, other.doc);
-      if (stale) item('conflict', stale);
-      else item('update', 'result-or-observation');
-    }
-    else if (kind.type === 'repository' && doc && other.doc && sameSources(doc, other.doc)) item('skip', 'unchanged');
-    else if (kind.type === 'repository' && doc && other.doc) {
-      const [mine, theirs] = [asText(doc.fields.indexed_at), asText(other.doc.fields.indexed_at)];
-      if (mine > theirs) item('update', 'newer-index');
-      else if (mine === theirs) item('conflict', 'same-date-different-index');
-      else item('skip', 'shared-is-newer');
-    } else item('conflict', kind.type === 'criterion' ? 'change-by-replaces' : 'append-only');
+    // A shared kind folder that is a link or not a directory is reported once under its own path; everything
+    // beneath it is blocked too, so no `add` can write through it.
+    const sharedIssue = shared.get(path)?.issue ?? shared.get(kind.dir)?.issue;
+    if (local.issue) item('conflict', local.issue);
+    else if (sharedIssue) item('conflict', `shared:${sharedIssue}`);
+    else {
+      const other = shared.get(path);
+      if (!other) item('add', 'new');
+      else if (other.text === text) item('skip', 'unchanged');
+      else if (kind.type === 'solution' && doc && other.doc && sameExceptResult(doc, other.doc)) {
+        const stale = staleOutcome(doc, other.doc);
+        if (stale) item('conflict', stale);
+        else item('update', 'result-or-observation');
+      }
+      else if (kind.type === 'repository' && doc && other.doc && sameSources(doc, other.doc)) item('skip', 'unchanged');
+      else if (kind.type === 'repository' && doc && other.doc) {
+        const [mine, theirs] = [asText(doc.fields.indexed_at), asText(other.doc.fields.indexed_at)];
+        if (mine > theirs) item('update', 'newer-index');
+        else if (mine === theirs) item('conflict', 'same-date-different-index');
+        else item('skip', 'shared-is-newer');
+      } else item('conflict', kind.type === 'criterion' ? 'change-by-replaces' : 'append-only');
 
-    // A substitute that is not going to be published (conflict) must not remove anything.
-    if (kind.type === 'criterion' && doc && items[items.length - 1]!.action !== 'conflict') {
-      const replaces = Array.isArray(doc.fields.replaces) ? doc.fields.replaces : [];
-      for (const id of replaces) {
-        // A qualified reference only counts for the knowledge it names; without --shared-name it stays unresolved.
-        const source = /^knowledge:([^/\s]+)\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
-        const old = source ? (source[1] === sharedName ? source[2]! : '') : /^[a-zA-Z0-9_-]+$/.test(id) ? `${kind.dir}/${id}.md` : '';
-        if (shared.has(old) && old !== path) remove.push({ path: old, replacedBy: path });
+      // A substitute that is not going to be published (conflict) must not remove anything.
+      if (kind.type === 'criterion' && doc && items[items.length - 1]!.action !== 'conflict') {
+        const replaces = Array.isArray(doc.fields.replaces) ? doc.fields.replaces : [];
+        for (const id of replaces) {
+          // A qualified reference only counts for the knowledge it names; without --shared-name it stays unresolved.
+          const source = /^knowledge:([^/\s]+)\/(criteria\/[a-zA-Z0-9_.-]+\.md)$/.exec(id);
+          const old = source ? (source[1] === sharedName ? source[2]! : '') : /^[a-zA-Z0-9_-]+$/.test(id) ? `${kind.dir}/${id}.md` : '';
+          // A shared criterion that could not be read is reported as a conflict; it is never removed unseen.
+          const target = shared.get(old);
+          if (target && !target.issue && old !== path) remove.push({ path: old, replacedBy: path });
+        }
       }
     }
+  }
+  // A broken record only shared stays in the plan too: nothing can be published for it,
+  // but the reviewer needs to know the shared file is unreadable.
+  for (const entry of shared.values()) {
+    if (entry.issue && !covered.has(entry.path)) items.push({ path: entry.path, action: 'conflict', reason: `shared:${entry.issue}` });
   }
   items.sort((a, b) => a.path.localeCompare(b.path));
   remove.sort((a, b) => a.path.localeCompare(b.path));
@@ -529,6 +566,8 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
   // `rel` is the folder relative to the base, `/`-separated; `parts` is the same as bytes, only built once a .gitignore applies.
   const walk = (path: string, explicit: boolean, inherited: IgnoreLayer[], rel: string, parts: Buffer[] | undefined) => {
     const issue = pathIssue(root, path);
+    // A path that exists but cannot be inspected must fail the hash, not look like a source that is absent.
+    if (issue === 'unreadable' || issue === 'not-directory') throw new Error(`${path}: ${issue}`);
     if (issue) return;
     if (path.split(/[\\/]/).some(part => skipped.has(part))) return;
     const full = resolve(root, path);

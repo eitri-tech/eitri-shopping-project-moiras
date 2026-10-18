@@ -725,7 +725,13 @@ describe('security regressions', () => {
     assert.notEqual(sourcesHash(local, ['.']), initial, 'unreadable files still change the hash when they appear');
     assert.throws(() => sourcesHash(local, ['criteria/huge.md']), /file-too-large/);
     assert.throws(() => sourcesHash(local, ['criteria/binary.md']), /binary-file/);
-    assert.equal(plan(local, shared).items.length, 1);
+    assert.deepEqual(plan(local, shared).items, [
+      { path: 'criteria/binary.md', action: 'conflict', reason: 'binary-file' },
+      { path: 'criteria/cycle.md', action: 'conflict', reason: 'symlink' },
+      { path: 'criteria/good.md', action: 'skip', reason: 'unchanged' },
+      { path: 'criteria/huge.md', action: 'conflict', reason: 'file-too-large' },
+      { path: 'criteria/link.md', action: 'conflict', reason: 'symlink' },
+    ], 'broken or linked registries surface as conflicts');
     const result = check(local).findings;
     assert.equal(result.filter(f => f.rule === 'symlink').length, 2);
     assert.ok(result.some(f => f.rule === 'file-too-large'));
@@ -737,6 +743,115 @@ describe('security regressions', () => {
     const deep = Array.from({ length: 34 }, () => 'd').join('/');
     write('local', `${deep}/a.txt`, 'a');
     assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
+  });
+
+  it('fails the hash for a path it cannot traverse instead of treating it as absent', t => {
+    const { local, write } = workspace(t);
+    write('local', 'src/a.txt', 'a');
+    write('local', 'file.txt', 'f');
+    assert.throws(() => sourcesHash(local, ['file.txt/inside']), /not-directory/);
+    if (process.getuid?.() === 0) return;
+    chmodSync(join(local, 'src'), 0o000);
+    try {
+      assert.throws(() => sourcesHash(local, ['src/a.txt']), /unreadable/);
+    } finally {
+      chmodSync(join(local, 'src'), 0o755);
+    }
+  });
+
+  it('surfaces broken registries as conflicts instead of dropping from the plan', t => {
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/broken-local.md', 'x'.repeat(1024 * 1024 + 1));
+    write('shared', 'learnings/patterns/broken-shared.md', 'y'.repeat(1024 * 1024 + 1));
+    write('shared', 'criteria/only-shared.md', criterion('only-shared'));
+    write('local', 'criteria/only-shared.md', criterion('only-shared'));
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/broken-local.md', action: 'conflict', reason: 'file-too-large' },
+        { path: 'criteria/only-shared.md', action: 'skip', reason: 'unchanged' },
+        { path: 'learnings/patterns/broken-shared.md', action: 'conflict', reason: 'shared:file-too-large' },
+      ],
+      remove: [],
+    });
+  });
+
+  it('never removes a shared criterion that could not be read', t => {
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/old.md', 'z'.repeat(1024 * 1024 + 1));
+    write('local', 'criteria/new.md', criterion('new', 'old'));
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/new.md', action: 'add', reason: 'new' },
+        { path: 'criteria/old.md', action: 'conflict', reason: 'shared:file-too-large' },
+      ],
+      remove: [],
+    });
+  });
+
+  it('reports a shared criterion without read permission as a conflict', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { local, shared, write } = workspace(t);
+    write('shared', 'criteria/old.md', criterion('old'));
+    write('local', 'criteria/new.md', criterion('new', 'old'));
+    chmodSync(join(shared, 'criteria/old.md'), 0o000);
+    t.after(() => { if (existsSync(join(shared, 'criteria/old.md'))) chmodSync(join(shared, 'criteria/old.md'), 0o644); });
+    assert.deepEqual(plan(local, shared), {
+      items: [
+        { path: 'criteria/new.md', action: 'add', reason: 'new' },
+        { path: 'criteria/old.md', action: 'conflict', reason: 'shared:unreadable' },
+      ],
+      remove: [],
+    });
+  });
+
+  it('reports a shared kind folder without read permission as a conflict', t => {
+    if (process.getuid?.() === 0) return t.skip('root ignores file permissions');
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('shared', 'criteria/old.md', criterion('old'));
+    chmodSync(join(shared, 'criteria'), 0o000);
+    try {
+      const { items, remove } = plan(local, shared);
+      assert.deepEqual(items.filter(item => item.path.startsWith('criteria')), [
+        { path: 'criteria', action: 'conflict', reason: 'shared:unreadable' },
+        { path: 'criteria/a.md', action: 'conflict', reason: 'shared:unreadable' },
+      ]);
+      assert.deepEqual(remove, []);
+    } finally {
+      chmodSync(join(shared, 'criteria'), 0o755);
+    }
+  });
+
+  it('reports a shared folder that is a regular file as a conflict', t => {
+    const { local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'x'));
+    write('shared', 'learnings', 'not a folder');
+    const { items, remove } = plan(local, shared);
+    assert.deepEqual(items.filter(item => item.path.startsWith('learnings')), [
+      { path: 'learnings/decisions', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/patterns', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/patterns/p.md', action: 'conflict', reason: 'shared:not-directory' },
+      { path: 'learnings/solutions', action: 'conflict', reason: 'shared:not-directory' },
+    ]);
+    assert.deepEqual(items.find(item => item.path === 'criteria/a.md'), { path: 'criteria/a.md', action: 'add', reason: 'new' });
+    assert.deepEqual(remove, []);
+  });
+
+  it('blocks additions beneath a shared folder that is a link', t => {
+    const { dir, local, shared, write } = workspace(t);
+    write('local', 'criteria/a.md', criterion('a'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', 'x'));
+    write('elsewhere', 'b.md', criterion('b'));
+    mkdirSync(shared, { recursive: true });
+    symlinkSync(join(dir, 'elsewhere'), join(shared, 'criteria'));
+    const { items, remove } = plan(local, shared);
+    assert.deepEqual(items.filter(item => item.path.startsWith('criteria')), [
+      { path: 'criteria', action: 'conflict', reason: 'shared:symlink' },
+      { path: 'criteria/a.md', action: 'conflict', reason: 'shared:symlink' },
+    ]);
+    assert.ok(items.some(item => item.path === 'learnings/patterns/p.md' && item.action === 'add'));
+    assert.deepEqual(remove, []);
   });
 
   it('resolves the base once, so a symlinked base hashes like the real one, and missing or file bases fail', t => {
