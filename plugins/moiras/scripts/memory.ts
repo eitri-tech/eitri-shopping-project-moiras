@@ -7,7 +7,7 @@
  * namespaces or parameter properties) and import siblings with the .ts extension.
  */
 import { hash as digest } from 'node:crypto';
-import { readFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, appendFileSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -82,7 +82,11 @@ export function readRecords(
   try {
     source = readFileSync(file, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { records: [], source: '' };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      // A link whose target is missing is not an empty memory: recording would create the target behind the link.
+      if (lstatSync(file, { throwIfNoEntry: false })) throw new Error(`${file}: broken symlink`);
+      return { records: [], source: '' };
+    }
     throw error;
   }
   const records: MemoryRecord[] = [];
