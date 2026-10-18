@@ -89,6 +89,66 @@ Sem glossário nem critérios, a Láquesis usa categorias padrão (ou `unknown`)
 
 Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a liberar em `--allowedTools`) está em [Execução por cron](plugins/moiras/README.md#execução-por-cron).
 
+### Fluxo das skills
+
+As setas indicam leitura ou escrita aprovada, não uma execução automática das sete skills.
+
+```text
+[moiras-init] -- "sim" ao arquivo inteiro --> [.moiras/sources.json]
+                                             | configuração das outras skills
+[Código: só leitura] --> [moiras-index] -- "sim" --> [local: glossary/]
+[Jira: concluídas] ----> [moiras-learn] -- "sim" --> [local: learnings/]
+[moiras-triage] -- escolha / "sim" ---------------> [local: learnings/, criteria/]
+[moiras-audit] -- "sim" --> [local: ajustes em learnings/; regeneração em criteria/]
+
+Leitura do knowledge: local > project > group > global (mais específico vence)
+                     glossary/ só é gerado por moiras-index
+
+[Knowledge local] --> [moiras-publish] -- check + "sim" --> [Branch novo + PR]
+[Compartilhado privado, após merge humano] --> [moiras-sync] --> [Clones para leitura]
+```
+
+### Pipeline da triagem
+
+Resumo dos contratos; os campos completos e as condições estão nos
+[stages](plugins/moiras/skills/moiras-triage/stages/).
+
+```text
+[moiras-triage: configuração + escopo]
+  |
+  v
+[Cloto / clotho]
+  +--> [Jira: pendentes sem responsável + siblings] --+
+  +--> [Slack: mensagens + respostas das threads] ----+ em paralelo
+  output: jira, slack, interactions, collected_at, errors
+  v
+[Láquesis / lachesis]
+  input: issue + evidence + siblings + warnings (inclui agency)
+  output: repositories, component, category, origin, confidence,
+          duplicates, agency, sources, warnings, glossary_suggestions, key, complex
+  |
+  v
+[Interações opcionais da Cloto, desligadas por padrão]
+  interativo: "sim" à lista exata; --auto: só reaction autorizada
+  comment: nunca no --auto, nem com agência ou agência ambígua
+  |
+  v
+[Átropos / atropos]
+  input: ticket completo da Cloto + classification + precedents
+  output: key, action, duplicate_of, agency, justification, solutions,
+          criteria_suggestions, warnings
+  action: duplicate | blocked | ready-for-dev | needs-info | close
+  |
+  +--> [Interativo: escolha de solução] --> [local: learnings/solutions/]
+  |    ["sim" a padrões/decisões ou critérios] --> [local: learnings/ ou criteria/]
+  +--> [--auto: relatório + escolhas pendentes; sem escrita no knowledge]
+```
+
+Valide cada saída antes de avançar: contrato inválido interrompe aquela issue.
+Jira falhou ou não há issues a triar: encerra; Slack indisponível: segue com aviso.
+No `--auto`, só pule `unchanged` com conclusão válida comprovada para a entrada e o
+knowledge atuais; `--full` reprocessa tudo. `none` não gera aprendizado.
+
 ## Segurança
 
 - Só lê e sugere no Jira e no Slack; nada é escrito sem o "sim" à lista exata. A exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira), desligadas por padrão (`interactions.enabled`). Com elas ligadas, só a reação autorizada em `interactions.auto_types` roda no `--auto` sem o "sim"; comentário sempre pede aprovação.

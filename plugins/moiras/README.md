@@ -9,9 +9,62 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
 Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
 
-- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
-- Láquesis (mede): issue + evidências + outras issues do escopo, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
-- Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
+Os contratos abaixo estão resumidos; os campos completos ficam nos
+[stages da triagem](skills/moiras-triage/stages/).
+
+```text
+[moiras-triage: .moiras/sources.json + escopo]
+  |
+  v
+[Cloto / clotho]
+  input: configuração + épicos e/ou categorias
+    +--> [Jira: pendentes sem responsável + siblings de todo o escopo] --+
+    +--> [Slack: pessoas/canais configurados + threads] ----------------+ em paralelo
+  output: collected_at, jira, slack, interactions, errors
+  |
+  +--> Jira falhou / nenhum épico encontrado sem categorias / nenhuma issue: encerra
+  +--> Slack falhou: segue com listas vazias e aviso; falha parcial: usa os demais
+  v
+[Láquesis / lachesis: uma chamada por issue, na ordem da Cloto]
+  input: key, summary, description, created_at, epic, priority, agency,
+         evidence, siblings, warnings
+  lê: glossary/, criteria/, learnings/ + candidatos a duplicata no Jira
+  output: key, category, component, repositories, origin, agency, complex,
+          confidence, duplicates, sources, warnings, glossary_suggestions
+  |
+  v
+[Interações propostas pela Cloto: exige interactions.enabled: true]
+  agency e avisos atuais resolvidos para TODAS as issues, inclusive unchanged
+  interativo -- "sim" à lista exata --> reaction no Slack / comment no Jira
+  --auto ---- reaction em interactions.auto_types --> só reação autorizada
+  comment nunca no --auto, nem para agency ou agency-ambiguous
+  |
+  v
+[Átropos / atropos]
+  input: ticket (jira.issues completo) + classification + precedents do knowledge
+  output: key, action, duplicate_of, agency, justification, solutions,
+          criteria_suggestions, warnings
+  |
+  +--> duplicate: similarity >= 0.8 + relation: same-incident; exige duplicate_of
+  +--> blocked: dependência externa com evidência
+  +--> ready-for-dev: descrição/critérios claros, confidence >= 0.8, sem bloqueio
+  +--> needs-info: baixa confiança, origin: unknown, falta reprodução ou há dúvida
+  +--> close: evidência explícita de que não se aplica mais
+  |
+  +--> Interativo: escolha --> learnings/solutions/ local (none: não grava)
+  |    "sim" a padrões/decisões --> learnings/ local
+  |    "sim" a critérios -------> criteria/ local (conflito: regenera com replaces)
+  |    agência + pedido -------> rascunho de repasse; usuário envia
+  +--> --auto: runs.dir/<run_id>.md + .json; pendências, sem escrita no knowledge
+```
+
+Os critérios do time podem refinar as ações; sem critério aplicável, sinalize
+`criteria-missing`. Cada passagem exige saída válida e acumula `warnings`.
+No `--auto`, antes do filtro incremental, recalcule a agência de todas as issues.
+Só pule `unchanged` com relatório completo comprovando contratos válidos para o mesmo
+`ticket` (sem `change`), entrada da Láquesis e `knowledge_fingerprint` atuais.
+`--full` reprocessa tudo. As saídas completas também são salvas no interativo quando
+há veredito ou escolha pendente; a memória recebe só hashes e metadados via script.
 
 As ações são `duplicate`, `blocked`, `ready-for-dev`, `needs-info` e `close`.
 `duplicate` e `close` podem não ter soluções; se faltarem alternativas distintas
@@ -53,13 +106,40 @@ Quem escreve onde:
   `knowledge.ts check`, escreve numa seleção e num worktree temporários,
   envia um branch novo e abre PR; não altera o knowledge local nem o clone principal.
 
-Ciclo do knowledge:
+Mapa das sete skills (escrita de registros locais só no modo interativo):
 
-1. Indexar o código para localizar repositórios e componentes.
-2. Triar e registrar escolhas, desfechos e critérios aprovados.
-3. Auditar e aprovar os ajustes locais necessários.
-4. Publicar por PR; a revisão e o merge cabem às pessoas do repositório.
-5. Sincronizar os clones para ler o que foi mergeado na próxima triagem.
+```text
+[moiras-init] -- "sim" ao arquivo inteiro --> [.moiras/sources.json]
+                                             + .moiras/.gitignore
+                                             | configuração das demais skills
+[Código: só leitura] --> [moiras-index] -- "sim" à lista --> [local: glossary/]
+[Jira: concluídas] ----> [moiras-learn] -- "sim" à lista --> [local: learnings/]
+[moiras-triage: Cloto -> Láquesis -> Átropos] -- escolha/"sim" --> [local]
+[moiras-audit] -- "sim" à lista --> [local: learnings/ (result e observação), criteria/]
+
+[local: glossary/ + criteria/ + learnings/]
+  |
+  v
+[moiras-publish: destino privado, clone limpo e sincronizado; plan + check]
+  | "sim" à lista exata
+  v
+[Worktree temporário: branch novo + check] --> [Push do branch + PR]
+  |
+  v
+[Revisão e merge humanos no compartilhado privado: project / group / global]
+  |
+  v
+[moiras-sync: clone limpo, branch padrão, sem commits locais ou divergência]
+  | fetch + merge --ff-only; não altera o knowledge local
+  v
+[Clones dos knowledges compartilhados] --> [Leitura junto com o local]
+
+Precedência em conflitos: local > project > group > global
+Autoria de glossary/: só moiras-index; publish copia, sync traz o que foi mergeado.
+```
+
+O sync pode vir antes da triagem; no interativo, clone ausente exige "sim" para clonar.
+No `--auto`, só avança clones existentes. Publish não inclui memória nem relatórios.
 
 Na leitura, o escopo mais específico vence: `local` > `project` > `group` > `global`.
 Sincronizar também pode acontecer antes de triar. Caminhos, estrutura e regras
