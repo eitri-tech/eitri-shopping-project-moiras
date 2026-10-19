@@ -8,7 +8,7 @@
  */
 import { hash as digest } from 'node:crypto';
 import { readFileSync, mkdirSync, appendFileSync, lstatSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 
 export type Stage = 'clotho' | 'lachesis' | 'atropos';
@@ -74,17 +74,29 @@ export function parseContent(raw: string): Json | string {
   catch { return raw.replaceAll('\r\n', '\n').replace(/\n+$/, ''); }
 }
 
+// Trust ancestors above `.moiras` (or a custom memory folder), including platform symlinks.
+function assertNoSymlink(file: string): void {
+  const parts = resolve(file).split(sep).filter(Boolean);
+  const moiras = parts.indexOf('.moiras');
+  const start = moiras === -1 ? Math.max(0, parts.length - 2) : moiras;
+  for (let index = start; index < parts.length; index++) {
+    const current = `${sep}${parts.slice(0, index + 1).join(sep)}`;
+    if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      throw new Error(`${current}: symlink refused`);
+    }
+  }
+}
+
 export function readRecords(
   file: string,
   warn: (message: string) => void = message => process.stderr.write(`${message}\n`),
 ): { records: MemoryRecord[]; source: string } {
+  assertNoSymlink(file);
   let source: string;
   try {
     source = readFileSync(file, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      // A link whose target is missing is not an empty memory: recording would create the target behind the link.
-      if (lstatSync(file, { throwIfNoEntry: false })) throw new Error(`${file}: broken symlink`);
       return { records: [], source: '' };
     }
     throw error;
