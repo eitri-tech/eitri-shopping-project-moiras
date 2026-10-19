@@ -70,9 +70,9 @@ export function canonicalRemote(value: string): string | undefined {
   return match ? `https://github.com/${match[1]}/${match[2]}`.toLowerCase() : undefined;
 }
 
-/** Every `remote.origin.url` of the checkout, canonicalized: `unreadable` when Git cannot read them (or takes too long), `undefined` entries for values that are not GitHub remotes. Includes are not followed and discovery stops at the clone folder. */
+/** Every `remote.origin.url` of the checkout, canonicalized: `unreadable` when Git cannot read them (or takes too long), `undefined` entries for values that are not GitHub remotes. Only the checkout's own `.git/config` counts (not global or system config, nor `GIT_CONFIG_*` variables), includes are not followed and discovery stops at the clone folder. */
 function originsOf(path: string, run: typeof spawnSync): (string | undefined)[] | 'unreadable' {
-  const result = run('git', ['-C', path, 'config', '--no-includes', '--get-all', 'remote.origin.url'], { env: { ...cloneEnv(), GIT_CEILING_DIRECTORIES: dirname(path) }, encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
+  const result = run('git', ['-C', path, 'config', '--local', '--no-includes', '--get-all', 'remote.origin.url'], { env: { ...cloneEnv(), GIT_CEILING_DIRECTORIES: dirname(path) }, encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
   if (result.status !== 0 || typeof result.stdout !== 'string') return 'unreadable';
   const values = result.stdout.split('\n').filter(Boolean);
   return values.length ? values.map(canonicalRemote) : 'unreadable';
@@ -106,6 +106,7 @@ export function planClone(dir: string, input: unknown, run: typeof spawnSync = s
 export function localRepositories(dir: string, pattern: string, run: typeof spawnSync = spawnSync) {
   const [owner, glob] = patternParts(pattern);
   const base = resolve(dir);
+  if (lstatSync(base, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('Clone folder refused.');
   const names = lstatSync(base, { throwIfNoEntry: false })?.isDirectory() ? readdirSync(base).filter(name => safeName.test(name) && globMatch(glob, name)).sort() : [];
   return { owner, repositories: names.map(name => classify(join(base, name), name, canonicalRemote(`https://github.com/${owner}/${name}`), run)).filter(entry => entry.action !== 'clone') };
 }

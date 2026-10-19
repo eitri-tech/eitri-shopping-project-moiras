@@ -122,3 +122,17 @@ it('lists local clones by glob without the gh list, reporting mismatches as conf
   assert.deepEqual(localRepositories(join(dir, 'missing'), 'acme/shop-*').repositories, []);
   assert.deepEqual(JSON.parse(main(['local', '--dir', dir, '--pattern', 'acme/tool-*']).output).repositories.map((r: { name: string }) => r.name), ['tool-c']);
 });
+
+it('reads only the checkout config and refuses a symlinked clone folder in local', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  checkout(dir, 'shop-env', ['https://github.com/other/shop-env']);
+  const saved = { ...process.env };
+  process.env.GIT_CONFIG_COUNT = '1';
+  process.env.GIT_CONFIG_KEY_0 = 'remote.origin.url';
+  process.env.GIT_CONFIG_VALUE_0 = 'https://github.com/acme/shop-env';
+  t.after(() => { for (const key of ['GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0']) delete process.env[key]; Object.assign(process.env, saved); });
+  assert.deepEqual(localRepositories(dir, 'acme/shop-*').repositories.map(r => [r.name, r.reason]), [['shop-env', 'origin-mismatch']]);
+  symlinkSync(dir, join(dir, 'link'));
+  assert.throws(() => localRepositories(join(dir, 'link'), 'acme/shop-*'), /Clone folder refused/);
+});
