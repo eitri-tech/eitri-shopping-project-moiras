@@ -35,6 +35,7 @@ const slackChannel = /^[CG][A-Z0-9]{8,}$/;
 const userInfo = patterns.find(entry => entry.rule === 'url-credentials')!.test;
 const secret = patterns.find(entry => entry.rule === 'secret')!.test;
 const absolutePath = patterns.find(entry => entry.rule === 'absolute-path')!.test;
+const absolutePathValue = /^(?:\/|~|[A-Za-z]:[\\/])/;
 
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -165,6 +166,12 @@ export function validate(config: unknown): Finding[] {
     }
   }
 
+  const warnPath = (path: string, value: unknown) => {
+    if (isText(value) && absolutePathValue.test(value.trim()) && !findings.some(f => f.path === path && f.rule === 'absolute-path')) {
+      add(path, 'absolute-path', 'warning');
+    }
+  };
+
   // knowledge
   const names = new Set<string>();
   let locals = 0;
@@ -177,6 +184,7 @@ export function validate(config: unknown): Finding[] {
     if (typeof entry.scope !== 'string' || !scopes.has(entry.scope)) add(`${path}.scope`, 'scope-invalid');
     if (entry.scope === 'local' && ++locals > 1) add(`${path}.scope`, 'local-duplicate');
     if (!isText(entry.dir)) add(`${path}.dir`, 'field-missing');
+    else warnPath(`${path}.dir`, entry.dir);
     if (entry.repository !== undefined && !isText(entry.repository)) add(`${path}.repository`, 'field-invalid');
     if (entry.scope === 'local' && entry.repository !== undefined) add(`${path}.repository`, 'local-with-repository');
   });
@@ -186,12 +194,16 @@ export function validate(config: unknown): Finding[] {
     const index = config.index;
     if (!isObject(index)) add('index', 'not-an-object');
     else {
-      if (index.roots !== undefined && (!Array.isArray(index.roots) || index.roots.some(root => !isText(root)))) add('index.roots', 'not-a-list');
+      if (index.roots !== undefined) {
+        if (!Array.isArray(index.roots) || index.roots.some(root => !isText(root))) add('index.roots', 'not-a-list');
+        else index.roots.forEach((root, position) => warnPath(`index.roots[${position}]`, root));
+      }
       // Each name is a file (`glossary/<name>.md`): two repositories with one name (any case) would overwrite each other.
       const repositoryNames = new Set<string>();
       list(index.repositories, 'index.repositories').forEach((repository, position) => {
         const path = `index.repositories[${position}]`;
         for (const field of ['name', 'path']) if (!isText(repository[field])) add(`${path}.${field}`, 'field-missing');
+        warnPath(`${path}.path`, repository.path);
         if (isText(repository.name) && !safeName.test(repository.name)) add(`${path}.name`, 'name-invalid');
         else if (isText(repository.name) && repositoryNames.has(repository.name.toLowerCase())) add(`${path}.name`, 'name-duplicate');
         else if (isText(repository.name)) repositoryNames.add(repository.name.toLowerCase());
@@ -214,7 +226,10 @@ export function validate(config: unknown): Finding[] {
 
   for (const key of ['memory', 'runs']) {
     const section = config[key];
-    if (section !== undefined && !(isObject(section) && (section.dir === undefined || isText(section.dir)))) add(`${key}.dir`, 'field-invalid');
+    if (section !== undefined) {
+      if (!(isObject(section) && (section.dir === undefined || isText(section.dir)))) add(`${key}.dir`, 'field-invalid');
+      else warnPath(`${key}.dir`, section.dir);
+    }
   }
   return findings;
 }
