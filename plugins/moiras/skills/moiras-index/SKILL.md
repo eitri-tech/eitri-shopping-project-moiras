@@ -47,10 +47,10 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 Para cada entrada de `github`, na ordem:
 
 ```bash
-gh repo list <dono> --limit 1000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" match --pattern "<dono>/<glob>" [--include-archived]
+gh repo list <dono> --limit 4000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" match --pattern "<dono>/<glob>" [--include-archived]
 ```
 
-A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite), avise que podem faltar repositórios e peça um padrão mais estreito. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: os clones que já estão em `clone_dir` continuam sendo indexados, mas nada é dado como ausente.
+A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit`. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: os clones que já estão em `clone_dir` continuam sendo indexados, mas nada é dado como ausente.
 
 Depois veja o que já existe em disco:
 

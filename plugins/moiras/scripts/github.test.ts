@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cloneRepository, main, matchRepositories, planClone } from './github.ts';
+import { cloneRepository, globMatch, listLimit, main, matchRepositories, planClone } from './github.ts';
 import type { spawnSync } from 'node:child_process';
 
 const repo = (name: string, isArchived = false, url = `https://github.com/acme/${name}`) => ({ name, url, isArchived, description: 'Acme' });
@@ -16,7 +16,7 @@ it('matches a single segment case-insensitively, sorts, and filters unsafe entri
 
 it('escapes dots and supports question marks and truncation', () => {
   assert.deepEqual(matchRepositories('acme/shop.?', [repo('shop.a'), repo('shopXa'), repo('shop.ab')]).repositories.map(r => r.name), ['shop.a']);
-  assert.equal(matchRepositories('acme/shop*', Array.from({ length: 1000 }, () => repo('other'))).truncated, true);
+  assert.equal(matchRepositories('acme/shop*', Array.from({ length: listLimit }, () => repo('other'))).truncated, true);
   assert.equal(matchRepositories('acme/shop*', Array.from({ length: 999 }, () => repo('other'))).truncated, false);
 });
 
@@ -63,4 +63,16 @@ it('rejects unsafe names, URLs and depths before invoking git', () => {
   for (const url of ['http://github.com/acme/shop', 'https://github.com.evil/acme/shop', 'https://user:pass@github.com/acme/shop', 'https://github.com/acme/other', 'https://github.com/acme/shop?x', 'https://github.com/acme/shop/']) assert.throws(() => cloneRepository('repos', 'shop', url, undefined, never));
   for (const name of ['../shop', '-shop', '.', 'a/b']) assert.throws(() => cloneRepository('repos', name, 'https://github.com/acme/shop', undefined, never));
   for (const depth of ['0', '-1', '1.5', '1e2', '9007199254740992']) assert.throws(() => cloneRepository('repos', 'shop', 'https://github.com/acme/shop', depth, never));
+});
+
+it('matches globs in linear time and with the usual wildcard rules', () => {
+  assert.equal(globMatch('shop-*', 'Shop-Checkout'), true);
+  assert.equal(globMatch('*-checkout', 'acme-shop-checkout'), true);
+  assert.equal(globMatch('a?c', 'abc'), true);
+  assert.equal(globMatch('a?c', 'ac'), false);
+  assert.equal(globMatch('a*b*c', 'axxbxxd'), false);
+  assert.equal(globMatch('shop.*', 'shopx1'), false);
+  const started = Date.now();
+  assert.equal(globMatch(`${'a*'.repeat(25)}b`, 'a'.repeat(100)), false);
+  assert.ok(Date.now() - started < 1000);
 });

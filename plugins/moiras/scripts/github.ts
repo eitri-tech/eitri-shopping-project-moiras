@@ -19,6 +19,23 @@ function patternParts(pattern: string): string[] {
   return pattern.split('/');
 }
 
+/** Number the skill passes to `gh repo list --limit`; a list this long may have been cut. */
+export const listLimit = 4000;
+
+/** Linear-time glob (`*` any run, `?` one character, case-insensitive); no RegExp, so a pattern full of `*` cannot backtrack. */
+export function globMatch(glob: string, name: string): boolean {
+  const pattern = glob.toLowerCase(), text = name.toLowerCase();
+  let p = 0, t = 0, star = -1, mark = 0;
+  while (t < text.length) {
+    if (p < pattern.length && (pattern[p] === '?' || pattern[p] === text[t])) { p++; t++; }
+    else if (p < pattern.length && pattern[p] === '*') { star = p++; mark = t; }
+    else if (star >= 0) { p = star + 1; t = ++mark; }
+    else return false;
+  }
+  while (pattern[p] === '*') p++;
+  return p === pattern.length;
+}
+
 function cleanUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
@@ -30,15 +47,14 @@ function cleanUrl(value: unknown): value is string {
 export function matchRepositories(pattern: string, input: unknown, includeArchived = false): Matches {
   const [owner, glob] = patternParts(pattern);
   if (!Array.isArray(input)) throw new Error('Expected a repository list.');
-  const expression = new RegExp(`^${[...glob].map(char => char === '*' ? '.*' : char === '?' ? '.' : char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('')}$`, 'i');
   const repositories: Repository[] = [];
   for (const item of input) {
-    if (!item || typeof item.name !== 'string' || !safeName.test(item.name) || !expression.test(item.name) || !cleanUrl(item.url) || typeof item.isArchived !== 'boolean') continue;
+    if (!item || typeof item.name !== 'string' || !safeName.test(item.name) || !globMatch(glob, item.name) || !cleanUrl(item.url) || typeof item.isArchived !== 'boolean') continue;
     if (item.isArchived && !includeArchived) continue;
     repositories.push({ name: item.name, url: item.url, archived: item.isArchived });
   }
   repositories.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-  return { owner, repositories, truncated: input.length >= 1000 };
+  return { owner, repositories, truncated: input.length >= listLimit };
 }
 
 // Trust ancestors above the clone folder (platform symlinks such as /tmp); refuse a link on the folder or on the repository itself.
