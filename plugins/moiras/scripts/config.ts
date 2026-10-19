@@ -35,7 +35,7 @@ const slackChannel = /^[CG][A-Z0-9]{8,}$/;
 const userInfo = patterns.find(entry => entry.rule === 'url-credentials')!.test;
 const secret = patterns.find(entry => entry.rule === 'secret')!.test;
 const absolutePath = patterns.find(entry => entry.rule === 'absolute-path')!.test;
-const absolutePathValue = /^(?:\/|~|[A-Za-z]:[\\/])/;
+const absolutePathValue = /^(?:[\\/]|~|[A-Za-z]:[\\/])/;
 
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);

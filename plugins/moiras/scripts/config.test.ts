@@ -152,7 +152,7 @@ describe('validate', () => {
         { name: 'ok', scope: 'project', dir: '/home/fulano/knowledge', repository: 'https://<user>:<token>@github.com/<org>/ok.git' },
         { name: 'data', scope: 'project', dir: '/data/knowledge' },
       ],
-      index: { roots: ['/code/acme'], repositories: [{ name: 'acme-shop-checkout', path: 'D:\\work\\acme' }] },
+      index: { roots: ['/code/acme', '\\\\server\\share\\repo', '\\work\\repo', '..\\team'], repositories: [{ name: 'acme-shop-checkout', path: 'D:\\work\\acme' }] },
       memory: { dir: '/data/memory' },
       runs: { dir: '~/runs' },
     };
@@ -163,6 +163,8 @@ describe('validate', () => {
       'runs.dir:absolute-path:warning',
       'knowledge[4].dir:absolute-path:warning',
       'index.roots[0]:absolute-path:warning',
+      'index.roots[1]:absolute-path:warning',
+      'index.roots[2]:absolute-path:warning',
       'index.repositories[0].path:absolute-path:warning',
       'memory.dir:absolute-path:warning',
     ]);
