@@ -75,6 +75,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 ## Convenções
 
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
+- Worktrees do Git ficam dentro da pasta do repositório, em `.worktrees/<nome>` (por exemplo, `git worktree add .worktrees/minha-correcao -b fix/minha-correcao origin/main`), nunca em `/tmp` nem em pastas irmãs. A pasta `.worktrees/` está no `.gitignore` e deve continuar assim: nada dela vai para um commit. Em cada worktree novo, ligue o `.direnv/types` ao do checkout principal com caminho absoluto. Ao terminar, remova o worktree (`git worktree remove`) e o branch.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
 - Scripts em TypeScript executado direto pelo Node LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), sem build: só sintaxe apagável (sem `enum`, `namespace` nem parameter properties) e imports locais com extensão `.ts`. ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
 - Testes dos scripts com `node:test`, ao lado do script (`*.test.ts`). Antes de commitar, rode `node --test plugins/moiras/scripts/*.test.ts` e `tsc -p tsconfig.json`.
