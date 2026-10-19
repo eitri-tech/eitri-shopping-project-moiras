@@ -191,6 +191,7 @@ export function parseDoc(text: string): Doc | null {
 const asText = (value: Value | undefined): string => (Array.isArray(value) ? value.join(', ') : value ?? '');
 const asScalar = (value: Value | undefined): string => (typeof value === 'string' ? value : '');
 const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const learningSource = /^knowledge:[A-Za-z0-9_][A-Za-z0-9._-]*\/learnings\/(?:solutions|patterns|decisions)\/(?![^/]*\.\.)[A-Za-z0-9_][A-Za-z0-9._-]*\.md$/;
 
 export interface Entry {
   path: string;
@@ -398,7 +399,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !jiraKey.test(item))) add('issues-invalid', 'error');
       }
       if (kind.type === 'decision' && asText(fields.source)) {
-        if (!Array.isArray(fields.source) || fields.source.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('source-invalid', 'error');
+        if (!Array.isArray(fields.source) || fields.source.some(item => !fieldPlaceholder.test(item) && !safeName.test(item) && !learningSource.test(item))) add('source-invalid', 'error');
       }
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asScalar(fields.sources_hash))) add('sources-hash-invalid', 'error');
       if (kind.type === 'repository') {

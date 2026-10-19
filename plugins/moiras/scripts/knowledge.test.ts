@@ -273,6 +273,37 @@ describe('check', () => {
     write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
   });
 
+  it('accepts qualified learning sources only in the documented shape', t => {
+    const { local, write } = workspace(t);
+    const decision = (source: string) => `---\nid: d\ntype: decision\ncreated_at: 2026-10-04\nsource: [${source}]\n---\n\n# D\n`;
+    for (const folder of ['solutions', 'patterns', 'decisions']) {
+      write('local', 'learnings/decisions/d.md', decision(`PROJ-1-1, knowledge:acme.team-1/learnings/${folder}/record.v1.md`));
+      assert.deepEqual(check(local, 'learnings').findings, [], folder);
+    }
+    for (const source of [
+      'knowledge:x/learnings/../../secret.md',
+      'knowledge:x/criteria/record.md',
+      'knowledge:x/learnings/other/record.md',
+      'knowledge:x/learnings/solutions/extra/record.md',
+      'knowledge:/learnings/solutions/record.md',
+      'knowledge:../learnings/solutions/record.md',
+      'knowledge:x/learnings/solutions/record..md',
+      'knowledge:x/learnings/solutions/.md',
+      'knowledge:x/learnings/solutions/record.txt',
+    ]) {
+      write('local', 'learnings/decisions/d.md', decision(source));
+      assert.deepEqual(check(local, 'learnings').findings.map(f => f.rule), ['source-invalid'], source);
+    }
+    write('local', 'learnings/decisions/d.md', decision('PROJ-1-1'));
+    for (const [path, doc] of [
+      ['learnings/solutions/PROJ-1-1.md', solution('resolved').replace('chosen_by: Fulano', 'chosen_by: user-1')],
+      ['learnings/patterns/p.md', patternDoc('p', '# P')],
+    ]) {
+      write('local', path!, doc!.replace('repositories: [acme-shop-checkout]', 'repositories: [knowledge:acme/glossary/acme-shop-checkout.md]'));
+    }
+    assert.deepEqual(check(local, 'learnings').findings.map(f => f.rule), ['repositories-invalid', 'repositories-invalid']);
+  });
+
   it('rejects single-element lists on scalar fields and requires safe lists for repositories and source', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/solutions/PROJ-1-1.md', solution('[resolved]')
