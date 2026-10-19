@@ -9,7 +9,7 @@ Corta o fio. Para cada issue, explica o problema, decide o encaminhamento e suge
 ```json
 {
   "input": {
-    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "epic": "PROJ-100", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "buffer_days": 15, "agency": null, "change": "new", "warnings": [] },
+    "ticket": { "key": "PROJ-123", "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "epic": "PROJ-100", "priority": "High", "status": "To Do", "duedate": "2026-11-30", "end_date": "2026-11-30", "end_date_source": "issue", "buffer_days": 15, "agency": null, "change": "new", "warnings": [] },
     "classification": "<saída da Láquesis para esta issue, com os avisos acumulados>",
     "precedents": [
       { "id": "PROJ-187-1", "solution": "", "result": "resolved | not-resolved | pending", "ref": "knowledge:local/learnings/solutions/PROJ-187-1.md" }
@@ -93,7 +93,7 @@ Como calibrar:
 
 ## 5. Saída para o usuário
 
-Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, folga até a data fim (do épico da issue, ou do projeto quando ela não tem épico), ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas. Em seguida, as sugestões de glossário (`glossary_suggestions`) agrupadas por repositório e as de critérios (`criteria_suggestions`). Por fim, as saídas completas em JSON.
+Apresente uma tabela na ordem da Cloto (prioridade, data fim) com: chave, resumo, data fim e de onde veio (`issue`, `epic` ou `project`), folga até o teto do épico (ou do projeto) quando a issue tem data própria, ação, melhor solução e sua confiança. Depois, por issue: a justificativa e as soluções numeradas. Em seguida, as sugestões de glossário (`glossary_suggestions`) agrupadas por repositório e as de critérios (`criteria_suggestions`). Por fim, as saídas completas em JSON.
 
 Nas issues com `agency`, escreva na linha da tabela "gerida pela <agência>" e, na seção da issue, avise que o repasse da solução à agência está disponível (seção 9).
 

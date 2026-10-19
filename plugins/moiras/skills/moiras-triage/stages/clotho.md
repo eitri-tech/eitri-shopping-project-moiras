@@ -33,11 +33,17 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
    Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
-3. Para cada issue, calcule `buffer_days` = data fim − `duedate` da issue. A data fim é a do **épico da própria issue** (`epic`), lida no passo 1; issue sem épico, ou cujo épico não pôde ser lido, usa `jira.project_end`. Sem nenhuma das duas, `buffer_days = null` e o aviso `no-end-date`.
-   - `duedate` vazio: `buffer_days = null`, com o aviso `no-due-date`.
-   - `duedate` depois da data fim: aviso `exceeds-epic` (o nome fica, mesmo quando a data fim é a do projeto).
+3. Para cada issue, calcule a data fim efetiva (`end_date`) e de onde ela veio (`end_date_source`), nesta ordem de prioridade:
+   1. a `duedate` da **própria issue** (`end_date_source: issue`);
+   2. senão, a data fim do **épico da issue** (`epic`), lida no passo 1 (`epic`);
+   3. senão, `jira.project_end`, que é opcional (`project`).
 
-A ordem final segue a do Jira (prioridade, depois data fim). Issues com `exceeds-epic` sobem dentro da mesma prioridade.
+   Sem nenhuma das três, `end_date = null`, `end_date_source = null` e o aviso `no-end-date`. Épico sem data, ou que não pôde ser lido, só deixa de ser fonte: a issue cai no próximo item. Issue sem `duedate` não é erro: herda a data do épico (ou do projeto) e leva o aviso `no-due-date`, que só diz que a data não é dela.
+
+   `buffer_days` continua sendo a folga da issue dentro do teto do épico (ou do projeto): data fim do épico (ou `project_end`) − `duedate` da issue, só quando a issue tem `duedate` e há um teto; senão `null`.
+   - `duedate` depois do teto: aviso `exceeds-epic` (o nome fica, mesmo quando o teto é a data do projeto).
+
+A ordem final é a prioridade e, dentro dela, `end_date` crescente (a efetiva, não só a `duedate`; sem `end_date` por último). Issues com `exceeds-epic` sobem dentro da mesma prioridade e data.
 
 4. Na mesma rodada, busque **todas** as issues do escopo, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `<ESCOPO> ORDER BY key`. Exponha a resolução como `resolved_at` (timestamp ISO 8601 com fuso; `null` se não resolvida ou indisponível). Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2. Com vários épicos, `siblings` reúne os de todos eles, então a Láquesis também acha duplicado entre épicos.
 
@@ -124,6 +130,8 @@ Regras:
         "priority": "High",
         "status": "To Do",
         "duedate": "2026-11-30",
+        "end_date": "2026-11-30",
+        "end_date_source": "issue | epic | project | null",
         "buffer_days": 15,
         "agency": "Agência Aurora | null",
         "change": "new | changed | unchanged",
@@ -211,10 +219,10 @@ Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem 
 - `key`, `summary`, `description`, `created_at`, `epic`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
-- `warnings`: os da issue (`no-due-date`, `no-end-date`, `exceeds-epic`, `creation-date-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
+- `warnings`: os da issue (`no-due-date`: a issue não tem data própria; `no-end-date`: nem ela, nem o épico, nem o projeto têm; `exceeds-epic`, `creation-date-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
 
 Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 
-O item completo de `jira.issues` (com `description`, `duedate` e `buffer_days`) fica guardado: ele é o `ticket` da entrada da Átropos.
+O item completo de `jira.issues` (com `description`, `duedate`, `end_date`, `end_date_source` e `buffer_days`) fica guardado: ele é o `ticket` da entrada da Átropos.
 
 A coleta é somente leitura. As únicas escritas possíveis são as interações opcionais acima (reação e comentário curto), aprovadas pelo usuário. Esta etapa nunca cria ou atribui issues, nem posta mensagens novas no Slack. Com `interactions` desligado, `interactions` na saída é `[]`.
