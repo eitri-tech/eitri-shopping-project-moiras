@@ -1,6 +1,6 @@
 ---
 name: moiras-teach
-description: "Ensina o knowledge das Moiras: transforma uma regra que o usuário dita (\"sempre que mexer com X, precisa de Y\") em critério em criteria/, com gatilho, o que conferir e como conferir, sempre com o \"sim\" à lista exata. Use para incrementar o knowledge, por exemplo: \"sempre que trabalhar com deeplink, App Link ou assetlinks, confira o Digital Asset Links (/.well-known/assetlinks.json) do domínio contra o package name e o fingerprint do app\"."
+description: "Ensina o knowledge das Moiras: transforma uma regra que o usuário dita (\"sempre que mexer com X, precisa de Y\") em critério em criteria/, com gatilho, o que conferir e como conferir, sempre com o \"sim\" à lista exata. Use para incrementar o knowledge, por exemplo: \"sempre que a issue mexer com o checkout, confira a flag de homologação antes de propor a solução\"."
 argument-hint: "[tema ou regra em uma frase]"
 allowed-tools: Bash(node:*), WebFetch
 ---
@@ -32,17 +32,12 @@ A Átropos só aprende critério quando o usuário discorda de um veredito. Esta
 
 7. **Relatar** o que foi gravado e sugerir `moiras-publish` se o time deve compartilhar a regra.
 
-## Exemplo: deeplink exige assetlinks
+## Exemplo: checkout exige conferir a flag de homologação
 
-Critério `deeplink-requires-assetlinks`, `applies_to: solutions`. **Gatilho:** issue ou solução que mexe em deeplink, App Link (`https` com `android:autoVerify`), esquema customizado trocado por link web, ou redirecionamento de links. **Conferir**, nesta ordem:
+Critério `checkout-check-staging-flag`, `applies_to: solutions`. **Gatilho:** issue ou solução que mexe no componente `checkout` do repositório `acme-shop-checkout`. **Conferir**, nesta ordem:
 
-1. **Domínio e app.** Domínio dos links, `package_name` e fingerprints SHA-256 de cada assinatura em uso. Vêm do manifesto do app, da configuração da loja e do glossário; **o que não estiver nessas fontes é perguntado, nunca inventado**. Com Play App Signing, o fingerprint que vale é o da chave de assinatura do app no console da loja, não o da chave de upload.
-2. **Arquivo ao vivo (só leitura).** Busque `https://<domínio>/.well-known/assetlinks.json` (e o `www.`, se os links usarem). Confira:
-   - resposta `200` direta, sem redirecionamento, em HTTPS, `Content-Type: application/json`;
-   - JSON válido, com uma entrada cujo `relation` inclui `delegate_permission/common.handle_all_urls`;
-   - `target.namespace` = `android_app`, `target.package_name` igual ao do app, e **todos** os fingerprints em uso (release e, se for testar assim, debug) em `sha256_cert_fingerprints`, em maiúsculas e separados por `:`.
-3. **Manifesto.** `<intent-filter android:autoVerify="true">` com `VIEW`, `DEFAULT`, `BROWSABLE` e os `scheme`/`host`/`pathPrefix` batendo com o que o arquivo cobre.
-4. **Sinais de falha:** domínio ou subdomínio sem arquivo, arquivo servido por CDN com redirect, fingerprint de debug em produção, `package_name` de outro flavor, cache antigo (a verificação do Android não é imediata).
-5. **iOS** é regra à parte (`apple-app-site-association`); se for necessário, ensine como um segundo critério.
+1. **Fonte da flag.** Onde ela é definida (arquivo de configuração do repositório, com caminho e commit). O que não estiver nas fontes do knowledge ou do código é perguntado, nunca inventado.
+2. **Estado atual.** Valor da flag no ambiente de homologação, lido sem alterar nada.
+3. **Efeito na solução.** Se a flag estiver desligada, a solução inclui ligá-la como primeiro passo e o veredito não vira `ready-for-dev` sem isso.
 
-Cite como fonte a URL consultada e a data da leitura (`verified_at`). Falha de rede não vira "arquivo ausente": relate como não verificado.
+Cite como fonte o arquivo lido e a data da leitura (`verified_at`). Falha de leitura não vira "flag ausente": relate como não verificado.

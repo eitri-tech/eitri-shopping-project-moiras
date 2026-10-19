@@ -70,7 +70,7 @@ O escopo do Jira não precisa ser um épico só: `epics` aceita vários e `categ
 | `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
 | `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-learn [PROJ-100] [--since AAAA-MM-DD]` | Aprende com as issues já concluídas do escopo: propõe soluções, padrões e decisões e grava no knowledge local só o que você aprovar |
-| `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: deeplink exige conferir o assetlinks do domínio): grava um critério no knowledge local só depois do seu "sim" |
+| `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: mexeu no checkout, confira a flag de homologação): grava um critério no knowledge local só depois do seu "sim" |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios; grava no knowledge local depois do seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
 | `/moiras:moiras-sync <nome>` | Traz o que foi mergeado nos knowledges compartilhados |

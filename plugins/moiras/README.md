@@ -23,7 +23,7 @@ Quando usar cada skill:
 - [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
 - [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico, propõe soluções, padrões e decisões e grava só o que você aprovar.
 - [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
-- [moiras-teach](skills/moiras-teach/SKILL.md): incrementar o knowledge com uma regra que você dita ("sempre que mexer com deeplink, confira o assetlinks"); vira um critério local, com gatilho e passos de conferência, só após o "sim".
+- [moiras-teach](skills/moiras-teach/SKILL.md): incrementar o knowledge com uma regra que você dita ("sempre que mexer com o checkout, confira a flag de homologação"); vira um critério local, com gatilho e passos de conferência, só após o "sim".
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
 - [moiras-sync](skills/moiras-sync/SKILL.md): trazer o que foi mergeado nos knowledges compartilhados, por exemplo antes da triagem.
