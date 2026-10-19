@@ -8,7 +8,7 @@ Instruções para agentes de código (Claude Code, Codex, Copilot etc.) neste re
 
 A triagem segue três etapas, cada uma com entrada e saída verificáveis:
 
-1. **Cloto**: coleta em paralelo. Do Jira, as issues sem responsável do escopo (um ou vários épicos e categorias), por prioridade e data fim, comparando com o fim do épico da issue ou do projeto. Das demais fontes configuradas, as mensagens e conversas relevantes de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
+1. **Cloto**: coleta em paralelo das fontes configuradas. Das issues, as sem responsável do escopo (um ou vários épicos e categorias), por prioridade e data fim, comparando com o fim do épico da issue ou do projeto. Das conversas, as mensagens relevantes de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
 2. **Láquesis**: identifica repositório e componente pelo glossário, classifica (categoria, origem, confiança) e avalia duplicados
 3. **Átropos**: justifica o problema, decide a ação (`duplicate`, `blocked`, `ready-for-dev`, `needs-info`, `close`), sugere normalmente de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
 

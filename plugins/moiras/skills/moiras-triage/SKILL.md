@@ -1,6 +1,6 @@
 ---
 name: moiras-triage
-description: "Faz a triagem das issues sem responsável do escopo do Jira (um ou vários épicos e categorias). Coleta as issues (por prioridade e data fim) e as conversas das demais fontes configuradas (pessoas e canais definidos), classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se nem o pedido nem .moiras/sources.json trouxerem épico ou categoria, pergunte (no modo --auto, encerre com erro)."
+description: "Faz a triagem das issues sem responsável do escopo do Jira (um ou vários épicos e categorias). Coleta as issues (por prioridade e data fim) e as conversas das fontes configuradas (pessoas e canais definidos), classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se nem o pedido nem .moiras/sources.json trouxerem épico ou categoria, pergunte (no modo --auto, encerre com erro)."
 argument-hint: "[EPIC...] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
@@ -35,7 +35,7 @@ Antes da seleção de issues, calcule o fingerprint do knowledge descrito abaixo
 Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
 
 ```
-Cloto     : configuração + escopo    → issues do Jira + mensagens das demais fontes
+Cloto     : configuração + escopo    → issues + mensagens das fontes configuradas
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
 Átropos   : issue + classificação    → justificativa, ação e normalmente de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
