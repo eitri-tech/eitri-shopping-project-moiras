@@ -45,12 +45,17 @@ it('plans existing repositories, conflicts, free targets, and symlink ancestors 
 });
 
 it('runs clone with an argument array and suppresses git failure details', t => {
+  process.env.GIT_WORK_TREE = '/elsewhere';
+  process.env.GIT_DIR = '/elsewhere/.git';
+  t.after(() => { delete process.env.GIT_WORK_TREE; delete process.env.GIT_DIR; });
   const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const run = ((command, args, options) => {
     assert.equal(command, 'git');
     assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
     assert.equal(options?.env?.GIT_TERMINAL_PROMPT, '0');
+    assert.equal(options?.env?.GIT_WORK_TREE, undefined);
+    assert.equal(options?.env?.GIT_DIR, undefined);
     return { status: 0 };
   }) as typeof spawnSync;
   assert.deepEqual(JSON.parse(cloneRepository(dir, 'acme-shop-checkout', 'https://github.com/acme/acme-shop-checkout.git', '2', run).output), { cloned: true, path: join(dir, 'acme-shop-checkout') });

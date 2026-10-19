@@ -79,13 +79,22 @@ export function planClone(dir: string, input: unknown) {
   }) };
 }
 
+// Variables that move the Git directory, work tree or index away from the clone target.
+const locationVariables = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX'];
+
+function cloneEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (locationVariables.includes(name.toUpperCase())) delete env[name];
+  return env;
+}
+
 export function cloneRepository(dir: string, name: string, url: string, depth?: string, run: typeof spawnSync = spawnSync) {
   if (!safeName.test(name) || !cleanUrl(url) || !/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(url.replace(/\.git$/, '')) || (depth !== undefined && (!/^[1-9][0-9]*$/.test(depth) || !Number.isSafeInteger(Number(depth))))) throw new Error(usage);
   const remoteName = url.slice(url.lastIndexOf('/') + 1);
   if (remoteName !== name && remoteName !== `${name}.git`) throw new Error(usage);
   const path = join(resolve(dir), name);
   if (hasSymlink(path) || lstatSync(path, { throwIfNoEntry: false })) throw new Error('Clone target refused.');
-  const result = run('git', ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', ...(depth ? ['--depth', depth] : []), '--', url, path], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: 'pipe' });
+  const result = run('git', ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', ...(depth ? ['--depth', depth] : []), '--', url, path], { env: { ...cloneEnv(), GIT_TERMINAL_PROMPT: '0' }, stdio: 'pipe' });
   return result.status === 0 ? { output: JSON.stringify({ cloned: true, path }), code: 0 } : { output: JSON.stringify({ cloned: false, status: result.status }), code: 1 };
 }
 
