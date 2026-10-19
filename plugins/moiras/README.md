@@ -23,6 +23,7 @@ Quando usar cada skill:
 - [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
 - [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico, propõe soluções, padrões e decisões e grava só o que você aprovar.
 - [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
+- [moiras-teach](skills/moiras-teach/SKILL.md): incrementar o knowledge com uma regra que você dita ("sempre que mexer com o checkout, confira a flag de homologação"); vira um critério local, com gatilho e passos de conferência, só após o "sim".
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
 - [moiras-sync](skills/moiras-sync/SKILL.md): trazer o que foi mergeado nos knowledges compartilhados, por exemplo antes da triagem.
@@ -34,6 +35,7 @@ Quem escreve onde:
 - `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
   grava só após o "sim" à lista exata e não apaga registros.
 - `moiras-learn` grava em `learnings/` do knowledge local, só no modo interativo e após o "sim" à lista exata; marca os registros com `imported_from: history`, só afirma `result: resolved` com evidência (PR ou comentário de fechamento) e nunca copia texto de issue.
+- `moiras-teach` grava só em `criteria/` do knowledge local, no modo interativo e após o "sim" à lista exata; regra que conflita com outra vira critério regenerado (`replaces`), e a skill nunca copia texto de issue nem inventa dado que a regra mande conferir.
 - `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`
   após o "sim", sempre no knowledge local e no modo interativo.
 - `moiras-audit` só ajusta `result` e a observação de aprendizados locais e gera
@@ -112,6 +114,8 @@ moiras/
     │   └── SKILL.md                # glossário derivado do código
     ├── moiras-learn/
     │   └── SKILL.md                # aprendizado a partir das issues já concluídas
+    ├── moiras-teach/
+    │   └── SKILL.md                # ensina uma regra ao knowledge (critério)
     ├── moiras-sync/
     │   └── SKILL.md                # traz o que foi mergeado nos knowledges compartilhados
     ├── moiras-publish/
@@ -163,7 +167,7 @@ No modo `--auto` a skill não faz perguntas, processa o que mudou (incluindo o k
 
 Liste em `--allowedTools` as ferramentas dos conectores de Jira e Slack que a coleta usa; sem isso a execução sem terminal fica bloqueada esperando permissão.
 
-Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto` antes (ela só avança clones que já existem) e libere em `--allowedTools` os comandos `git status`, `git fetch`, `git merge --ff-only` e os de leitura que ela usa. `moiras-index`, `moiras-learn`, `moiras-publish` e `moiras-audit` não rodam em `--auto`.
+Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto` antes (ela só avança clones que já existem) e libere em `--allowedTools` os comandos `git status`, `git fetch`, `git merge --ff-only` e os de leitura que ela usa. `moiras-index`, `moiras-learn`, `moiras-teach`, `moiras-publish` e `moiras-audit` não rodam em `--auto`.
 
 ## Memória
 
