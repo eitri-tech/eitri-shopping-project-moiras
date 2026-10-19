@@ -81,6 +81,8 @@ const required: Record<string, string[]> = {
 /** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
+const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
 const skipped = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.direnv']);
@@ -377,8 +379,19 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.issue) && !asText(fields.issue).includes('<') && !jiraKey.test(asText(fields.issue))) add('issue-invalid', 'error');
+      if (kind.type === 'pattern' && asText(fields.issues) && !asText(fields.issues).includes('<')) {
+        const list = (Array.isArray(fields.issues) ? fields.issues : fields.issues.split(',')).map(item => item.trim()).filter(Boolean);
+        if (list.length === 0 || list.some(item => !jiraKey.test(item))) add('issues-invalid', 'error');
+      }
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
       if (kind.type === 'repository') {
+        const platform = asText(fields.platform);
+        if (platform && !platform.includes('<') && (Array.isArray(fields.platform) || !platforms.has(platform))) add('platform-invalid', 'error');
+        if (fields.keywords !== undefined) {
+          const list = Array.isArray(fields.keywords) ? fields.keywords : asText(fields.keywords).split(',').map(item => item.trim()).filter(Boolean);
+          if (list.length > 10) add('keywords-too-many', 'error');
+        }
         const commit = asText(fields.indexed_commit);
         if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
         // A commit alone does not say when it was made or whether the tree matched it.

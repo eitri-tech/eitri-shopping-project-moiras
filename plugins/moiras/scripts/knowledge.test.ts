@@ -224,19 +224,26 @@ describe('check', () => {
     assert.deepEqual([...new Set(rules(local))], ['criteria/c.md:replaces-invalid']);
   });
 
-  it('requires the fields of each record type', t => {
+  it('requires the fields and contract values of each record type', t => {
     const { local, write } = workspace(t);
     write('local', 'learnings/solutions/PROJ-9-1.md', '---\nid: PROJ-9-1\ntype: solution\ncreated_at: 2026-10-01\nresult: resolved\n---\n');
     write('local', 'learnings/solutions/PROJ-9-2.md', solution('resolved').replace('id: PROJ-1-1', 'id: PROJ-9-2').replace('confidence: 70', 'confidence: 170'));
+    write('local', 'learnings/solutions/PROJ-9-3.md', solution('resolved').replace('id: PROJ-1-1', 'id: PROJ-9-3').replace('issue: PROJ-1', 'issue: proj-1'));
     write('local', 'criteria/c.md', criterion('c').replace('applies_to: category', 'applies_to: tudo'));
     write('local', 'learnings/patterns/p.md', '---\nid: p\ntype: pattern\ncreated_at: 2026-10-03\n---\n');
+    write('local', 'learnings/patterns/p-bad.md', patternDoc('p-bad', '# P').replace('issues: [PROJ-1]', 'issues: [PROJ-1, bad_key]'));
     write('local', 'learnings/decisions/d.md', '---\nid: d\ntype: decision\ncreated_at: 2026-10-03\n---\n');
+    write('local', 'glossary/bad-repo.md', glossary('2026-10-06').replace('id: acme-shop-checkout', 'id: bad-repo').replace('platform: vtex', 'platform: magento\nkeywords: [k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11]'));
     assert.deepEqual([...new Set(rules(local))], [
       'criteria/c.md:applies-to-invalid',
+      'glossary/bad-repo.md:keywords-too-many',
+      'glossary/bad-repo.md:platform-invalid',
       'learnings/decisions/d.md:field-missing',
+      'learnings/patterns/p-bad.md:issues-invalid',
       'learnings/patterns/p.md:field-missing',
       'learnings/solutions/PROJ-9-1.md:field-missing',
       'learnings/solutions/PROJ-9-2.md:confidence-invalid',
+      'learnings/solutions/PROJ-9-3.md:issue-invalid',
     ]);
     assert.equal(check(local).findings.filter(f => f.path.endsWith('PROJ-9-1.md')).length, 5);
   });
