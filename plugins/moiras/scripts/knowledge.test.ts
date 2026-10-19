@@ -652,7 +652,12 @@ describe('sourcesHash', () => {
     } finally {
       chmodSync(join(base, 'src/.gitignore'), 0o644);
     }
-    rmSync(join(base, 'src/.gitignore'));
+  });
+
+  it('fails on a nested symlinked .gitignore for directories', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/hidden/a.txt', 'x');
     write('repo', 'real.ignore', 'hidden/\n');
     symlinkSync(join(base, 'real.ignore'), join(base, 'src/.gitignore'));
     for (const path of ['.', 'src', 'src/hidden']) {
