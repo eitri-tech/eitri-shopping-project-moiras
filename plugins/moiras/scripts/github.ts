@@ -1,14 +1,15 @@
 /** Helpers locais para filtrar repositórios GitHub e planejar clones.
  * Usage: node github.ts match --pattern <owner/glob> [--include-archived] < repos.json
  *        node github.ts plan-clone --dir <dir> < matches.json
+ *        node github.ts local --dir <dir> --pattern <owner/glob>
  *        node github.ts clone --dir <dir> --repo <name> --url <https-url> [--depth <n>]
  */
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-export const usage = 'Usage: node github.ts match --pattern <owner/glob> [--include-archived] | plan-clone --dir <dir> | clone --dir <dir> --repo <name> --url <https-url> [--depth <n>]';
+export const usage = 'Usage: node github.ts match --pattern <owner/glob> [--include-archived] | plan-clone --dir <dir> | local --dir <dir> --pattern <owner/glob> | clone --dir <dir> --repo <name> --url <https-url> [--depth <n>]';
 // Same file-name rules as knowledge.ts.
 const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 type Repository = { name: string; url: string; archived: boolean };
@@ -63,20 +64,44 @@ function hasSymlink(path: string): boolean {
   return [target, dirname(target)].some(current => lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink());
 }
 
-export function planClone(dir: string, input: unknown) {
+/** `https://github.com/Owner/Repo` for any GitHub remote spelling (https, `git@github.com:o/r.git`, `ssh://git@github.com/o/r`), lower case, no credentials; undefined for anything else. */
+export function canonicalRemote(value: string): string | undefined {
+  const match = /^(?:https:\/\/(?:[^/@]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9-]+)\/([A-Za-z0-9_][A-Za-z0-9._-]*?)(?:\.git)?\/?$/i.exec(value.trim());
+  return match ? `https://github.com/${match[1]}/${match[2]}`.toLowerCase() : undefined;
+}
+
+function originOf(path: string, run: typeof spawnSync): string | undefined {
+  const result = run('git', ['-C', path, 'config', '--get', 'remote.origin.url'], { env: cloneEnv(), encoding: 'utf8', stdio: 'pipe' });
+  return result.status === 0 && typeof result.stdout === 'string' ? canonicalRemote(result.stdout) : undefined;
+}
+
+type Planned = { name: string; path: string; action: 'exists' | 'conflict' | 'clone'; reason?: string };
+
+/** `exists` only for a real Git checkout whose `origin` is the expected repository; a same-named checkout of another owner is a `conflict`. */
+function classify(path: string, name: string, expected: string | undefined, run: typeof spawnSync): Planned {
+  if (hasSymlink(path)) return { name, path, action: 'conflict', reason: 'symlink' };
+  const entry = lstatSync(path, { throwIfNoEntry: false });
+  if (!entry) return { name, path, action: 'clone' };
+  const git = entry.isDirectory() ? lstatSync(join(path, '.git'), { throwIfNoEntry: false }) : undefined;
+  if (!git || git.isSymbolicLink() || !(git.isDirectory() || git.isFile())) return { name, path, action: 'conflict', reason: 'not-a-checkout' };
+  if (expected !== undefined && originOf(path, run) !== expected) return { name, path, action: 'conflict', reason: 'origin-mismatch' };
+  return { name, path, action: 'exists' };
+}
+
+export function planClone(dir: string, input: unknown, run: typeof spawnSync = spawnSync) {
   if (!input || typeof input !== 'object' || !('repositories' in input) || !Array.isArray(input.repositories)) throw new Error('Expected matches.');
   return { repositories: input.repositories.map((repo: Repository) => {
     if (!repo || typeof repo.name !== 'string' || !safeName.test(repo.name)) throw new Error('Invalid repository name.');
-    const path = join(resolve(dir), repo.name);
-    let action: 'exists' | 'conflict' | 'clone';
-    if (hasSymlink(path)) action = 'conflict';
-    else {
-      const entry = lstatSync(path, { throwIfNoEntry: false });
-      const git = entry?.isDirectory() ? lstatSync(join(path, '.git'), { throwIfNoEntry: false }) : undefined;
-      action = !entry ? 'clone' : git && !git.isSymbolicLink() && (git.isDirectory() || git.isFile()) ? 'exists' : 'conflict';
-    }
-    return { name: repo.name, path, action };
+    return classify(join(resolve(dir), repo.name), repo.name, canonicalRemote(String(repo.url ?? '')), run);
   }) };
+}
+
+/** Clones already in `dir` whose name matches the glob, independent of what `gh` listed (it can fail or be cut). Same checks as `plan-clone`, with the origin expected under the pattern's owner. */
+export function localRepositories(dir: string, pattern: string, run: typeof spawnSync = spawnSync) {
+  const [owner, glob] = patternParts(pattern);
+  const base = resolve(dir);
+  const names = lstatSync(base, { throwIfNoEntry: false })?.isDirectory() ? readdirSync(base).filter(name => safeName.test(name) && globMatch(glob, name)).sort() : [];
+  return { owner, repositories: names.map(name => classify(join(base, name), name, canonicalRemote(`https://github.com/${owner}/${name}`), run)).filter(entry => entry.action !== 'clone') };
 }
 
 // Variables that move the Git directory, work tree or index away from the clone target.
@@ -105,13 +130,14 @@ export function main(argv: string[], input?: string): { output: string; code: nu
   } catch { throw new Error(usage); }
   const { positionals, values: v } = parsed;
   const command = positionals[0];
-  const allowed = command === 'match' ? ['pattern', 'include-archived'] : command === 'plan-clone' ? ['dir'] : command === 'clone' ? ['dir', 'repo', 'url', 'depth'] : [];
+  const allowed = command === 'match' ? ['pattern', 'include-archived'] : command === 'plan-clone' ? ['dir'] : command === 'local' ? ['dir', 'pattern'] : command === 'clone' ? ['dir', 'repo', 'url', 'depth'] : [];
   if (positionals.length !== 1 || Object.keys(v).some(key => !allowed.includes(key))) throw new Error(usage);
   if (command === 'clone' && v.dir && v.repo && v.url) return cloneRepository(v.dir, v.repo, v.url, v.depth);
   if (command === 'match' && v.pattern) {
     patternParts(v.pattern);
     return { output: JSON.stringify(matchRepositories(v.pattern, JSON.parse(input ?? readFileSync(0, 'utf8')), v['include-archived'])), code: 0 };
   }
+  if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(localRepositories(v.dir, v.pattern)), code: 0 };
   if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(planClone(v.dir, JSON.parse(input ?? readFileSync(0, 'utf8')))), code: 0 };
   throw new Error(usage);
 }

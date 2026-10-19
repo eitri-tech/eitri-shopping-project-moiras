@@ -3,8 +3,15 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cloneRepository, globMatch, listLimit, main, matchRepositories, planClone } from './github.ts';
+import { canonicalRemote, cloneRepository, globMatch, listLimit, localRepositories, main, matchRepositories, planClone } from './github.ts';
+import { spawnSync as realSpawn } from 'node:child_process';
 import type { spawnSync } from 'node:child_process';
+
+const checkout = (dir: string, name: string, origin?: string) => {
+  mkdirSync(join(dir, name), { recursive: true });
+  realSpawn('git', ['init', '-q', join(dir, name)]);
+  if (origin) realSpawn('git', ['-C', join(dir, name), 'remote', 'add', 'origin', origin]);
+};
 
 const repo = (name: string, isArchived = false, url = `https://github.com/acme/${name}`) => ({ name, url, isArchived, description: 'Acme' });
 
@@ -30,13 +37,16 @@ it('rejects invalid arguments and malformed inputs', () => {
 it('plans existing repositories, conflicts, free targets, and symlink ancestors using lstat', t => {
   const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  mkdirSync(join(dir, 'shop-repo', '.git'), { recursive: true });
+  checkout(dir, 'shop-repo', 'git@github.com:Acme/shop-repo.git');
+  checkout(dir, 'shop-other', 'https://github.com/other/shop-other');
+  checkout(dir, 'shop-bare');
   mkdirSync(join(dir, 'shop-folder'));
   writeFileSync(join(dir, 'shop-file'), 'x');
   symlinkSync(join(dir, 'missing'), join(dir, 'shop-link'));
-  const input = matchRepositories('acme/shop-*', ['shop-repo', 'shop-folder', 'shop-file', 'shop-link', 'shop-free'].map(name => repo(name)));
+  const input = matchRepositories('acme/shop-*', ['shop-repo', 'shop-other', 'shop-bare', 'shop-folder', 'shop-file', 'shop-link', 'shop-free'].map(name => repo(name)));
   const actions = planClone(dir, input).repositories.map(r => [r.name, r.action]);
-  assert.deepEqual(actions, [['shop-file', 'conflict'], ['shop-folder', 'conflict'], ['shop-free', 'clone'], ['shop-link', 'conflict'], ['shop-repo', 'exists']]);
+  assert.deepEqual(actions, [['shop-bare', 'conflict'], ['shop-file', 'conflict'], ['shop-folder', 'conflict'], ['shop-free', 'clone'], ['shop-link', 'conflict'], ['shop-other', 'conflict'], ['shop-repo', 'exists']]);
+  assert.equal(planClone(dir, input).repositories.find(r => r.name === 'shop-other')?.reason, 'origin-mismatch');
   symlinkSync(dir, join(dir, 'parent'));
   assert.equal(planClone(join(dir, 'parent'), { repositories: [{ name: 'shop-free' }] }).repositories[0].action, 'conflict');
   assert.throws(() => cloneRepository(dir, 'shop-link', 'https://github.com/acme/shop-link'));
@@ -80,4 +90,20 @@ it('matches globs in linear time and with the usual wildcard rules', () => {
   const started = Date.now();
   assert.equal(globMatch(`${'a*'.repeat(25)}b`, 'a'.repeat(100)), false);
   assert.ok(Date.now() - started < 1000);
+});
+
+it('canonicalizes GitHub remotes and refuses other hosts', () => {
+  for (const value of ['https://github.com/Acme/Shop.git', 'git@github.com:acme/shop', 'ssh://git@github.com/acme/shop.git', 'https://user:token@github.com/acme/shop/']) assert.equal(canonicalRemote(value), 'https://github.com/acme/shop');
+  for (const value of ['https://gitlab.com/acme/shop', 'https://github.com/acme', 'file:///tmp/shop', '']) assert.equal(canonicalRemote(value), undefined);
+});
+
+it('lists local clones by glob without the gh list, skipping mismatches only as conflicts', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  checkout(dir, 'shop-a', 'https://github.com/acme/shop-a');
+  checkout(dir, 'shop-b', 'https://github.com/other/shop-b');
+  checkout(dir, 'tool-c', 'https://github.com/acme/tool-c');
+  assert.deepEqual(localRepositories(dir, 'acme/shop-*').repositories.map(r => [r.name, r.action]), [['shop-a', 'exists'], ['shop-b', 'conflict']]);
+  assert.deepEqual(localRepositories(join(dir, 'missing'), 'acme/shop-*').repositories, []);
+  assert.deepEqual(JSON.parse(main(['local', '--dir', dir, '--pattern', 'acme/tool-*']).output).repositories.map((r: { name: string }) => r.name), ['tool-c']);
 });

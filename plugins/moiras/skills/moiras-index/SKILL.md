@@ -50,7 +50,7 @@ Para cada entrada de `github`, na ordem:
 gh repo list <dono> --limit 4000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" match --pattern "<dono>/<glob>" [--include-archived]
 ```
 
-A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit`. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: os clones que já estão em `clone_dir` continuam sendo indexados, mas nada é dado como ausente.
+A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit`. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: liste os clones que já estão em `clone_dir` com `node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" local --dir <clone_dir> --pattern "<dono>/<glob>"` (mesma saída do `plan-clone`, só com o que está em disco) e indexe-os, mas nada é dado como ausente. Faça o mesmo quando a lista vier truncada.
 
 Depois veja o que já existe em disco:
 
@@ -58,7 +58,7 @@ Depois veja o que já existe em disco:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" plan-clone --dir <clone_dir> < matches.json
 ```
 
-Cada repositório volta como `exists` (já clonado: entra na indexação), `clone` (livre) ou `conflict` (a pasta existe e não é um clone, ou é link simbólico: avise e pule). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
+Cada repositório volta como `exists` (já clonado, com o `origin` esperado: entra na indexação), `clone` (livre) ou `conflict` (avise e pule; o `reason` diz por quê: `symlink`, `not-a-checkout` para uma pasta que não é um clone, ou `origin-mismatch` quando o `origin` do clone não é o repositório esperado, como um clone de outro dono com o mesmo nome ou um fork: se for o que você quer, declare-o em `repositories` com o `path`). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --repo <nome> --url <url> [--depth 1]
