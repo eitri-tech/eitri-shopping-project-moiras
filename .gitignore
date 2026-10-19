@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 .vscode/
 # Moiras local data (config, knowledge, memory, runs)
 .moiras/
+
+# Git worktrees of this repository (see AGENTS.md)
+.worktrees/
