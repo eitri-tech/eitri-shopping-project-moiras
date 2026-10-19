@@ -264,7 +264,7 @@ describe('check', () => {
       assert.deepEqual(check(local).findings.map(f => f.rule), expected);
     }
     write('local', 'learnings/patterns/p.md', patternDoc('p', '# P'));
-    for (const [value, expected] of [['magento<', ['platform-invalid']], ['<vtex|wake|shopify|other>', ['placeholder']]] as const) {
+    for (const [value, expected] of [['magento<', ['platform-invalid']], ['[]', ['platform-invalid']], ['<vtex|wake|shopify|other>', ['placeholder']]] as const) {
       write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', `platform: ${value}`));
       assert.deepEqual(check(local).findings.map(f => f.rule), expected);
     }

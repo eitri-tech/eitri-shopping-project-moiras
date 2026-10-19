@@ -388,7 +388,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
       if (kind.type === 'repository') {
         const platform = asText(fields.platform);
-        if (platform && !fieldPlaceholder.test(platform) && (Array.isArray(fields.platform) || !platforms.has(platform))) add('platform-invalid', 'error');
+        if (Array.isArray(fields.platform) || (platform && !fieldPlaceholder.test(platform) && !platforms.has(platform))) add('platform-invalid', 'error');
         if (fields.keywords !== undefined) {
           const list = Array.isArray(fields.keywords) ? fields.keywords : asText(fields.keywords).split(',').map(item => item.trim()).filter(Boolean);
           if (list.length > 10) add('keywords-too-many', 'error');
