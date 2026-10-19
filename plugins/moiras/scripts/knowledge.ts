@@ -189,6 +189,8 @@ export function parseDoc(text: string): Doc | null {
 }
 
 const asText = (value: Value | undefined): string => (Array.isArray(value) ? value.join(', ') : value ?? '');
+const asScalar = (value: Value | undefined): string => (typeof value === 'string' ? value : '');
+const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 
 export interface Entry {
   path: string;
@@ -248,7 +250,9 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       ids.add(stem);
       const fields = entry.doc?.fields;
       if (!fields || entry.issue) continue;
-      if (typeof fields.id === 'string' && fields.id) ids.add(fields.id);
+      for (const candidate of (Array.isArray(fields.id) ? fields.id : [fields.id])) {
+        if (typeof candidate === 'string' && candidate) ids.add(candidate);
+      }
       // Empty and TODO records are not evidence (see moiras-triage), so they do not cover an issue.
       if (invalid.has(entry.path) || !entry.doc!.body.trim() || /\bTODO\b/.test(entry.doc!.body)) continue;
       const id = stem;
@@ -366,44 +370,53 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       add('frontmatter-missing', 'error');
     } else {
       const { fields } = doc;
-      if (asText(fields.id) !== path.slice(path.lastIndexOf('/') + 1, -'.md'.length)) add('id-mismatch', 'error');
-      if (asText(fields.type) !== kind.type) add('type-mismatch', 'error');
-      const date = asText(fields[kind.date]);
-      if (!date) add('date-missing', 'error');
+      if (asScalar(fields.id) !== path.slice(path.lastIndexOf('/') + 1, -'.md'.length)) add('id-mismatch', 'error');
+      if (asScalar(fields.type) !== kind.type) add('type-mismatch', 'error');
+      const dateRaw = fields[kind.date];
+      const date = asScalar(dateRaw);
+      if (!asText(dateRaw)) add('date-missing', 'error');
       else if (!isCalendarDate(date)) add('date-invalid', 'error');
       if (Object.values(fields).some(value => fieldPlaceholder.test(asText(value)) || /AAAA-MM-DD|\s\|\s/.test(asText(value)))) add('placeholder', 'error');
       if (kind.type === 'criterion' && !asText(fields.approved_by)) add('approved-by-missing', 'error');
       for (const name of ['approved_by', 'chosen_by']) {
-        const value = asText(fields[name]);
-        if (value && !value.includes('<') && !pseudonymPattern.test(value)) add('pseudonym-required', 'error');
+        const raw = fields[name];
+        const value = asScalar(raw);
+        if ((Array.isArray(raw) && asText(raw) !== '') || (value && !value.includes('<') && !pseudonymPattern.test(value))) add('pseudonym-required', 'error');
       }
       for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
-      if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
-      if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
-      if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
-      if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asText(fields.issue)) && !jiraKey.test(asText(fields.issue))))) add('issue-invalid', 'error');
+      if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.category) && Array.isArray(fields.category)) add('category-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asScalar(fields.confidence)) && Number(asScalar(fields.confidence)) <= 100)) add('confidence-invalid', 'error');
+      if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
+      if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
+        if (!Array.isArray(fields.repositories) || fields.repositories.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('repositories-invalid', 'error');
+      }
       if (kind.type === 'pattern' && asText(fields.issues)) {
         const list = (Array.isArray(fields.issues) ? fields.issues : fields.issues.split(',')).map(item => item.trim()).filter(Boolean);
         if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !jiraKey.test(item))) add('issues-invalid', 'error');
       }
-      if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
+      if (kind.type === 'decision' && asText(fields.source)) {
+        if (!Array.isArray(fields.source) || fields.source.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('source-invalid', 'error');
+      }
+      if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asScalar(fields.sources_hash))) add('sources-hash-invalid', 'error');
       if (kind.type === 'repository') {
-        const platform = asText(fields.platform);
+        const platform = asScalar(fields.platform);
         if (Array.isArray(fields.platform) || (platform && !fieldPlaceholder.test(platform) && !platforms.has(platform))) add('platform-invalid', 'error');
         if (fields.keywords !== undefined) {
           const list = Array.isArray(fields.keywords) ? fields.keywords : asText(fields.keywords).split(',').map(item => item.trim()).filter(Boolean);
           if (list.length > 10) add('keywords-too-many', 'error');
         }
-        const commit = asText(fields.indexed_commit);
-        if (commit && !commitSha.test(commit)) add('indexed-commit-invalid', 'error');
+        const commit = asScalar(fields.indexed_commit);
+        if (Array.isArray(fields.indexed_commit) || (commit && !commitSha.test(commit))) add('indexed-commit-invalid', 'error');
         // A commit alone does not say when it was made or whether the tree matched it.
-        const incomplete = commit ? !asText(fields.indexed_commit_date) || !asText(fields.indexed_dirty) : provenanceFields.some(name => asText(fields[name]));
+        const incomplete = asText(fields.indexed_commit) !== '' ? !asText(fields.indexed_commit_date) || !asText(fields.indexed_dirty) : provenanceFields.some(name => asText(fields[name]));
         if (incomplete) add('provenance-incomplete', 'error');
-        const commitDate = asText(fields.indexed_commit_date);
-        if (commitDate && !isCalendarDate(commitDate)) add('indexed-commit-date-invalid', 'error');
-        const dirty = asText(fields.indexed_dirty);
-        if (dirty && dirty !== 'true' && dirty !== 'false') add('indexed-dirty-invalid', 'error');
+        const commitDate = asScalar(fields.indexed_commit_date);
+        if (Array.isArray(fields.indexed_commit_date) || (commitDate && !isCalendarDate(commitDate))) add('indexed-commit-date-invalid', 'error');
+        const dirty = asScalar(fields.indexed_dirty);
+        if (Array.isArray(fields.indexed_dirty) || (dirty && dirty !== 'true' && dirty !== 'false')) add('indexed-dirty-invalid', 'error');
         // Branch and tag names are not recorded: they can be internal and say nothing the commit does not.
         if ('indexed_branch' in fields || 'indexed_tag' in fields) add('indexed-ref-unsupported', 'error');
       }
