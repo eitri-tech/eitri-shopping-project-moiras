@@ -119,6 +119,16 @@ function assertInteractionKey(stage: Stage, key: string): void {
   }
 }
 
+function validTimestamp(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(value);
+  if (!match || match[0] !== value) return false;
+  const [, year, month, day] = match.map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= days[month - 1];
+}
+
 export function record(
   stage: Stage,
   input: unknown,
@@ -169,7 +179,7 @@ export function record(
         : typeof value === 'string';
       if (!valid) throw new Error(`Invalid metadata: ${field}`);
     }
-    if (Object.hasOwn(entry, 'ts') && (typeof entry.ts !== 'string' || Number.isNaN(Date.parse(entry.ts)))) {
+    if (Object.hasOwn(entry, 'ts') && !validTimestamp(entry.ts)) {
       throw new Error('Invalid metadata: ts');
     }
     if (Object.hasOwn(entry, 'run_id') && typeof entry.run_id !== 'string') {

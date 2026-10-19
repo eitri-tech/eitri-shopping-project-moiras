@@ -150,6 +150,22 @@ describe('record', () => {
     }
     assert.throws(() => record('clotho', { key: 'C', content: '', with_whom: { reporter: 42 } }, { dir }), /Invalid metadata: with_whom/);
     assert.throws(() => record('clotho', { key: 'C', content: '', ts: 'not-a-date' }, { dir }), /Invalid metadata: ts/);
+    for (const ts of [
+      '2026-02-30T10:00:00Z', '2026-10-19', '10/19/2026', '2026-10-19T10:00:00',
+      '2026-13-01T00:00:00Z', '2026-10-19T24:00:00Z', '2023-02-29T00:00:00Z',
+      '1900-02-29T00:00:00Z', '2026-04-31T00:00:00Z', '2026-10-19T10:60:00Z',
+      '2026-10-19T10:00:60Z', '2026-10-19T10:00:00+24:00', '2026-10-19T10:00:00-03:60',
+      '2026-10-19T10:00:00Z\n',
+    ]) {
+      assert.throws(() => record('clotho', { key: 'C', content: '', ts }, { dir }), { message: 'Invalid metadata: ts' });
+    }
+    for (const ts of [
+      '2026-10-19T10:00:00Z', '2026-10-19T10:00:00.123Z', '2024-02-29T23:59:59-03:00',
+      '2026-10-19T10:00Z', '2026-10-19T10:00+23:59', '2000-02-29T00:00:00Z',
+    ]) {
+      assert.doesNotThrow(() => record('clotho', { key: ts, content: '', ts }, { dir }));
+      assert.equal(query('clotho', { dir, key: ts, since: ts })[0].ts, ts);
+    }
   });
 
   it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {
