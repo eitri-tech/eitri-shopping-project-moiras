@@ -270,6 +270,78 @@ describe('check', () => {
       write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', `platform: ${value}`));
       assert.deepEqual(check(local).findings.map(f => f.rule), expected);
     }
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06'));
+  });
+
+  it('accepts qualified learning sources only in the documented shape', t => {
+    const { local, write } = workspace(t);
+    const decision = (source: string) => `---\nid: d\ntype: decision\ncreated_at: 2026-10-04\nsource: [${source}]\n---\n\n# D\n`;
+    for (const folder of ['solutions', 'patterns', 'decisions']) {
+      write('local', 'learnings/decisions/d.md', decision(`PROJ-1-1, knowledge:acme.team-1/learnings/${folder}/record.v1.md`));
+      assert.deepEqual(check(local, 'learnings').findings, [], folder);
+    }
+    for (const source of [
+      'knowledge:x/learnings/../../secret.md',
+      'knowledge:x/criteria/record.md',
+      'knowledge:x/learnings/other/record.md',
+      'knowledge:x/learnings/solutions/extra/record.md',
+      'knowledge:/learnings/solutions/record.md',
+      'knowledge:../learnings/solutions/record.md',
+      'knowledge:x/learnings/solutions/record..md',
+      'knowledge:x/learnings/solutions/.md',
+      'knowledge:x/learnings/solutions/record.txt',
+    ]) {
+      write('local', 'learnings/decisions/d.md', decision(source));
+      assert.deepEqual(check(local, 'learnings').findings.map(f => f.rule), ['source-invalid'], source);
+    }
+    write('local', 'learnings/decisions/d.md', decision('PROJ-1-1'));
+    for (const [path, doc] of [
+      ['learnings/solutions/PROJ-1-1.md', solution('resolved').replace('chosen_by: Fulano', 'chosen_by: user-1')],
+      ['learnings/patterns/p.md', patternDoc('p', '# P')],
+    ]) {
+      write('local', path!, doc!.replace('repositories: [acme-shop-checkout]', 'repositories: [knowledge:acme/glossary/acme-shop-checkout.md]'));
+    }
+    assert.deepEqual(check(local, 'learnings').findings.map(f => f.rule), ['repositories-invalid', 'repositories-invalid']);
+  });
+
+  it('rejects single-element lists on scalar fields and requires safe lists for repositories and source', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('[resolved]')
+      .replace('id: PROJ-1-1', 'id: [PROJ-1-1]')
+      .replace('type: solution', 'type: [solution]')
+      .replace('created_at: 2026-10-01', 'created_at: [2026-10-01]')
+      .replace('chosen_by: Fulano', 'chosen_by: [Fulano]')
+      .replace('repositories: [acme-shop-checkout]', 'repositories: acme-shop-checkout')
+      .replace('category: bug', 'category: [bug]')
+      .replace('confidence: 70', 'confidence: [70]'));
+    write('local', 'criteria/c.md', criterion('c')
+      .replace('approved_by: Beltrana', 'approved_by: [Beltrana]')
+      .replace('applies_to: category', 'applies_to: [category]'));
+    write('local', 'learnings/patterns/p.md', patternDoc('p', '# P').replace('repositories: [acme-shop-checkout]', 'repositories: [../bad]'));
+    write('local', 'learnings/decisions/d.md', '---\nid: d\ntype: decision\ncreated_at: 2026-10-04\nsource: PROJ-1-1\n---\n\n# D\n');
+    write('local', 'learnings/decisions/d2.md', '---\nid: d2\ntype: decision\ncreated_at: 2026-10-04\nsource: [../bad]\n---\n\n# D\n');
+    write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06')
+      .replace(`sources_hash: ${sha}`, `indexed_commit: [${'a'.repeat(40)}]\nindexed_commit_date: [2026-10-05]\nindexed_dirty: [false]\nsources_hash: [${sha}]`));
+    assert.deepEqual(rules(local), [
+      'criteria/c.md:applies-to-invalid',
+      'criteria/c.md:pseudonym-required',
+      'glossary/acme-shop-checkout.md:indexed-commit-date-invalid',
+      'glossary/acme-shop-checkout.md:indexed-commit-invalid',
+      'glossary/acme-shop-checkout.md:indexed-dirty-invalid',
+      'glossary/acme-shop-checkout.md:sources-hash-invalid',
+      'learnings/decisions/d.md:source-invalid',
+      'learnings/decisions/d2.md:source-invalid',
+      'learnings/patterns/p.md:repositories-invalid',
+      'learnings/solutions/PROJ-1-1.md:category-invalid',
+      'learnings/solutions/PROJ-1-1.md:confidence-invalid',
+      'learnings/solutions/PROJ-1-1.md:date-invalid',
+      'learnings/solutions/PROJ-1-1.md:id-mismatch',
+      'learnings/solutions/PROJ-1-1.md:pseudonym-required',
+      'learnings/solutions/PROJ-1-1.md:repositories-invalid',
+      'learnings/solutions/PROJ-1-1.md:result-invalid',
+      'learnings/solutions/PROJ-1-1.md:type-mismatch',
+    ]);
+    assert.ok(issues(local).ids.includes('PROJ-1-1'));
   });
 
   it('rejects credentials in URLs and placeholders left in the body, but not code or autolinks', t => {
@@ -651,6 +723,17 @@ describe('sourcesHash', () => {
       assert.throws(() => sourcesHash(base, ['src/.gitignore']), /unreadable/);
     } finally {
       chmodSync(join(base, 'src/.gitignore'), 0o644);
+    }
+  });
+
+  it('fails on a nested symlinked .gitignore for directories', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/hidden/a.txt', 'x');
+    write('repo', 'real.ignore', 'hidden/\n');
+    symlinkSync(join(base, 'real.ignore'), join(base, 'src/.gitignore'));
+    for (const path of ['.', 'src', 'src/hidden']) {
+      assert.throws(() => sourcesHash(base, [path]), /src[/\\]\.gitignore: not-regular-file/);
     }
   });
 

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { hash as digestOf } from 'node:crypto';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -248,29 +248,73 @@ describe('query', () => {
   });
 });
 
-describe('broken symlink', () => {
-  it('is neither an empty memory nor a place to record into', t => {
+describe('symlinks in memory paths', () => {
+  it('reads and appends below a symlinked ancestor', t => {
+    const { dir } = fixture(t);
+    const ancestor = join(dir, 'linked-home');
+    const home = join(dir, 'home');
+    mkdirSync(home);
+    symlinkSync(home, ancestor);
+    for (const memory of [join(ancestor, '.moiras', 'memory'), join(ancestor, 'custom-memory')]) {
+      assert.deepEqual(query('clotho', { dir: memory }), []);
+      assert.equal(record('clotho', { key: 'A', content: 'first' }, { dir: memory })[0].change, 'new');
+      assert.equal(record('clotho', { key: 'A', content: 'second' }, { dir: memory })[0].change, 'changed');
+      assert.equal(query('clotho', { dir: memory })[0].hash, digest('second'));
+    }
+  });
+
+  it('refuses symlinks at .moiras and intermediate folders', t => {
+    const { dir } = fixture(t);
+    const outside = join(dir, 'outside');
+    mkdirSync(outside);
+    for (const folder of ['.moiras', 'nested']) {
+      const base = join(dir, folder === '.moiras' ? 'project' : 'other', '.moiras');
+      const linked = folder === '.moiras' ? base : join(base, folder);
+      mkdirSync(folder === '.moiras' ? join(dir, 'project') : base, { recursive: true });
+      symlinkSync(outside, linked);
+      const memory = join(linked, 'memory');
+      assert.throws(() => query('clotho', { dir: memory }), /symlink refused/);
+      assert.throws(() => record('clotho', { key: 'A', content: 'value' }, { dir: memory }), /symlink refused/);
+      assert.equal(existsSync(join(outside, 'memory')), false);
+    }
+  });
+
+  it('refuses broken symlinks instead of treating them as empty or creating their target', t => {
     const { dir, file } = fixture(t);
     symlinkSync('missing.jsonl', file);
-    assert.throws(() => query('clotho', { dir }), /broken symlink/);
-    assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), /broken symlink/);
+    assert.throws(() => query('clotho', { dir }), /symlink refused/);
+    assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), /symlink refused/);
     assert.equal(existsSync(join(dir, 'missing.jsonl')), false, 'the target behind the link is not created');
   });
-});
 
-describe('invalid memory paths', () => {
   for (const target of ['missing/', 'clotho.jsonl', 'plain/child']) {
     it(`rejects query and record through ${target}`, t => {
       const { dir, file } = fixture(t);
       writeFileSync(join(dir, 'plain'), 'x');
       symlinkSync(target, file);
-      const expected = target === 'missing/' ? /broken symlink/ : { code: target === 'clotho.jsonl' ? 'ELOOP' : 'ENOTDIR' };
-      assert.throws(() => query('clotho', { dir }), expected);
-      assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), expected);
+      assert.throws(() => query('clotho', { dir }), /symlink refused/);
+      assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), /symlink refused/);
       assert.equal(existsSync(join(dir, 'missing')), false);
       assert.equal(readFileSync(join(dir, 'plain'), 'utf8'), 'x');
     });
   }
+
+  it('refuses a valid symlink on the memory file or its parent directory', t => {
+    const { dir, file } = fixture(t);
+    const outside = join(dir, 'outside.jsonl');
+    const existing = `${JSON.stringify({ key: 'EXTERNAL', hash: digest('secret'), ts: '2026-01-01T00:00:00Z' })}\n`;
+    writeFileSync(outside, existing);
+    symlinkSync(outside, file);
+    assert.throws(() => query('clotho', { dir }), /symlink refused/);
+    assert.throws(() => record('clotho', [{ key: 'A', hash: digest('1') }], { dir }), /symlink refused/);
+    assert.equal(readFileSync(outside, 'utf8'), existing, 'external target is untouched');
+
+    const linkedDir = join(dir, 'linked-memory');
+    symlinkSync(dir, linkedDir);
+    assert.throws(() => query('lachesis', { dir: linkedDir }), /symlink refused/);
+    assert.throws(() => record('lachesis', [{ key: 'A', hash: digest('1') }], { dir: linkedDir }), /symlink refused/);
+    assert.equal(existsSync(join(dir, 'lachesis.jsonl')), false);
+  });
 });
 
 describe('CLI', () => {
