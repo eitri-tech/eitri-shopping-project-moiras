@@ -72,8 +72,8 @@ const rules = (dir: string) => check(dir).findings.map(f => `${f.path}:${f.rule}
 
 describe('parseDoc', () => {
   it('reads scalars, inline lists, quotes and the body line', () => {
-    const doc = parseDoc('---\nid: a\nreplaces: [x, y]\nempty: []\nname: "Acme"\n---\n\n# Title\n');
-    assert.deepEqual(doc?.fields, { id: 'a', replaces: ['x', 'y'], empty: [], name: 'Acme' });
+    const doc = parseDoc('---\nid: a\nreplaces: [x, "y", \'z\']\nempty: []\nname: "Acme"\n---\n\n# Title\n');
+    assert.deepEqual(doc?.fields, { id: 'a', replaces: ['x', 'y', 'z'], empty: [], name: 'Acme' });
     assert.equal(doc?.bodyLine, 7);
     assert.equal(parseDoc('# no frontmatter'), null);
     assert.equal(parseDoc('---\nid: a\n'), null);
@@ -218,10 +218,12 @@ describe('check', () => {
     ]);
   });
 
-  it('rejects replaces that is not a list', t => {
+  it('rejects replaces that is not a list or holds an invalid reference', t => {
     const { local, write } = workspace(t);
     write('local', 'criteria/c.md', criterion('c').replace('replaces: []', 'replaces: a'));
-    assert.deepEqual([...new Set(rules(local))], ['criteria/c.md:replaces-invalid']);
+    write('local', 'criteria/bad.md', criterion('bad', '../secret, knowledge:acme/glossary/x.md'));
+    write('local', 'criteria/ok.md', criterion('ok', '"regra-a", \'knowledge:acme/criteria/b.md\''));
+    assert.deepEqual([...new Set(rules(local))], ['criteria/bad.md:replaces-invalid', 'criteria/c.md:replaces-invalid']);
   });
 
   it('requires the fields of each record type', t => {
