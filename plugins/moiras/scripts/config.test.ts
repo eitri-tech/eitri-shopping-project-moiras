@@ -150,12 +150,23 @@ describe('validate', () => {
         { name: 'team', scope: 'group', dir: '../team', repository: 'https://user:hunter2@github.com/<org>/team.git' },
         { name: 'bot', scope: 'global', dir: '../bot', repository: 'https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/<org>/bot.git' },
         { name: 'ok', scope: 'project', dir: '/home/fulano/knowledge', repository: 'https://<user>:<token>@github.com/<org>/ok.git' },
+        { name: 'data', scope: 'project', dir: '/data/knowledge' },
       ],
+      index: { roots: ['/code/acme', '\\\\server\\share\\repo', '\\work\\repo', '..\\team'], repositories: [{ name: 'acme-shop-checkout', path: 'D:\\work\\acme' }] },
+      memory: { dir: '/data/memory' },
+      runs: { dir: '~/runs' },
     };
     assert.deepEqual(rules(config), [
       'knowledge[1].repository:url-credentials:error',
       'knowledge[2].repository:secret:error',
       'knowledge[3].dir:absolute-path:warning',
+      'runs.dir:absolute-path:warning',
+      'knowledge[4].dir:absolute-path:warning',
+      'index.roots[0]:absolute-path:warning',
+      'index.roots[1]:absolute-path:warning',
+      'index.roots[2]:absolute-path:warning',
+      'index.repositories[0].path:absolute-path:warning',
+      'memory.dir:absolute-path:warning',
     ]);
     // Findings name the field and the rule, never the value.
     assert.ok(!JSON.stringify(validate(config)).includes('hunter2'));
