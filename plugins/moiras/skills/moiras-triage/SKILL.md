@@ -61,7 +61,7 @@ Todo knowledge tem a mesma estrutura:
 | Pasta | Conteúdo | Quem escreve |
 |---|---|---|
 | `glossary/` | Glossário de repositórios: um arquivo por repositório, com localização e metadados (e, opcionalmente, `agency`, a agência que cuida dele) | `moiras-index` (derivado do código, pode ser regenerado) |
-| `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando ou audita (`moiras-audit`) |
+| `criteria/` | Regras de classificação e de decisão do time | as Moiras, com o "sim" de quem está triando, ensina uma regra (`moiras-teach`) ou audita (`moiras-audit`) |
 | `learnings/solutions/` | Soluções escolhidas e o resultado delas | Átropos (e `moiras-learn`, para as já resolvidas no histórico) |
 | `learnings/patterns/` | Padrões de problema recorrentes | Láquesis / Átropos (e `moiras-learn`) |
 | `learnings/decisions/` | Decisões que valem para casos futuros | as Moiras e `moiras-learn`, a partir de soluções que funcionaram |
@@ -79,7 +79,7 @@ Regras de leitura:
 Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
 
 - Aprendizado (`learnings/`): um arquivo por registro, nomeado pelo `id`, sem apagar nem reescrever. Só `result` e a `Observação` podem mudar, pelo `id`, quando o usuário informar o desfecho. Para soluções, a mesma escolha da mesma issue com `result: pending` apenas confirma o registro existente; outra solução ou nova tentativa depois de resultado conhecido cria `<KEY>-<n+1>` (ver Átropos). Para padrões e decisões, procure registros equivalentes antes de criar e reutilize a referência existente, sem reescrevê-los.
-- Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces` contendo IDs simples ou referências `knowledge:<name>/<path>`, e apague apenas os antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; referencie-os em `replaces` com a fonte `knowledge:<name>/<caminho>`.
+- Critérios (`criteria/`): só com o "sim" de quem está triando (ver Átropos) ou de quem ensina uma regra direto (`moiras-teach`, também com o "sim" à lista exata). Se um critério novo conflitar com outro, una os dois num critério regenerado, com `replaces` contendo IDs simples ou referências `knowledge:<name>/<path>`, e apague apenas os antigos do mesmo knowledge local e dentro do escopo aprovado. Registros compartilhados ficam intocados; referencie-os em `replaces` com a fonte `knowledge:<name>/<caminho>`.
 - `chosen_by` e `approved_by` usam um pseudônimo não identificável escolhido pela pessoa, nunca nome real, e-mail ou identificador de conta. Use o formato `<prefixo>-<id>` (por exemplo `reviewer-01`, `user-7`), com o prefixo `person`, `user`, `reviewer`, `pseudonym`, `pessoa`, `usuario` ou `revisor` (ou os nomes fictícios Fulano, Beltrana e Sicrano): é o que o `scripts/knowledge.ts check` aceita antes de uma publicação; outro prefixo (como `auditor-01`) é recusado. Na auditoria, `audit.auditors` usa esses mesmos pseudônimos; a identificação é declarada, não autenticação. Preserve o pseudônimo nos registros e na observação para rastrear escolhas e aprovações sem dados pessoais.
 - Nunca grave mais de um trecho por registro, nem trecho maior que 20 linhas, código sem referência (repositório, caminho, commit), segredos, dados pessoais ou texto bruto de issue e de conversa.
 - Levar o aprendizado local para um knowledge compartilhado é com o `moiras-publish`, que abre PR e nunca faz merge sozinho.
