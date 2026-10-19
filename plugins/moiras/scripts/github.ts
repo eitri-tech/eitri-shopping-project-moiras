@@ -4,7 +4,7 @@
  *        node github.ts clone --dir <dir> --repo <name> --url <https-url> [--depth <n>]
  */
 import { lstatSync, readFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
@@ -59,11 +59,8 @@ export function matchRepositories(pattern: string, input: unknown, includeArchiv
 
 // Trust ancestors above the clone folder (platform symlinks such as /tmp); refuse a link on the folder or on the repository itself.
 function hasSymlink(path: string): boolean {
-  const parts = resolve(path).split(sep).filter(Boolean);
-  for (let index = Math.max(0, parts.length - 2); index < parts.length; index++) {
-    if (lstatSync(`${sep}${parts.slice(0, index + 1).join(sep)}`, { throwIfNoEntry: false })?.isSymbolicLink()) return true;
-  }
-  return false;
+  const target = resolve(path);
+  return [target, dirname(target)].some(current => lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink());
 }
 
 export function planClone(dir: string, input: unknown) {
@@ -88,7 +85,7 @@ export function cloneRepository(dir: string, name: string, url: string, depth?: 
   if (remoteName !== name && remoteName !== `${name}.git`) throw new Error(usage);
   const path = join(resolve(dir), name);
   if (hasSymlink(path) || lstatSync(path, { throwIfNoEntry: false })) throw new Error('Clone target refused.');
-  const result = run('git', ['clone', ...(depth ? ['--depth', depth] : []), '--', url, path], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: 'pipe' });
+  const result = run('git', ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', ...(depth ? ['--depth', depth] : []), '--', url, path], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: 'pipe' });
   return result.status === 0 ? { output: JSON.stringify({ cloned: true, path }), code: 0 } : { output: JSON.stringify({ cloned: false, status: result.status }), code: 1 };
 }
 

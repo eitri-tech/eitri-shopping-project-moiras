@@ -49,7 +49,7 @@ it('runs clone with an argument array and suppresses git failure details', t => 
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const run = ((command, args, options) => {
     assert.equal(command, 'git');
-    assert.deepEqual(args, ['clone', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
+    assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
     assert.equal(options?.env?.GIT_TERMINAL_PROMPT, '0');
     return { status: 0 };
   }) as typeof spawnSync;

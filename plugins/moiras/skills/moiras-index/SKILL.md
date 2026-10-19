@@ -64,7 +64,7 @@ Cada repositório volta como `exists` (já clonado: entra na indexação), `clon
 node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --repo <nome> --url <url> [--depth 1]
 ```
 
-Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário.
+Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário. O clone roda sem hooks (nem os do modelo do Git do usuário); filtros que a configuração do próprio usuário define (como o Git LFS) continuam valendo.
 
 ## Passos
 
