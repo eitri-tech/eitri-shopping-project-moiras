@@ -16,6 +16,115 @@ Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima e
 Os contratos abaixo estão resumidos; os campos completos ficam nos
 [stages da triagem](skills/moiras-triage/stages/).
 
+Versão em diagrama:
+
+```mermaid
+sequenceDiagram
+  participant T as moiras-triage
+  participant C as Cloto
+  participant F as Fontes configuradas
+  participant L as Láquesis
+  participant A as Átropos
+  participant K as Knowledge local
+  T->>C: Configuração e escopo
+  Note over T,C: input: configuração e escopo — output: coleta, interactions, collected_at, errors
+  par Fonte de issues obrigatória
+    C->>F: Ler issues pendentes sem responsável e siblings na fonte de issues
+  and Demais fontes configuradas
+    C->>F: Ler contexto conforme configuração e contrato da fonte
+  end
+  F-->>C: Issues, evidências e avisos
+  Note over C,F: Fonte de issues falhou ou nenhuma issue: encerra — demais fontes indisponíveis: segue com aviso
+  C-->>T: Coleta para montar entradas por issue
+  T->>L: Resolver agency de todas as issues antes do filtro incremental
+  T->>L: Classificar cada issue selecionada na ordem da Cloto
+  L->>K: Ler glossário, critérios e aprendizados
+  Note over T,L: input: issue, evidence, siblings, warnings — output: classificação, duplicates, agency, sources, warnings
+  L-->>T: Classificação validada
+  opt interactions.enabled: true — desligado por padrão
+    alt Interativo com sim à lista exata
+      T->>F: Aplicar interações aprovadas da Cloto
+    else --auto com reaction em interactions.auto_types
+      T->>F: Aplicar só reaction autorizada
+    end
+    Note over T,F: comment nunca no --auto, nem com agency ou agency-ambiguous — fontes sem interação prevista só leitura
+  end
+  T->>A: ticket completo, classification e precedents
+  Note over T,A: input: ticket, classification, precedents — output: key, action, duplicate_of, agency, justification, solutions, criteria_suggestions, warnings
+  A-->>T: Veredito e soluções com fontes
+  Note over T,A: Validar cada output antes de avançar — contrato inválido interrompe a issue — warnings se acumulam
+```
+
+```mermaid
+sequenceDiagram
+  participant U as Usuário
+  participant T as moiras-triage
+  participant A as Átropos
+  participant K as Knowledge local
+  Note over T,A: Critérios do time podem refinar as ações — sem critério aplicável: criteria-missing
+  alt similarity >= 0.8 e relation: same-incident
+    A-->>T: duplicate com duplicate_of obrigatório
+  else Dependência externa com evidência
+    A-->>T: blocked
+  else Descrição e critérios claros, confidence >= 0.8, sem bloqueio
+    A-->>T: ready-for-dev
+  else Baixa confiança, origin: unknown, falta reprodução ou dúvida
+    A-->>T: needs-info
+  else Evidência explícita de que não se aplica mais
+    A-->>T: close
+  end
+  Note over A: Normalmente 3 a 5 soluções com confiança — duplicate e close podem não ter soluções
+  alt Interativo
+    T-->>U: Apresentar justificativa, fontes e soluções
+    opt Escolha de solução
+      U->>T: Escolher solução
+      T->>K: Gravar em learnings/solutions/ — none não grava
+    end
+    opt Sim a padrões, decisões ou critérios
+      U->>T: Aprovar registros
+      T->>K: Gravar em learnings/ ou regenerar criteria/ com replaces
+    end
+    opt Agência e pedido de repasse
+      T-->>U: Entregar rascunho para o usuário enviar
+    end
+  else --auto
+    T->>T: Salvar relatório e pendências em runs.dir — sem escrita no knowledge
+  end
+  Note over T,U: Saídas completas também são salvas no interativo quando há veredito ou escolha pendente
+```
+
+```mermaid
+stateDiagram-v2
+  state "coletada" as Collected
+  state "classificada" as Classified
+  state "duplicate" as Duplicate
+  state "blocked" as Blocked
+  state "ready-for-dev" as Ready
+  state "needs-info" as Info
+  state "close" as Closed
+  state "Veredito apresentado" as Verdict
+  state "Escolha gravada em learnings/ no interativo" as Saved
+  state "Relatório no --auto" as Report
+  [*] --> Collected
+  Collected --> Classified: Contrato válido
+  Classified --> Duplicate
+  Classified --> Blocked
+  Classified --> Ready
+  Classified --> Info
+  Classified --> Closed
+  Duplicate --> Verdict
+  Blocked --> Verdict
+  Ready --> Verdict
+  Info --> Verdict
+  Closed --> Verdict
+  Verdict --> Saved: Escolha de solução diferente de none
+  Verdict --> Report: "--auto sem escrita no knowledge"
+  note right of Verdict
+    Interativo sem escolha mantém pendência.
+    Vereditos são recomendações, não transições no Jira.
+  end note
+```
+
 ```text
 [moiras-triage: .moiras/sources.json + escopo]
   |
@@ -23,11 +132,11 @@ Os contratos abaixo estão resumidos; os campos completos ficam nos
 [Cloto / clotho]
   input: configuração + épicos e/ou categorias
     +--> [Jira: pendentes sem responsável + siblings de todo o escopo] --+
-    +--> [Slack: pessoas/canais configurados + threads] ----------------+ em paralelo
+    +--> [demais fontes configuradas: pessoas/canais configurados + threads] ----------------+ em paralelo
   output: collected_at, jira, slack, interactions, errors
   |
   +--> Jira falhou / nenhum épico encontrado sem categorias / nenhuma issue: encerra
-  +--> Slack falhou: segue com listas vazias e aviso; falha parcial: usa os demais
+  +--> demais fontes configuradas falharam: segue com listas vazias e aviso; falha parcial: usa os demais
   v
 [Láquesis / lachesis: uma chamada por issue, na ordem da Cloto]
   input: key, summary, description, created_at, epic, priority, agency,
@@ -39,7 +148,7 @@ Os contratos abaixo estão resumidos; os campos completos ficam nos
   v
 [Interações propostas pela Cloto: exige interactions.enabled: true]
   agency e avisos atuais resolvidos para TODAS as issues, inclusive unchanged
-  interativo -- "sim" à lista exata --> reaction no Slack / comment no Jira
+  interativo -- "sim" à lista exata --> reaction / comment nas fontes configuradas
   --auto ---- reaction em interactions.auto_types --> só reação autorizada
   comment nunca no --auto, nem para agency ou agency-ambiguous
   |
@@ -119,6 +228,74 @@ Ciclo do knowledge:
 5. Sincronizar os clones para ler o que foi mergeado na próxima triagem.
 
 Mapa das sete skills (escrita de registros locais só no modo interativo):
+
+Versão em diagrama:
+
+```mermaid
+classDiagram
+  class Init["moiras-init"]
+  class Index["moiras-index"]
+  class Learn["moiras-learn"]
+  class Triage["moiras-triage"]
+  class Audit["moiras-audit"]
+  class Publish["moiras-publish"]
+  class Sync["moiras-sync"]
+  class Config[".moiras/sources.json"]
+  class Glossary["glossary/"]
+  class Learnings["learnings/"]
+  class Criteria["criteria/"]
+  class Local["Knowledge local"]
+  <<skill>> Init
+  <<skill>> Index
+  <<skill>> Learn
+  <<skill>> Triage
+  <<skill>> Audit
+  <<skill>> Publish
+  <<skill>> Sync
+  <<knowledge>> Local
+  <<knowledge>> Glossary
+  <<knowledge>> Learnings
+  <<knowledge>> Criteria
+  Init ..> Config : cria após aprovação integral
+  Index ..> Glossary : escreve após aprovação da lista exata
+  Learn ..> Learnings : importa histórico após aprovação da lista exata
+  Triage ..> Learnings : grava após escolha ou aprovação
+  Triage ..> Criteria : regenera após aprovação
+  Audit ..> Learnings : ajusta result e observação após aprovação
+  Audit ..> Criteria : regenera com replaces após aprovação
+  Local *-- Glossary : contém
+  Local *-- Learnings : contém
+  Local *-- Criteria : contém
+  Triage ..> Local : lê
+  Publish ..> Local : lê seleção aprovada
+  note for Init "Cria também .moiras/.gitignore sem sobrescrever"
+  note for Index "Só lê código; única autora de glossary/"
+  note for Local "Precedência em conflitos: local > project > group > global<br/>Escrita local só no interativo e com aprovação"
+  note for Sync "Avança clones compartilhados para leitura; não altera o knowledge local"
+```
+
+```mermaid
+sequenceDiagram
+  participant U as Usuário
+  participant P as moiras-publish
+  participant K as Knowledge local
+  participant R as Compartilhado privado
+  participant H as Revisores humanos
+  participant S as moiras-sync
+  U->>P: Solicitar publicação interativa
+  Note over P,R: Destino privado — clone limpo e sincronizado — plan e check
+  P->>K: Ler seleção de registros locais
+  P-->>U: Apresentar lista exata
+  U->>P: Aprovar lista exata
+  Note over P: Worktree temporário — branch novo — check antes do envio
+  P->>R: Enviar branch novo e abrir PR
+  H->>R: Revisar e fazer merge
+  U->>S: Solicitar sincronização
+  Note over R,S: Clone limpo na branch padrão, sem commits locais ou divergência
+  S->>R: git fetch
+  S->>S: git merge --ff-only no clone
+  Note over K,S: Clones para leitura junto com o local — local permanece intacto
+```
 
 ```text
 [moiras-init] -- "sim" ao arquivo inteiro --> [.moiras/sources.json]

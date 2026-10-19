@@ -74,6 +74,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 
 ## Convenções
 
+- Diagramas da documentação são UML em Mermaid: `sequenceDiagram` para interações, `stateDiagram-v2` para estados e `classDiagram` para estrutura e dependências. Use rótulos em português para pessoas e identificadores de máquina em inglês (nomes de skills, flags, pastas, campos e valores fixos); coloque rótulos com caracteres especiais entre aspas. Mantenha os diagramas pequenos e divida-os em vez de ampliá-los.
 - Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
 - Scripts em TypeScript executado direto pelo Node LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), sem build: só sintaxe apagável (sem `enum`, `namespace` nem parameter properties) e imports locais com extensão `.ts`. ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.

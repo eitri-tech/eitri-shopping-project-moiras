@@ -93,6 +93,74 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 
 As setas indicam leitura ou escrita aprovada, não uma execução automática das sete skills.
 
+Versão em diagrama:
+
+```mermaid
+classDiagram
+  class Init["moiras-init"]
+  class Index["moiras-index"]
+  class Learn["moiras-learn"]
+  class Triage["moiras-triage"]
+  class Audit["moiras-audit"]
+  class Publish["moiras-publish"]
+  class Sync["moiras-sync"]
+  class Config[".moiras/sources.json"]
+  class Glossary["glossary/"]
+  class Learnings["learnings/"]
+  class Criteria["criteria/"]
+  class Local["Knowledge local"]
+  <<skill>> Init
+  <<skill>> Index
+  <<skill>> Learn
+  <<skill>> Triage
+  <<skill>> Audit
+  <<skill>> Publish
+  <<skill>> Sync
+  <<knowledge>> Local
+  <<knowledge>> Glossary
+  <<knowledge>> Learnings
+  <<knowledge>> Criteria
+  Init ..> Config : cria após aprovação integral
+  Index ..> Glossary : escreve após aprovação da lista exata
+  Learn ..> Learnings : importa histórico após aprovação da lista exata
+  Triage ..> Learnings : grava após escolha ou aprovação
+  Triage ..> Criteria : regenera após aprovação
+  Audit ..> Learnings : ajusta result e observação após aprovação
+  Audit ..> Criteria : regenera com replaces após aprovação
+  Local *-- Glossary : contém
+  Local *-- Learnings : contém
+  Local *-- Criteria : contém
+  Triage ..> Local : lê
+  Publish ..> Local : lê seleção aprovada
+  note for Init "Cria também .moiras/.gitignore sem sobrescrever"
+  note for Index "Só lê código; única autora de glossary/"
+  note for Local "Precedência em conflitos: local > project > group > global<br/>Escrita local só no interativo e com aprovação"
+  note for Sync "Avança clones compartilhados para leitura; não altera o knowledge local"
+```
+
+```mermaid
+sequenceDiagram
+  participant U as Usuário
+  participant P as moiras-publish
+  participant K as Knowledge local
+  participant R as Compartilhado privado
+  participant H as Revisores humanos
+  participant S as moiras-sync
+  U->>P: Solicitar publicação interativa
+  Note over P,R: Destino privado — clone limpo e sincronizado — plan e check
+  P->>K: Ler seleção de registros locais
+  P-->>U: Apresentar lista exata
+  U->>P: Aprovar lista exata
+  Note over P: Worktree temporário — branch novo — check antes do envio
+  P->>R: Enviar branch novo e abrir PR
+  H->>R: Revisar e fazer merge
+  U->>S: Solicitar sincronização
+  Note over R,S: Clone limpo na branch padrão, sem commits locais ou divergência
+  S->>R: git fetch
+  S->>S: git merge --ff-only no clone
+  Note over K,S: Clones para leitura junto com o local — local permanece intacto
+```
+
 ```text
 [moiras-init] -- "sim" ao arquivo inteiro --> [.moiras/sources.json]
                                              | configuração das outras skills
@@ -113,13 +181,90 @@ Leitura do knowledge: local > project > group > global (mais específico vence)
 Resumo dos contratos; os campos completos e as condições estão nos
 [stages](plugins/moiras/skills/moiras-triage/stages/).
 
+Versão em diagrama:
+
+```mermaid
+sequenceDiagram
+  participant T as moiras-triage
+  participant C as Cloto
+  participant F as Fontes configuradas
+  participant L as Láquesis
+  participant A as Átropos
+  participant K as Knowledge local
+  T->>C: Configuração e escopo
+  Note over T,C: input: configuração e escopo — output: coleta, interactions, collected_at, errors
+  par Fonte de issues obrigatória
+    C->>F: Ler issues pendentes sem responsável e siblings na fonte de issues
+  and Demais fontes configuradas
+    C->>F: Ler contexto conforme configuração e contrato da fonte
+  end
+  F-->>C: Issues, evidências e avisos
+  Note over C,F: Fonte de issues falhou ou nenhuma issue: encerra — demais fontes indisponíveis: segue com aviso
+  C-->>T: Coleta para montar entradas por issue
+  T->>L: Resolver agency de todas as issues antes do filtro incremental
+  T->>L: Classificar cada issue selecionada na ordem da Cloto
+  L->>K: Ler glossário, critérios e aprendizados
+  Note over T,L: input: issue, evidence, siblings, warnings — output: classificação, duplicates, agency, sources, warnings
+  L-->>T: Classificação validada
+  opt interactions.enabled: true — desligado por padrão
+    alt Interativo com sim à lista exata
+      T->>F: Aplicar interações aprovadas da Cloto
+    else --auto com reaction em interactions.auto_types
+      T->>F: Aplicar só reaction autorizada
+    end
+    Note over T,F: comment nunca no --auto, nem com agency ou agency-ambiguous — fontes sem interação prevista só leitura
+  end
+  T->>A: ticket completo, classification e precedents
+  Note over T,A: input: ticket, classification, precedents — output: key, action, duplicate_of, agency, justification, solutions, criteria_suggestions, warnings
+  A-->>T: Veredito e soluções com fontes
+  Note over T,A: Validar cada output antes de avançar — contrato inválido interrompe a issue — warnings se acumulam
+```
+
+```mermaid
+sequenceDiagram
+  participant U as Usuário
+  participant T as moiras-triage
+  participant A as Átropos
+  participant K as Knowledge local
+  Note over T,A: Critérios do time podem refinar as ações — sem critério aplicável: criteria-missing
+  alt similarity >= 0.8 e relation: same-incident
+    A-->>T: duplicate com duplicate_of obrigatório
+  else Dependência externa com evidência
+    A-->>T: blocked
+  else Descrição e critérios claros, confidence >= 0.8, sem bloqueio
+    A-->>T: ready-for-dev
+  else Baixa confiança, origin: unknown, falta reprodução ou dúvida
+    A-->>T: needs-info
+  else Evidência explícita de que não se aplica mais
+    A-->>T: close
+  end
+  Note over A: Normalmente 3 a 5 soluções com confiança — duplicate e close podem não ter soluções
+  alt Interativo
+    T-->>U: Apresentar justificativa, fontes e soluções
+    opt Escolha de solução
+      U->>T: Escolher solução
+      T->>K: Gravar em learnings/solutions/ — none não grava
+    end
+    opt Sim a padrões, decisões ou critérios
+      U->>T: Aprovar registros
+      T->>K: Gravar em learnings/ ou regenerar criteria/ com replaces
+    end
+    opt Agência e pedido de repasse
+      T-->>U: Entregar rascunho para o usuário enviar
+    end
+  else --auto
+    T->>T: Salvar relatório e pendências em runs.dir — sem escrita no knowledge
+  end
+  Note over T,U: Saídas completas também são salvas no interativo quando há veredito ou escolha pendente
+```
+
 ```text
 [moiras-triage: configuração + escopo]
   |
   v
 [Cloto / clotho]
   +--> [Jira: pendentes sem responsável + siblings] --+
-  +--> [Slack: mensagens + respostas das threads] ----+ em paralelo
+  +--> [demais fontes configuradas: mensagens + respostas das threads] ----+ em paralelo
   output: jira, slack, interactions, collected_at, errors
   v
 [Láquesis / lachesis]
