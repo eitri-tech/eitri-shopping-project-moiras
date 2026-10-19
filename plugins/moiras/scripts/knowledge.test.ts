@@ -726,6 +726,17 @@ describe('sourcesHash', () => {
     }
   });
 
+  it('fails on a nested symlinked .gitignore for directories', t => {
+    const { dir, write } = workspace(t);
+    const base = join(dir, 'repo');
+    write('repo', 'src/hidden/a.txt', 'x');
+    write('repo', 'real.ignore', 'hidden/\n');
+    symlinkSync(join(base, 'real.ignore'), join(base, 'src/.gitignore'));
+    for (const path of ['.', 'src', 'src/hidden']) {
+      assert.throws(() => sourcesHash(base, [path]), /src[/\\]\.gitignore: not-regular-file/);
+    }
+  });
+
   it('evaluates anchored rules of a nested .gitignore and skips folders under an ignored ancestor', t => {
     const { dir, write } = workspace(t);
     const base = join(dir, 'repo');
