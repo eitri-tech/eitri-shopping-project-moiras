@@ -23,7 +23,7 @@ function patternParts(pattern: string): string[] {
 /** Number the skill passes to `gh repo list --limit`; a list this long may have been cut. */
 export const listLimit = 4000;
 
-/** Linear-time glob (`*` any run, `?` one character, case-insensitive); no RegExp, so a pattern full of `*` cannot backtrack. */
+/** Glob (`*` any run, `?` one character, case-insensitive) in O(pattern x name) time; no RegExp, so a pattern full of `*` cannot backtrack exponentially. */
 export function globMatch(glob: string, name: string): boolean {
   const pattern = glob.toLowerCase(), text = name.toLowerCase();
   let p = 0, t = 0, star = -1, mark = 0;
@@ -70,21 +70,27 @@ export function canonicalRemote(value: string): string | undefined {
   return match ? `https://github.com/${match[1]}/${match[2]}`.toLowerCase() : undefined;
 }
 
-function originOf(path: string, run: typeof spawnSync): string | undefined {
-  const result = run('git', ['-C', path, 'config', '--get', 'remote.origin.url'], { env: cloneEnv(), encoding: 'utf8', stdio: 'pipe' });
-  return result.status === 0 && typeof result.stdout === 'string' ? canonicalRemote(result.stdout) : undefined;
+/** Every `remote.origin.url` of the checkout, canonicalized: `unreadable` when Git cannot read them (or takes too long), `undefined` entries for values that are not GitHub remotes. Includes are not followed and discovery stops at the clone folder. */
+function originsOf(path: string, run: typeof spawnSync): (string | undefined)[] | 'unreadable' {
+  const result = run('git', ['-C', path, 'config', '--no-includes', '--get-all', 'remote.origin.url'], { env: { ...cloneEnv(), GIT_CEILING_DIRECTORIES: dirname(path) }, encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
+  if (result.status !== 0 || typeof result.stdout !== 'string') return 'unreadable';
+  const values = result.stdout.split('\n').filter(Boolean);
+  return values.length ? values.map(canonicalRemote) : 'unreadable';
 }
 
 type Planned = { name: string; path: string; action: 'exists' | 'conflict' | 'clone'; reason?: string };
 
-/** `exists` only for a real Git checkout whose `origin` is the expected repository; a same-named checkout of another owner is a `conflict`. */
+/** `exists` only for a real Git checkout whose every `origin` URL is the expected repository; another owner, a missing expected URL or an unreadable origin is a `conflict`. */
 function classify(path: string, name: string, expected: string | undefined, run: typeof spawnSync): Planned {
   if (hasSymlink(path)) return { name, path, action: 'conflict', reason: 'symlink' };
   const entry = lstatSync(path, { throwIfNoEntry: false });
   if (!entry) return { name, path, action: 'clone' };
   const git = entry.isDirectory() ? lstatSync(join(path, '.git'), { throwIfNoEntry: false }) : undefined;
   if (!git || git.isSymbolicLink() || !(git.isDirectory() || git.isFile())) return { name, path, action: 'conflict', reason: 'not-a-checkout' };
-  if (expected !== undefined && originOf(path, run) !== expected) return { name, path, action: 'conflict', reason: 'origin-mismatch' };
+  if (expected === undefined) return { name, path, action: 'conflict', reason: 'origin-unknown' };
+  const origins = originsOf(path, run);
+  if (origins === 'unreadable') return { name, path, action: 'conflict', reason: 'origin-unreadable' };
+  if (origins.some(origin => origin !== expected)) return { name, path, action: 'conflict', reason: 'origin-mismatch' };
   return { name, path, action: 'exists' };
 }
 
