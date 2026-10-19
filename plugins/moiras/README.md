@@ -9,6 +9,10 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
 Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
 
+- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
+- Láquesis (mede): issue + evidências + outras issues do escopo, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
+- Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
+
 Os contratos abaixo estão resumidos; os campos completos ficam nos
 [stages da triagem](skills/moiras-triage/stages/).
 
@@ -105,6 +109,14 @@ Quem escreve onde:
 - Só `moiras-publish` leva registros ao compartilhado: valida a seleção com
   `knowledge.ts check`, escreve numa seleção e num worktree temporários,
   envia um branch novo e abre PR; não altera o knowledge local nem o clone principal.
+
+Ciclo do knowledge:
+
+1. Indexar o código para localizar repositórios e componentes.
+2. Triar e registrar escolhas, desfechos e critérios aprovados.
+3. Auditar e aprovar os ajustes locais necessários.
+4. Publicar por PR; a revisão e o merge cabem às pessoas do repositório.
+5. Sincronizar os clones para ler o que foi mergeado na próxima triagem.
 
 Mapa das sete skills (escrita de registros locais só no modo interativo):
 
