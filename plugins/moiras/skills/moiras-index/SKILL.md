@@ -2,7 +2,7 @@
 name: moiras-index
 description: "Indexa os repositórios do projeto e gera ou atualiza o glossário do knowledge local (um arquivo por repositório, com localização, plataforma, apps, palavras-chave e componentes), derivado do código. Use quando o glossário estiver vazio ou velho, quando a triagem citar um repositório fora dele, ou quando o usuário pedir para indexar (ex.: \"indexa os repositórios\", \"atualiza o glossário do acme-shop-checkout\")."
 argument-hint: "[repositório...] [--all]"
-allowed-tools: Bash(node:*)
+allowed-tools: Bash(node:*), Bash(gh repo list:*)
 ---
 
 # Indexação dos repositórios
@@ -15,7 +15,8 @@ Esta skill é a única que escreve em `glossary/`. O glossário é derivado do c
 
 ## O que ela lê e o que ela escreve
 
-- **Lê** os repositórios declarados em `index` no `.moiras/sources.json`, só para leitura: nunca escreve neles, nunca instala dependências nem roda scripts, builds ou testes deles.
+- **Lê** os repositórios declarados em `index` no `.moiras/sources.json`, só para leitura: nunca escreve neles, nunca instala dependências nem roda scripts, builds ou testes deles. Com `index.github`, também **lista** (só leitura, `gh repo list`) os repositórios do GitHub que casam com o padrão.
+- **Clona**, só se `index.github` pedir, só depois do "sim" à lista exata e só pelo `github.ts clone`: um repositório que ainda não existe em `clone_dir`, nunca por cima de uma pasta existente e nunca com `pull`, `fetch` ou `checkout` num clone que já está lá.
 - **Escreve** só `glossary/<id>.md` no knowledge de escopo `local`, depois do "sim". Nenhum outro arquivo do knowledge, nenhum Jira, Slack ou repositório.
 - Registros de glossário de repositórios que não aparecem mais na configuração **não são apagados**: a skill só os lista como `missing` no relatório.
 
@@ -26,20 +27,48 @@ Esta skill é a única que escreve em `glossary/`. O glossário é derivado do c
   "roots": ["../acme"],
   "repositories": [
     { "name": "acme-shop-checkout", "path": "../acme-shop-checkout", "url": "https://github.com/<org>/acme-shop-checkout", "owner": "Squad Checkout", "agency": "Agência Aurora" }
+  ],
+  "github": [
+    { "match": "acme/acme-shop-*", "clone_dir": "../acme" }
   ]
 }
 ```
 
 - `roots`: pastas cujas subpastas com `.git` são descobertas como repositórios. O nome do repositório é o nome da pasta.
 - `repositories`: repositórios explícitos. `name` e `path` são obrigatórios; `url`, `owner`, `agency` e `platform` são opcionais e **valem mais que o detectado**, porque dono e agência não saem do código.
+- `github`: padrões de repositórios do GitHub. `match` é `<dono>/<glob>`: o dono é fixo e o glob aceita `*` (qualquer trecho) e `?` (um caractere) sobre o nome do repositório, sem diferenciar maiúsculas (é glob, não regex). `clone_dir` é a pasta onde os clones ficam (e onde os que já existem são encontrados). `include_archived` (padrão `false`) traz também os arquivados. Cada repositório que casa é indexado como os de `roots`, pelo nome, e vale o que `repositories` disser sobre ele (por `name`): dono, agência e plataforma continuam vindo de lá.
 - `agency`, quando existir, precisa ser um `name` de `agencies`. Se não for, avise e deixe o campo vazio.
 - Caminhos relativos valem a partir da pasta onde está o `.moiras/`. Sem `index`, pergunte em qual pasta estão os repositórios e proponha a configuração, mas não grave o `sources.json`: indique `/moiras:moiras-init` (se o arquivo não existe) ou a edição à mão.
 
 Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all` (o padrão quando não há nome).
 
+### Repositórios do GitHub (`index.github`)
+
+Para cada entrada de `github`, na ordem:
+
+```bash
+gh repo list <dono> --limit 1000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" match --pattern "<dono>/<glob>" [--include-archived]
+```
+
+A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite), avise que podem faltar repositórios e peça um padrão mais estreito. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: os clones que já estão em `clone_dir` continuam sendo indexados, mas nada é dado como ausente.
+
+Depois veja o que já existe em disco:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" plan-clone --dir <clone_dir> < matches.json
+```
+
+Cada repositório volta como `exists` (já clonado: entra na indexação), `clone` (livre) ou `conflict` (a pasta existe e não é um clone, ou é link simbólico: avise e pule). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --repo <nome> --url <url> [--depth 1]
+```
+
+Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário.
+
 ## Passos
 
-1. **Descobrir.** Junte `roots` e `repositories`, sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
+1. **Descobrir.** Junte `roots`, `repositories` e os repositórios de `github` (depois do passo de clonagem acima), sem duplicar por caminho. O nome vira o arquivo `glossary/<id>.md`: se dois repositórios (descobertos ou da lista) ficarem com o mesmo nome, ignorando maiúsculas, pare e peça para renomear um deles na configuração, para um não sobrescrever o outro. Repositório da lista que não existe em disco vira `missing` no relatório.
 2. **Ler as evidências**, repositório por repositório e sob demanda (README, manifestos como `package.json`, configuração do app, `CODEOWNERS`, lista de pastas de código). Não leia `.env*`, chaves, certificados nem `node_modules`/`dist`.
 3. **Montar o registro** com o modelo `_templates/glossary.md` do knowledge ou, sem ele (como num knowledge recém-criado), com o "Modelo de reserva" abaixo (ver "O que vai em cada campo").
 4. **Registrar até onde o repositório foi lido (proveniência).** Rode, para cada repositório (só comandos de leitura do Git, por dentro do script), **antes** de ler as evidências do passo 2 e **de novo depois** de calcular o `sources_hash` (passo 5):

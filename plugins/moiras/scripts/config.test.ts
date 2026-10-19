@@ -341,3 +341,21 @@ describe('main', () => {
     assert.deepEqual(JSON.parse(output), { created: [], findings: [] });
   });
 });
+
+describe('index.github', () => {
+  const config = (github: unknown) => ({ ...minimal(), index: { github } });
+  it('accepts patterns and detects duplicates without values', () => {
+    assert.deepEqual(validate(config([{ match: 'acme/acme-shop-*', clone_dir: '../repos', include_archived: true }])), []);
+    assert.deepEqual(rules(config([{ match: 'acme/acme-shop-*', clone_dir: 'repos' }, { match: 'ACME/ACME-SHOP-*', clone_dir: 'repos' }])), ['index.github[1].match:match-duplicate:error']);
+  });
+  it('validates lists and required fields', () => {
+    for (const value of [null, {}, 'repos', [null]]) assert.deepEqual(rules(config(value)), ['index.github:not-a-list:error']);
+    assert.deepEqual(rules(config([{}])), ['index.github[0].match:match-invalid:error', 'index.github[0].clone_dir:field-missing:error']);
+    assert.deepEqual(rules(config([{ match: 'acme/shop?', clone_dir: '/repos', include_archived: 'yes' }])), ['index.github[0].clone_dir:absolute-path:warning', 'index.github[0].include_archived:field-invalid:error']);
+  });
+  it('refuses malformed matches', () => {
+    for (const match of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
+      assert.ok(rules(config([{ match, clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
+    }
+  });
+});

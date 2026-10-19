@@ -198,6 +198,16 @@ export function validate(config: unknown): Finding[] {
         if (!Array.isArray(index.roots) || index.roots.some(root => !isText(root))) add('index.roots', 'not-a-list');
         else index.roots.forEach((root, position) => warnPath(`index.roots[${position}]`, root));
       }
+      const matches = new Set<string>();
+      list(index.github, 'index.github').forEach((entry, position) => {
+        const path = `index.github[${position}]`;
+        if (typeof entry.match !== 'string' || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._*?-]+$/.test(entry.match) || entry.match.includes('..') || entry.match.split('/')[1] === '*') add(`${path}.match`, 'match-invalid');
+        else if (matches.has(entry.match.toLowerCase())) add(`${path}.match`, 'match-duplicate');
+        else matches.add(entry.match.toLowerCase());
+        if (!isText(entry.clone_dir)) add(`${path}.clone_dir`, 'field-missing');
+        else warnPath(`${path}.clone_dir`, entry.clone_dir);
+        if (entry.include_archived !== undefined && typeof entry.include_archived !== 'boolean') add(`${path}.include_archived`, 'field-invalid');
+      });
       // Each name is a file (`glossary/<name>.md`): two repositories with one name (any case) would overwrite each other.
       const repositoryNames = new Set<string>();
       list(index.repositories, 'index.repositories').forEach((repository, position) => {
