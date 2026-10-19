@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { hash as digestOf } from 'node:crypto';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -249,6 +249,36 @@ describe('query', () => {
 });
 
 describe('symlinks in memory paths', () => {
+  it('reads and appends below a symlinked ancestor', t => {
+    const { dir } = fixture(t);
+    const ancestor = join(dir, 'linked-home');
+    const home = join(dir, 'home');
+    mkdirSync(home);
+    symlinkSync(home, ancestor);
+    for (const memory of [join(ancestor, '.moiras', 'memory'), join(ancestor, 'custom-memory')]) {
+      assert.deepEqual(query('clotho', { dir: memory }), []);
+      assert.equal(record('clotho', { key: 'A', content: 'first' }, { dir: memory })[0].change, 'new');
+      assert.equal(record('clotho', { key: 'A', content: 'second' }, { dir: memory })[0].change, 'changed');
+      assert.equal(query('clotho', { dir: memory })[0].hash, digest('second'));
+    }
+  });
+
+  it('refuses symlinks at .moiras and intermediate folders', t => {
+    const { dir } = fixture(t);
+    const outside = join(dir, 'outside');
+    mkdirSync(outside);
+    for (const folder of ['.moiras', 'nested']) {
+      const base = join(dir, folder === '.moiras' ? 'project' : 'other', '.moiras');
+      const linked = folder === '.moiras' ? base : join(base, folder);
+      mkdirSync(folder === '.moiras' ? join(dir, 'project') : base, { recursive: true });
+      symlinkSync(outside, linked);
+      const memory = join(linked, 'memory');
+      assert.throws(() => query('clotho', { dir: memory }), /symlink refused/);
+      assert.throws(() => record('clotho', { key: 'A', content: 'value' }, { dir: memory }), /symlink refused/);
+      assert.equal(existsSync(join(outside, 'memory')), false);
+    }
+  });
+
   it('refuses broken symlinks instead of treating them as empty or creating their target', t => {
     const { dir, file } = fixture(t);
     symlinkSync('missing.jsonl', file);

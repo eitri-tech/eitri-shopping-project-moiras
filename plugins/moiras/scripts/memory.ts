@@ -74,10 +74,12 @@ export function parseContent(raw: string): Json | string {
   catch { return raw.replaceAll('\r\n', '\n').replace(/\n+$/, ''); }
 }
 
-// Memory files and their parent folders must not be symlinks: following a link would read or append outside `.moiras/memory`.
+// Trust ancestors above `.moiras` (or a custom memory folder), including platform symlinks.
 function assertNoSymlink(file: string): void {
   const parts = resolve(file).split(sep).filter(Boolean);
-  for (let index = 0; index < parts.length; index++) {
+  const moiras = parts.indexOf('.moiras');
+  const start = moiras === -1 ? Math.max(0, parts.length - 2) : moiras;
+  for (let index = start; index < parts.length; index++) {
     const current = `${sep}${parts.slice(0, index + 1).join(sep)}`;
     if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
       throw new Error(`${current}: symlink refused`);
