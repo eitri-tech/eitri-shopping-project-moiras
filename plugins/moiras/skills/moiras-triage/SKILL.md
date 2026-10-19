@@ -1,6 +1,6 @@
 ---
 name: moiras-triage
-description: "Faz a triagem das issues sem responsável do escopo do Jira (um ou vários épicos e categorias). Coleta as issues (por prioridade e data fim) e as conversas do Slack de pessoas e canais definidos, classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se nem o pedido nem .moiras/sources.json trouxerem épico ou categoria, pergunte (no modo --auto, encerre com erro)."
+description: "Faz a triagem das issues sem responsável do escopo do Jira (um ou vários épicos e categorias). Coleta as issues (por prioridade e data fim) e as conversas das fontes configuradas (pessoas e canais definidos), classifica cada issue com o knowledge do time e sugere normalmente de 3 a 5 soluções com porcentagem de confiança, citando as fontes e registrando a solução escolhida. Use quando o usuário pedir para triar ou priorizar o backlog de um épico (ex.: \"faz a triagem do épico PROJ-100\"). Se nem o pedido nem .moiras/sources.json trouxerem épico ou categoria, pergunte (no modo --auto, encerre com erro)."
 argument-hint: "[EPIC...] [--auto] [--full]"
 allowed-tools: Bash(node:*)
 ---
@@ -26,7 +26,7 @@ Execute as três etapas **em ordem**:
 
 Antes da seleção de issues, calcule o fingerprint do knowledge descrito abaixo.
 
-1. **Cloto** (coleta Jira + Slack, em paralelo): siga `stages/clotho.md`.
+1. **Cloto** (coleta das fontes configuradas, em paralelo): siga `stages/clotho.md`.
 2. **Láquesis** (classificação): antes de aplicar o filtro incremental do `--auto`, resolva os repositórios no glossário atual e recalcule `agency` e os avisos de agência para **todas** as issues coletadas, inclusive `unchanged` (seção 3 da etapa). Use esse resultado nas interações e no relatório mesmo quando a classificação completa for pulada. Depois, siga `stages/lachesis.md`. Depois dela, e antes da Átropos, aplique as interações aprovadas da Cloto, se houver (ver `stages/clotho.md`, "Interações").
 3. **Átropos** (veredito e soluções): siga `stages/atropos.md`.
 
@@ -35,7 +35,7 @@ Antes da seleção de issues, calcule o fingerprint do knowledge descrito abaixo
 Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
 
 ```
-Cloto     : configuração + escopo    → issues do Jira + mensagens do Slack
+Cloto     : configuração + escopo    → issues + mensagens das fontes configuradas
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
 Átropos   : issue + classificação    → justificativa, ação e normalmente de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
