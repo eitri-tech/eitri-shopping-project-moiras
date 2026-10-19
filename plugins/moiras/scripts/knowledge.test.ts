@@ -385,6 +385,10 @@ describe('plan', () => {
     assert.deepEqual(plan(local, shared).items, [
       { path: 'learnings/solutions/PROJ-1-1.md', action: 'update', reason: 'result-or-observation' },
     ]);
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved', 'Funcionou em produção.').replace('**Observação:**', '**Observação**:'));
+    assert.deepEqual(plan(local, shared).items, [
+      { path: 'learnings/solutions/PROJ-1-1.md', action: 'update', reason: 'result-or-observation' },
+    ]);
     write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved', '', ' Texto reescrito.'));
     assert.deepEqual(plan(local, shared).items, [
       { path: 'learnings/solutions/PROJ-1-1.md', action: 'conflict', reason: 'append-only' },

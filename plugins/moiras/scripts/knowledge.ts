@@ -437,14 +437,19 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
   return { checked: all.length, findings };
 }
 
+const observationPattern = /\*\*Observação(?::\*\*|\*\*:)/;
+
 /** Everything but `result` in the frontmatter, and everything before the observation, must be equal. */
 function sameExceptResult(local: Doc, shared: Doc): boolean {
   const strip = ({ fields }: Doc) => JSON.stringify(Object.entries(fields).filter(([key]) => key !== 'result').sort());
-  const head = ({ body }: Doc) => body.split(observationMarker)[0]!.trimEnd();
+  const head = ({ body }: Doc) => body.split(observationPattern)[0]!.trimEnd();
   return strip(local) === strip(shared) && head(local) === head(shared);
 }
 
-const observation = ({ body }: Doc): string => body.split(observationMarker).slice(1).join(observationMarker).trim();
+const observation = ({ body }: Doc): string => {
+  const match = observationPattern.exec(body);
+  return match ? body.slice(match.index + match[0].length).trim() : '';
+};
 
 /**
  * Why a local solution may not replace the shared one, or null when it only moves it forward:
