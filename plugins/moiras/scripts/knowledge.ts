@@ -165,6 +165,8 @@ export const patterns: { rule: string; test: RegExp }[] = [
   },
 ];
 
+const unquote = (value: string): string => value.replace(/^(["'])(.*)\1$/, '$2');
+
 export function parseDoc(text: string): Doc | null {
   const lines = text.replaceAll('\r\n', '\n').split('\n');
   if (lines[0] !== '---') return null;
@@ -177,8 +179,8 @@ export function parseDoc(text: string): Doc | null {
     const key = match[1]!;
     const raw = match[2]!;
     fields[key] = raw.startsWith('[') && raw.endsWith(']')
-      ? raw.slice(1, -1).split(',').map(item => item.trim()).filter(Boolean)
-      : raw.replace(/^(["'])(.*)\1$/, '$2');
+      ? raw.slice(1, -1).split(',').map(item => unquote(item.trim())).filter(Boolean)
+      : unquote(raw);
   }
   return { fields, body: lines.slice(end + 1).join('\n'), bodyLine: end + 2 };
 }
@@ -373,7 +375,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (value && !value.includes('<') && !pseudonymPattern.test(value)) add('pseudonym-required', 'error');
       }
       for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
-      if (kind.type === 'criterion' && fields.replaces !== undefined && !Array.isArray(fields.replaces)) add('replaces-invalid', 'error');
+      if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
