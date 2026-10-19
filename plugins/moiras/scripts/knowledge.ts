@@ -93,6 +93,7 @@ const maxLineLength = 8192;
 /** Pseudonyms accepted for `approved_by`, `chosen_by` and `audit.auditors`. */
 export const pseudonymPattern = /^(?:Fulano|Beltrana|Sicrano|(?:person|user|reviewer|pseudonym|pessoa|usuario|revisor)[-_][a-z0-9_-]+)$/i;
 
+const fieldPlaceholder = /<[^>]*>/;
 export const placeholder = (value: string) => /^(?:<[^>]+>|x{4,}|\*{4,})$/i.test(value);
 const email = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,190}\.[A-Z]{2,24}\b/i;
 
@@ -368,7 +369,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       const date = asText(fields[kind.date]);
       if (!date) add('date-missing', 'error');
       else if (!isCalendarDate(date)) add('date-invalid', 'error');
-      if (Object.values(fields).some(value => /<[^>]*>|AAAA-MM-DD|\s\|\s/.test(asText(value)))) add('placeholder', 'error');
+      if (Object.values(fields).some(value => fieldPlaceholder.test(asText(value)) || /AAAA-MM-DD|\s\|\s/.test(asText(value)))) add('placeholder', 'error');
       if (kind.type === 'criterion' && !asText(fields.approved_by)) add('approved-by-missing', 'error');
       for (const name of ['approved_by', 'chosen_by']) {
         const value = asText(fields[name]);
@@ -379,15 +380,15 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
-      if (kind.type === 'solution' && asText(fields.issue) && !asText(fields.issue).includes('<') && !jiraKey.test(asText(fields.issue))) add('issue-invalid', 'error');
-      if (kind.type === 'pattern' && asText(fields.issues) && !asText(fields.issues).includes('<')) {
+      if (kind.type === 'solution' && asText(fields.issue) && !fieldPlaceholder.test(asText(fields.issue)) && !jiraKey.test(asText(fields.issue))) add('issue-invalid', 'error');
+      if (kind.type === 'pattern' && asText(fields.issues)) {
         const list = (Array.isArray(fields.issues) ? fields.issues : fields.issues.split(',')).map(item => item.trim()).filter(Boolean);
-        if (list.length === 0 || list.some(item => !jiraKey.test(item))) add('issues-invalid', 'error');
+        if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !jiraKey.test(item))) add('issues-invalid', 'error');
       }
       if (kind.type === 'repository' && !/^sha256:[0-9a-f]{64}$/.test(asText(fields.sources_hash))) add('sources-hash-invalid', 'error');
       if (kind.type === 'repository') {
         const platform = asText(fields.platform);
-        if (platform && !platform.includes('<') && (Array.isArray(fields.platform) || !platforms.has(platform))) add('platform-invalid', 'error');
+        if (platform && !fieldPlaceholder.test(platform) && (Array.isArray(fields.platform) || !platforms.has(platform))) add('platform-invalid', 'error');
         if (fields.keywords !== undefined) {
           const list = Array.isArray(fields.keywords) ? fields.keywords : asText(fields.keywords).split(',').map(item => item.trim()).filter(Boolean);
           if (list.length > 10) add('keywords-too-many', 'error');

@@ -248,6 +248,28 @@ describe('check', () => {
     assert.equal(check(local).findings.filter(f => f.path.endsWith('PROJ-9-1.md')).length, 5);
   });
 
+  it('validates malformed placeholders and exempts complete placeholders from contract errors', t => {
+    const { local, write } = workspace(t);
+    for (const [value, expected] of [['bad<', ['issue-invalid']], ['<PROJ-123>', ['placeholder']]] as const) {
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), expected);
+    }
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved'));
+    for (const [value, expected] of [
+      ['PROJ-1, bad<', ['issues-invalid']],
+      ['<PROJ-1>, bad<', ['placeholder', 'issues-invalid']],
+      ['<PROJ-1>, PROJ-2', ['placeholder']],
+    ] as const) {
+      write('local', 'learnings/patterns/p.md', patternDoc('p', '# P').replace('issues: [PROJ-1]', `issues: [${value}]`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), expected);
+    }
+    write('local', 'learnings/patterns/p.md', patternDoc('p', '# P'));
+    for (const [value, expected] of [['magento<', ['platform-invalid']], ['<vtex|wake|shopify|other>', ['placeholder']]] as const) {
+      write('local', 'glossary/acme-shop-checkout.md', glossary('2026-10-06').replace('platform: vtex', `platform: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), expected);
+    }
+  });
+
   it('rejects credentials in URLs and placeholders left in the body, but not code or autolinks', t => {
     const { local, write } = workspace(t);
     const pattern = (id: string, lines: string[]) =>
