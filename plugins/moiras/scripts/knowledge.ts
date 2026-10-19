@@ -380,7 +380,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asText(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asText(fields.confidence)) && Number(fields.confidence) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asText(fields.result))) add('result-invalid', 'error');
-      if (kind.type === 'solution' && asText(fields.issue) && !fieldPlaceholder.test(asText(fields.issue)) && !jiraKey.test(asText(fields.issue))) add('issue-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asText(fields.issue)) && !jiraKey.test(asText(fields.issue))))) add('issue-invalid', 'error');
       if (kind.type === 'pattern' && asText(fields.issues)) {
         const list = (Array.isArray(fields.issues) ? fields.issues : fields.issues.split(',')).map(item => item.trim()).filter(Boolean);
         if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !jiraKey.test(item))) add('issues-invalid', 'error');

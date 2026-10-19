@@ -250,7 +250,7 @@ describe('check', () => {
 
   it('validates malformed placeholders and exempts complete placeholders from contract errors', t => {
     const { local, write } = workspace(t);
-    for (const [value, expected] of [['bad<', ['issue-invalid']], ['<PROJ-123>', ['placeholder']]] as const) {
+    for (const [value, expected] of [['bad<', ['issue-invalid']], ['[PROJ-1]', ['issue-invalid']], ['<PROJ-123>', ['placeholder']]] as const) {
       write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
       assert.deepEqual(check(local).findings.map(f => f.rule), expected);
     }
