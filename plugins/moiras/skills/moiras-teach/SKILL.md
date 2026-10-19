@@ -20,7 +20,7 @@ A Átropos só aprende critério quando o usuário discorda de um veredito. Esta
    - **Exigência:** o que precisa existir ou ser conferido (artefato, configuração, aprovação).
    - **Como conferir:** passos verificáveis, de preferência com uma fonte que se abre (arquivo no código, URL pública, painel).
    - **Efeito na triagem:** vira item obrigatório nas soluções (`applies_to: solutions`), muda a ação (`action`), a categoria (`category`) ou a origem (`origin`).
-2. **Procurar o que já existe.** Leia `criteria/` de todos os knowledges configurados; para cada candidato com o mesmo gatilho ou `applies_to`, leia o **arquivo inteiro** (regra, lista **Conferir** e **Por quê**), nunca só título, escopo e gatilho. Só é equivalente a regra que pede as mesmas conferências: nesse caso, não crie outra e mostre a existente. Mesmo gatilho com exigência diferente conflita: proponha um critério regenerado com `replaces` que **preserve todas as exigências e conferências** dos antigos e acrescente a nova (apague só os antigos do knowledge local; os compartilhados ficam intocados e são citados como `knowledge:<name>/criteria/<arquivo>.md`). Na lista do passo 4, mostre o que cada critério antigo exigia e onde isso ficou no novo, para o usuário conferir que nada se perdeu.
+2. **Procurar o que já existe.** Leia `criteria/` de todos os knowledges configurados; para cada candidato com o mesmo gatilho ou `applies_to`, leia o **arquivo inteiro** (regra, lista **Conferir** e **Por quê**), nunca só título, escopo e gatilho. Só é equivalente a regra que pede as mesmas conferências: nesse caso, não crie outra e mostre a existente. Mesmo gatilho com exigência diferente conflita: proponha um critério regenerado com `replaces` que **preserve todas as exigências e conferências** dos antigos e acrescente a nova (apague só os antigos do knowledge local; os compartilhados ficam intocados e são citados como `knowledge:<name>/criteria/<arquivo>.md`). Critério consultado com `created_at` de mais de 6 meses gera `knowledge-stale:<ref>` (referência completa, com a data), e o aviso vai para a proposta do passo 4 e para o relatório final; não atualize a data para esconder a idade. Na lista do passo 4, mostre o que cada critério antigo exigia e onde isso ficou no novo, para o usuário conferir que nada se perdeu.
 3. **Rascunhar** o critério no modelo de `_templates/` do knowledge (sem ele, o modelo de `moiras-triage/stages/atropos.md`, seção 8), com `id` curto em inglês, `created_at` de hoje, `applies_to` e `replaces`. O corpo diz a regra em uma ou duas frases, o **Gatilho**, a lista **Conferir** e o **Por quê**. Sem segredo, dado pessoal, texto bruto de issue ou código com mais de 20 linhas (sempre com referência).
 4. **Mostrar a lista exata** (arquivos a criar e a apagar) e pedir o "sim", mais um pseudônimo para `approved_by` (`reviewer-01`, `user-7`; ver "Regras de escrita" em `moiras-triage/SKILL.md`). Ajuste pedido volta para um novo "sim".
 5. **Gravar** só o aprovado, um arquivo por critério, sem sobrescrever.
@@ -30,7 +30,7 @@ A Átropos só aprende critério quando o usuário discorda de um veredito. Esta
    node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only criteria
    ```
 
-7. **Relatar** o que foi gravado e sugerir `moiras-publish` se o time deve compartilhar a regra.
+7. **Relatar** o que foi gravado, os avisos `knowledge-stale` e sugerir `moiras-publish` se o time deve compartilhar a regra.
 
 ## Exemplo: checkout exige conferir a flag de homologação
 
