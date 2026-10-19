@@ -652,6 +652,12 @@ describe('sourcesHash', () => {
     } finally {
       chmodSync(join(base, 'src/.gitignore'), 0o644);
     }
+    rmSync(join(base, 'src/.gitignore'));
+    write('repo', 'real.ignore', 'hidden/\n');
+    symlinkSync(join(base, 'real.ignore'), join(base, 'src/.gitignore'));
+    for (const path of ['.', 'src', 'src/hidden']) {
+      assert.throws(() => sourcesHash(base, [path]), /src[/\\]\.gitignore: not-regular-file/);
+    }
   });
 
   it('evaluates anchored rules of a nested .gitignore and skips folders under an ignored ancestor', t => {

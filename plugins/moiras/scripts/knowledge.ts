@@ -555,8 +555,8 @@ function canonical(value: unknown): string {
 }
 
 /**
- * The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, a link, too large or not UTF-8 text.
- * One that exists but cannot be read fails the hash: skipping it would put the files it excludes into the fingerprint unannounced.
+ * The rules of the `.gitignore` in `dir` (relative to the base): none when it is missing, too large or not UTF-8 text.
+ * One that exists as a symlink or without read permission fails the hash: skipping it would put the files it excludes into the fingerprint unannounced.
  */
 function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
   const file = join(base, dir, '.gitignore');
@@ -566,7 +566,7 @@ function ignoreLayer(base: string, dir: string): IgnoreLayer | undefined {
   } catch {
     return undefined;
   }
-  if (read.issue === 'unreadable') throw new Error(`${join(dir, '.gitignore')}: unreadable`);
+  if (read.issue === 'unreadable' || read.issue === 'not-regular-file') throw new Error(`${join(dir, '.gitignore')}: ${read.issue}`);
   return read.text === undefined ? undefined : layerOf(dir.split(sep).join('/'), read.text);
 }
 
