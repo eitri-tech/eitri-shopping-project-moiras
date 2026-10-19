@@ -136,6 +136,20 @@ describe('record', () => {
     assert.throws(() => record('atropos', { ...base, choice: 'none', id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
     assert.throws(() => record('atropos', { ...base, choice: null, id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
     assert.throws(() => record('atropos', { key: 'D', content: '', id: 'PROJ-123-1' }, { dir }), /Invalid metadata: id/);
+    for (const badSolutions of [[{}], [{ title: 'A' }], [{ confidence: 70 }], [{ title: 1, confidence: 70 }], [{ title: 'A', confidence: 70.5 }], [{ title: 'A', confidence: 101 }], [{ title: 'A', confidence: -1 }]]) {
+      assert.throws(() => record('atropos', { key: 'E', content: '', solutions: badSolutions }, { dir }), /Invalid metadata: solutions/);
+    }
+    for (const origin of ['platform', 'app', 'unknown']) {
+      assert.doesNotThrow(() => record('lachesis', { key: 'L', content: '', origin, confidence: 0.5 }, { dir }));
+    }
+    for (const badOrigin of ['backend', '', 1]) {
+      assert.throws(() => record('lachesis', { key: 'L', content: '', origin: badOrigin }, { dir }), /Invalid metadata: origin/);
+    }
+    for (const badConfidence of [-0.1, 1.1, 70, Number.NaN]) {
+      assert.throws(() => record('lachesis', { key: 'L', content: '', confidence: badConfidence }, { dir }), /Invalid metadata: confidence/);
+    }
+    assert.throws(() => record('clotho', { key: 'C', content: '', with_whom: { reporter: 42 } }, { dir }), /Invalid metadata: with_whom/);
+    assert.throws(() => record('clotho', { key: 'C', content: '', ts: 'not-a-date' }, { dir }), /Invalid metadata: ts/);
   });
 
   it('validates supplied hashes and rejects ambiguous content/hash input atomically', t => {

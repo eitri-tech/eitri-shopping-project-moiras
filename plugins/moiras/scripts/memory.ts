@@ -139,15 +139,22 @@ export function record(
       throw new Error('Use content or hash, not both.');
     }
     // Nested metadata has its own allowlist; raw payload belongs only in content.
-    const nestedFields = stage === 'clotho' ? { with_whom: ['reporter', 'updated_by', 'author', 'channel'] }
-      : stage === 'atropos' ? { solutions: ['title', 'confidence'] } : {};
-    for (const [field, fields] of Object.entries(nestedFields)) {
-      if (!Object.hasOwn(entry, field)) continue;
-      const values = field === 'solutions' ? entry[field] : [entry[field]];
+    if (stage === 'clotho' && Object.hasOwn(entry, 'with_whom')) {
+      const value = entry.with_whom;
+      const allowedKeys = ['reporter', 'updated_by', 'author', 'channel'];
+      if (!isObject(value) ||
+          Object.keys(value).some(key => !allowedKeys.includes(key)) ||
+          Object.values(value).some(item => typeof item !== 'string')) {
+        throw new Error('Invalid metadata: with_whom');
+      }
+    }
+    if (stage === 'atropos' && Object.hasOwn(entry, 'solutions')) {
+      const values = entry.solutions;
       if (!Array.isArray(values) || values.some(value => !isObject(value) ||
-          Object.keys(value).some(key => !fields.includes(key)) ||
-          Object.values(value).some(value => typeof value !== 'string' && typeof value !== 'number'))) {
-        throw new Error(`Invalid metadata: ${field}`);
+          Object.keys(value).some(key => key !== 'title' && key !== 'confidence') ||
+          typeof value.title !== 'string' ||
+          typeof value.confidence !== 'number' || !Number.isInteger(value.confidence) || value.confidence < 0 || value.confidence > 100)) {
+        throw new Error('Invalid metadata: solutions');
       }
     }
     for (const field of stageFields[stage]) {
@@ -156,15 +163,17 @@ export function record(
       const valid = field === 'repositories' || field === 'duplicates'
         ? Array.isArray(value) && value.every(item => typeof item === 'string')
         : field === 'complex' ? typeof value === 'boolean'
-        : field === 'confidence' ? typeof value === 'number' && Number.isFinite(value)
+        : field === 'confidence' ? typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+        : field === 'origin' ? value === 'platform' || value === 'app' || value === 'unknown'
         : field === 'choice' ? value === null || typeof value === 'number' || value === 'none'
         : typeof value === 'string';
       if (!valid) throw new Error(`Invalid metadata: ${field}`);
     }
-    for (const field of ['ts', 'run_id']) {
-      if (Object.hasOwn(entry, field) && typeof entry[field] !== 'string') {
-        throw new Error(`Invalid metadata: ${field}`);
-      }
+    if (Object.hasOwn(entry, 'ts') && (typeof entry.ts !== 'string' || Number.isNaN(Date.parse(entry.ts)))) {
+      throw new Error('Invalid metadata: ts');
+    }
+    if (Object.hasOwn(entry, 'run_id') && typeof entry.run_id !== 'string') {
+      throw new Error('Invalid metadata: run_id');
     }
     // Atropos records must agree internally: action and mode use the documented values,
     // a chosen solution is numbered against the summary list, and a learning id only
