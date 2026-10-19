@@ -9,7 +9,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
 Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
 
-- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas do Slack, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
+- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas das demais fontes configuradas, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
 - Láquesis (mede): issue + evidências + outras issues do escopo, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
 - Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
 
