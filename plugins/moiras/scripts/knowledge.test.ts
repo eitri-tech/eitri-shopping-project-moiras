@@ -846,7 +846,9 @@ describe('security regressions', () => {
     const withUrl = (url: string) => solution('pending').replace('result: pending', `reference_url: ${url}\nresult: pending`);
     write('local', 'learnings/solutions/PROJ-1-1.md', withUrl('https://github.com/acme/acme-shop-checkout/pull/12'));
     assert.equal(check(local).findings.filter(f => f.rule === 'reference-url-invalid').length, 0);
-    for (const bad of ['http://github.com/acme/acme-shop-checkout/pull/12', 'https://user:pass@github.com/acme/x/pull/1', 'https://token@github.com/acme/x/pull/1', 'github.com/acme/x/pull/1', '[https://github.com/acme/x/pull/1]']) {
+    write('local', 'learnings/solutions/PROJ-1-1.md', withUrl('https://github.com:443/acme/x/pull/1'));
+    assert.equal(check(local).findings.filter(f => f.rule === 'reference-url-invalid').length, 0);
+    for (const bad of ['http://github.com/acme/acme-shop-checkout/pull/12', 'https://user:pass@github.com/acme/x/pull/1', 'https://token@github.com/acme/x/pull/1', 'github.com/acme/x/pull/1', '[https://github.com/acme/x/pull/1]', 'https://%', '']) {
       write('local', 'learnings/solutions/PROJ-1-1.md', withUrl(bad));
       assert.ok(check(local).findings.some(f => f.rule === 'reference-url-invalid'), bad);
     }
