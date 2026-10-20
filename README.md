@@ -63,7 +63,7 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 }
 ```
 
-O escopo do Jira não precisa ser um épico só: `epics` aceita vários e `categories` filtra por campo, como `{ "field": "labels", "values": ["checkout"] }`; as duas valem juntas, em AND. `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
+`project_end` é opcional: a data fim de cada issue é a `duedate` dela, senão a do épico, e só então essa data padrão. O escopo do Jira não precisa ser um épico só: `epics` aceita vários e `categories` filtra por campo, como `{ "field": "labels", "values": ["checkout"] }`; as duas valem juntas, em AND. `repository` é o remoto git do knowledge compartilhado (privado, criado do template) e `url` é o endereço do repositório de código; nenhum dos dois leva credencial. Agências, interações, auditores, memória e relatórios são opcionais; o exemplo completo está no arquivo. Depois:
 
 | Comando | O que faz |
 |---|---|

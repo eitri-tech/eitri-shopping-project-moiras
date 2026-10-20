@@ -21,7 +21,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
 
    O nome do campo vai sempre entre aspas (`"Story Points"`, `"labels"`). Id de campo no formato REST (`customfield_10020`) vira `cf[10020]`, que é a forma de JQL e **não leva aspas**; `cf[10020]` informado assim vale como está. Em projetos que ainda usam o campo antigo de épico, troque `parent in (...)` por `"Epic Link" in (...)`. Sem épicos, a busca vale para o site todo: inclua `project` em uma categoria (`{ "field": "project", "values": ["PROJ"] }`).
 
-1. Leia as datas fim dos épicos, numa só chamada (`key in (...)`) quando o conector permitir: `duedate` ou, se vazio, o campo de data alvo do épico. São os épicos configurados; para um épico que uma categoria trouxe sem estar configurado, depende das issues, então leia depois do passo 2, com os épicos distintos que elas citam (já resolvidos como acima) e ainda não foram lidos. Épico sem data fica com `end_date: null` aqui; a escolha entre a data da issue, a do épico e `jira.project_end` é do passo 3. Épico configurado que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; sem nenhum épico encontrado e sem categorias, é o caso de "épico não encontrado" em **Falhas**. Issue sem épico é normal: segue com `epic: null` (a data dela vem do passo 3).
+1. Leia as datas fim dos épicos, numa só chamada (`key in (...)`) quando o conector permitir: `duedate` ou, se vazio, o campo de data alvo do épico. São os épicos configurados; para um épico que uma categoria trouxe sem estar configurado, depende das issues, então leia depois do passo 2, com os épicos distintos que elas citam (já resolvidos como acima) e ainda não foram lidos. Em `epics[]`, `end_date_field` diz de qual campo do Jira veio a data (`duedate` ou `target`), diferente do `end_date_source` das issues. Épico sem data fica com `end_date: null` aqui; a escolha entre a data da issue, a do épico e `jira.project_end` é do passo 3. Épico configurado que o Jira não devolve: aviso `epic-not-found:<KEY>` em todas as issues e a coleta segue com os outros; sem nenhum épico encontrado e sem categorias, é o caso de "épico não encontrado" em **Falhas**. Issue sem épico é normal: segue com `epic: null` (a data dela vem do passo 3).
 2. Busque as issues do escopo sem responsável e não concluídas:
 
    ```
@@ -43,7 +43,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    O **teto** é a data fim do épico da issue ou, sem ela, `jira.project_end`. `buffer_days` continua sendo a folga da issue dentro do teto: teto − `duedate` da issue, só quando a issue tem `duedate` e há teto; senão `null`. Sem teto (nem o épico nem o projeto têm data), o aviso é `no-end-date`, como antes, mesmo que a issue tenha `duedate` própria.
    - `duedate` depois do teto: aviso `exceeds-epic` (o nome fica, mesmo quando o teto é a data do projeto).
 
-A ordem final é a prioridade e, dentro dela, `end_date` crescente (a efetiva, não só a `duedate`; sem `end_date` por último); o `ORDER BY` do Jira é só o ponto de partida. Issues com `exceeds-epic` sobem dentro da mesma prioridade, como antes.
+A ordem final é a prioridade e, dentro dela, `end_date` crescente (a efetiva, não só a `duedate`; sem `end_date` por último; em empate, pela chave crescente); o `ORDER BY` do Jira é só o ponto de partida. Issues com `exceeds-epic` sobem dentro da mesma prioridade, como antes.
 
 4. Na mesma rodada, busque **todas** as issues do escopo, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `<ESCOPO> ORDER BY key`. Exponha a resolução como `resolved_at` (timestamp ISO 8601 com fuso; `null` se não resolvida ou indisponível). Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2. Com vários épicos, `siblings` reúne os de todos eles, então a Láquesis também acha duplicado entre épicos.
 
@@ -118,7 +118,7 @@ Regras:
     "status": "ok | failed",
     "scope": ["epics", "categories"],
     "epics": [
-      { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15", "end_date_source": "duedate | target | null" }
+      { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15", "end_date_field": "duedate | target | null" }
     ],
     "issues": [
       {
@@ -191,7 +191,7 @@ Depois da coleta, registre **cada item coletado** numa única chamada `record cl
     "source": "jira",
     "with_whom": { "reporter": "Fulano", "updated_by": "Beltrana" },
     "updated_at": "2026-10-05T17:40:00-03:00",
-    "content": { "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "", "status": "", "duedate": "", "end_date": "", "end_date_source": "" }
+    "content": { "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "", "status": "", "duedate": "", "end_date": "", "end_date_source": "", "buffer_days": "" }
   },
   {
     "key": "slack:C0123456789:1696341120.000100",
@@ -205,7 +205,7 @@ Depois da coleta, registre **cada item coletado** numa única chamada `record cl
 ```
 
 - `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
-- Inclua `agency` em `content` das issues só quando houver valor: trocar a agência conta como `changed`. A inclusão de `created_at`, e depois a de `end_date` e `end_date_source` (que também faz a mudança da data do épico ou do projeto contar como `changed`), provoca uma única mudança de hash nos registros antigos, mesmo sem agência.
+- Inclua `agency` em `content` das issues só quando houver valor: trocar a agência conta como `changed`. A inclusão de `created_at`, e depois a de `end_date`, `end_date_source` e `buffer_days` (que faz a mudança da data do épico ou do projeto contar como `changed` também para a issue com `duedate` própria, porque muda a folga), provoca uma única mudança de hash nos registros antigos, mesmo sem agência: o primeiro `--auto` depois da atualização reprocessa todas as issues uma vez.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
 - No modo automático (sem `--full`), issues `new` ou `changed` seguem para a Láquesis. Uma `unchanged` só pode ser pulada com conclusão comprovada em relatório completo para o mesmo `ticket` (sem `change`), a mesma entrada da Láquesis e o mesmo `knowledge_fingerprint` (ver `SKILL.md`). Sem essa prova, inclusive após falha de contrato ou mudança no knowledge ou em `siblings`, tente novamente e mantenha `change: unchanged`: coleta e conclusão são coisas distintas.
 - Cada interação aplicada tem registro próprio, consultável pela regra 6: a chave é `interaction:` + o `id` da interação na saída (ex.: `interaction:slack:C0123456789:1696341120.000100:reaction`), com `content` = tipo, texto e link. O script recusa chave de interação fora da forma `interaction:<id>`. Os registros desta seção são dos itens coletados, não das interações.
