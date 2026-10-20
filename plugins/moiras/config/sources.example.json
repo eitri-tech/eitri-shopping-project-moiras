@@ -45,6 +45,9 @@
         "owner": "Squad Checkout",
         "agency": "Agência Aurora"
       }
+    ],
+    "github": [
+      { "match": "acme/acme-shop-*", "clone_dir": "../acme", "include_archived": false }
     ]
   },
   "audit": { "auditors": ["reviewer-01", "reviewer-02"] },
