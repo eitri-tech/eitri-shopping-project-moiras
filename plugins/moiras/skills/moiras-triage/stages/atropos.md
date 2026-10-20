@@ -141,6 +141,7 @@ repositories: [acme-shop-checkout]
 component: checkout
 category: bug
 confidence: 70
+reference_url: https://github.com/acme/acme-shop-checkout/pull/12
 result: pending
 ---
 
@@ -166,6 +167,7 @@ result: pending
 - **Idempotência:** se o último registro da issue tem a mesma solução e `result: pending`, a escolha é uma confirmação: não crie outro. Crie `<KEY>-<n+1>` só quando for outra solução ou uma nova tentativa depois de um resultado conhecido.
 - **Edição:** registros não são apagados nem reescritos. A única exceção é `result` (`pending` → `resolved` ou `not-resolved`) e a `Observação`, atualizados pelo `id` quando o usuário contar o desfecho daquela aplicação.
 - `agency` só aparece no registro quando a issue tem agência; sem ela, omita a linha.
+- `reference_url` é opcional: a URL (normalmente a PR do GitHub) que serve de referência para a solução. Pergunte ao usuário ao registrar a escolha e omita a linha se ele não tiver uma. Só `https`, sem credencial; a Átropos não abre nem valida a PR. Como o registro não é reescrito, a URL só entra na criação.
 - Escolha `none` não gera registro.
 - Referencie registros pelo `id` (em `precedent`) ou pelo caminho (`knowledge:local/learnings/solutions/PROJ-123-1.md`).
 - Nada de texto bruto da issue ou da conversa, segredos ou código com mais de 20 linhas (ver `SKILL.md`).
