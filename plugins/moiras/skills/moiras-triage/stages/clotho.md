@@ -43,7 +43,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    O **teto** é a data fim do épico da issue ou, sem ela, `jira.project_end`. `buffer_days` continua sendo a folga da issue dentro do teto: teto − `duedate` da issue, só quando a issue tem `duedate` e há teto; senão `null`. Sem teto (nem o épico nem o projeto têm data), o aviso é `no-end-date`, como antes, mesmo que a issue tenha `duedate` própria.
    - `duedate` depois do teto: aviso `exceeds-epic` (o nome fica, mesmo quando o teto é a data do projeto).
 
-A ordem final é a prioridade e, dentro dela, `end_date` crescente (a efetiva, não só a `duedate`; sem `end_date` por último; em empate, pela chave crescente); o `ORDER BY` do Jira é só o ponto de partida. Issues com `exceeds-epic` sobem dentro da mesma prioridade, como antes.
+A ordem final é a prioridade e, dentro dela, `end_date` crescente (a efetiva, não só a `duedate`; sem `end_date` por último; em empate, pelo número da chave crescente: `PROJ-9` antes de `PROJ-10`); o `ORDER BY` do Jira é só o ponto de partida. Issues com `exceeds-epic` sobem dentro da mesma prioridade, como antes.
 
 4. Na mesma rodada, busque **todas** as issues do escopo, de qualquer status e responsável, só com chave, resumo, status, responsável e data de resolução: `<ESCOPO> ORDER BY key`. Exponha a resolução como `resolved_at` (timestamp ISO 8601 com fuso; `null` se não resolvida ou indisponível). Elas formam `jira.siblings`, usadas pela Láquesis na busca de duplicados. As issues a triar continuam sendo só as do passo 2. Com vários épicos, `siblings` reúne os de todos eles, então a Láquesis também acha duplicado entre épicos.
 
