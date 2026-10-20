@@ -1,24 +1,22 @@
 /** Helpers locais para filtrar repositórios GitHub e planejar clones.
  * Usage: node github.ts match --pattern <owner/glob> [--include-archived] < repos.json
- *        node github.ts plan-clone --dir <dir> < matches.json
- *        node github.ts local --dir <dir> --pattern <owner/glob>
- *        node github.ts clone --dir <dir> --repo <name> --owner <owner> --url <https-url> [--depth <n>]
+ *        node github.ts plan-clone --dir <dir> [--base <dir>] < matches.json
+ *        node github.ts local --dir <dir> --pattern <owner/glob> [--base <dir>]
+ *        node github.ts clone --dir <dir> [--base <dir>] --repo <name> --owner <owner> --url <https-url> [--depth <n>]
  */
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { validPattern } from './knowledge.ts';
 
-export const usage = 'Usage: node github.ts match --pattern <owner/glob> [--include-archived] | plan-clone --dir <dir> | local --dir <dir> --pattern <owner/glob> | clone --dir <dir> --repo <name> --owner <owner> --url <https-url> [--depth <n>]';
+export const usage = 'Usage: node github.ts match --pattern <owner/glob> [--include-archived] | plan-clone --dir <dir> [--base <dir>] | local --dir <dir> --pattern <owner/glob> [--base <dir>] | clone --dir <dir> [--base <dir>] --repo <name> --owner <owner> --url <https-url> [--depth <n>]';
 // Same file-name rules as knowledge.ts.
 const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 type Repository = { name: string; url: string; archived: boolean };
-type Matches = { owner: string; repositories: Repository[]; truncated: boolean };
+type Matches = { owner: string; repositories: Repository[]; truncated: boolean; other_owner: number };
 
-/** `owner/glob`: a GitHub login (no leading hyphen, no wildcard) and a glob of file-name characters with `*` and `?`, never a bare `*`. */
-export function validPattern(pattern: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && pattern.split('/')[1] !== '*';
-}
+export { validPattern };
 
 /** Upper bound for one `git clone` (ms). */
 export const cloneTimeout = 600_000;
@@ -59,14 +57,15 @@ export function matchRepositories(pattern: string, input: unknown, includeArchiv
   const [owner, glob] = patternParts(pattern);
   if (!Array.isArray(input)) throw new Error('Expected a repository list.');
   const repositories: Repository[] = [];
+  let otherOwner = 0;
   for (const item of input) {
     if (!item || typeof item.name !== 'string' || !safeName.test(item.name) || !globMatch(glob, item.name) || !cleanUrl(item.url) || typeof item.isArchived !== 'boolean') continue;
     if (item.isArchived && !includeArchived) continue;
-    if (canonicalRemote(item.url) !== `https://github.com/${owner}/${item.name}`.toLowerCase()) continue; // the url must be this owner's repository
+    if (canonicalRemote(item.url) !== `https://github.com/${owner}/${item.name}`.toLowerCase()) { otherOwner++; continue; } // the url must be this owner's repository (a transferred repo shows up here)
     repositories.push({ name: item.name, url: item.url, archived: item.isArchived });
   }
   repositories.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-  return { owner, repositories, truncated: input.length >= listLimit };
+  return { owner, repositories, truncated: input.length >= listLimit, other_owner: otherOwner };
 }
 
 // Trust ancestors above the clone folder (platform symlinks such as /tmp); refuse a link on the folder or on the repository itself.
@@ -107,10 +106,12 @@ function classify(path: string, name: string, expected: string | undefined, run:
 
 export function planClone(dir: string, input: unknown, run: typeof spawnSync = spawnSync) {
   if (!input || typeof input !== 'object' || !('repositories' in input) || !Array.isArray(input.repositories)) throw new Error('Expected matches.');
-  const owner = 'owner' in input && typeof input.owner === 'string' && ownerName.test(input.owner) ? input.owner : undefined; // from `match`, never from an entry's url
+  // The owner comes from `match`, never from an entry's url; without it nothing can be confirmed.
+  if (!('owner' in input) || typeof input.owner !== 'string' || !ownerName.test(input.owner)) throw new Error('Matches need an owner.');
+  const owner = input.owner;
   return { repositories: input.repositories.map((repo: Repository) => {
     if (!repo || typeof repo.name !== 'string' || !safeName.test(repo.name)) throw new Error('Invalid repository name.');
-    return classify(join(resolve(dir), repo.name), repo.name, owner ? canonicalRemote(`https://github.com/${owner}/${repo.name}`) : undefined, run);
+    return classify(join(resolve(dir), repo.name), repo.name, canonicalRemote(`https://github.com/${owner}/${repo.name}`), run);
   }) };
 }
 
@@ -135,32 +136,37 @@ function cloneEnv(): NodeJS.ProcessEnv {
 export function cloneRepository(dir: string, name: string, url: string, owner: string, depth?: string, run: typeof spawnSync = spawnSync) {
   if (!safeName.test(name) || !ownerName.test(owner) || !cleanUrl(url) || (depth !== undefined && (!/^[1-9][0-9]*$/.test(depth) || !Number.isSafeInteger(Number(depth))))) throw new Error(usage);
   // Only this owner's repository on github.com, spelled as `https://github.com/<owner>/<name>[.git]`.
-  if (!url.startsWith('https://github.com/') || canonicalRemote(url) !== `https://github.com/${owner}/${name}`.toLowerCase() || url.slice(url.lastIndexOf('/') + 1) !== name && url.slice(url.lastIndexOf('/') + 1) !== `${name}.git`) throw new Error(usage);
+  const suffix = url.slice(url.lastIndexOf('/') + 1);
+  if (!url.startsWith('https://github.com/') || canonicalRemote(url) !== `https://github.com/${owner}/${name}`.toLowerCase() || ![name, `${name}.git`].includes(suffix)) throw new Error(usage);
   const path = join(resolve(dir), name);
   if (hasSymlink(path) || lstatSync(path, { throwIfNoEntry: false })) throw new Error('Clone target refused.');
   // https only (a user `insteadOf` cannot swap in ssh, file or ext), no hooks, no fsmonitor, no submodules, bounded time.
   const args = ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
     'clone', '--template=', '--no-recurse-submodules', ...(depth ? ['--depth', depth] : []), '--', url, path];
   const result = run('git', args, { env: { ...cloneEnv(), GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https' }, stdio: 'pipe', timeout: cloneTimeout });
-  return result.status === 0 ? { output: JSON.stringify({ cloned: true, path }), code: 0 } : { output: JSON.stringify({ cloned: false, status: result.status }), code: 1 };
+  if (result.status === 0) return { output: JSON.stringify({ cloned: true, path }), code: 0 };
+  // A killed clone can leave a partial folder; the plugin never deletes it, so the user must remove it before trying again.
+  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+  return { output: JSON.stringify({ cloned: false, status: result.status, ...(timedOut ? { timed_out: true, partial_path: path } : {}) }), code: 1 };
 }
 
 export function main(argv: string[], input?: string): { output: string; code: number } {
   let parsed;
   try {
-    parsed = parseArgs({ args: argv, allowPositionals: true, options: { pattern: { type: 'string' }, 'include-archived': { type: 'boolean' }, dir: { type: 'string' }, repo: { type: 'string' }, owner: { type: 'string' }, url: { type: 'string' }, depth: { type: 'string' } } });
+    parsed = parseArgs({ args: argv, allowPositionals: true, options: { pattern: { type: 'string' }, 'include-archived': { type: 'boolean' }, dir: { type: 'string' }, repo: { type: 'string' }, owner: { type: 'string' }, base: { type: 'string' }, url: { type: 'string' }, depth: { type: 'string' } } });
   } catch { throw new Error(usage); }
   const { positionals, values: v } = parsed;
   const command = positionals[0];
-  const allowed = command === 'match' ? ['pattern', 'include-archived'] : command === 'plan-clone' ? ['dir'] : command === 'local' ? ['dir', 'pattern'] : command === 'clone' ? ['dir', 'repo', 'owner', 'url', 'depth'] : [];
+  const dir = v.dir === undefined ? undefined : resolve(v.base ?? '.', v.dir); // `--base` is the folder of the `.moiras/`: relative paths in the configuration start there
+  const allowed = command === 'match' ? ['pattern', 'include-archived'] : command === 'plan-clone' ? ['dir', 'base'] : command === 'local' ? ['dir', 'pattern', 'base'] : command === 'clone' ? ['dir', 'base', 'repo', 'owner', 'url', 'depth'] : [];
   if (positionals.length !== 1 || Object.keys(v).some(key => !allowed.includes(key))) throw new Error(usage);
-  if (command === 'clone' && v.dir && v.repo && v.owner && v.url) return cloneRepository(v.dir, v.repo, v.url, v.owner, v.depth);
+  if (command === 'clone' && v.dir && v.repo && v.owner && v.url) return cloneRepository(dir!, v.repo, v.url, v.owner, v.depth);
   if (command === 'match' && v.pattern) {
     patternParts(v.pattern);
     return { output: JSON.stringify(matchRepositories(v.pattern, JSON.parse(input ?? readFileSync(0, 'utf8')), v['include-archived'])), code: 0 };
   }
-  if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(localRepositories(v.dir, v.pattern)), code: 0 };
-  if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(planClone(v.dir, JSON.parse(input ?? readFileSync(0, 'utf8')))), code: 0 };
+  if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(localRepositories(dir!, v.pattern)), code: 0 };
+  if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(planClone(dir!, JSON.parse(input ?? readFileSync(0, 'utf8')))), code: 0 };
   throw new Error(usage);
 }
 

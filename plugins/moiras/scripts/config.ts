@@ -12,8 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { validPattern } from './github.ts';
-import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern } from './knowledge.ts';
+import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern, validPattern } from './knowledge.ts';
 
 export const usage = 'Usage: node config.ts init [--dir <path>] [--dry-run] < config.json | check [<file>]';
 

@@ -1,9 +1,8 @@
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { canonicalRemote, cloneRepository, cloneTimeout, globMatch, listLimit, localRepositories, main, matchRepositories, planClone, validPattern } from './github.ts';
 import { spawnSync as realSpawn } from 'node:child_process';
 import type { spawnSync } from 'node:child_process';
@@ -24,7 +23,7 @@ const repo = (name: string, isArchived = false, url = `https://github.com/acme/$
 
 it('matches a single segment case-insensitively, sorts, and filters unsafe entries', () => {
   const result = matchRepositories('acme/acme-shop-*', [repo('acme-shop-z'), repo('acme-shop-a'), repo('ACME-shop-b'), repo('acme-shop-old', true), repo('../acme-shop-x'), repo('acme-shop-secret', false, 'https://user:pass@github.com/acme/acme-shop-secret'), repo('acme-shop-x/y')]);
-  assert.deepEqual(result, { owner: 'acme', repositories: [repo('ACME-shop-b'), repo('acme-shop-a'), repo('acme-shop-z')].map(r => ({ name: r.name, url: r.url, archived: false })), truncated: false });
+  assert.deepEqual(result, { owner: 'acme', repositories: [repo('ACME-shop-b'), repo('acme-shop-a'), repo('acme-shop-z')].map(r => ({ name: r.name, url: r.url, archived: false })), truncated: false, other_owner: 0 });
   assert.equal(matchRepositories('acme/acme-shop-*', [repo('acme-shop-old', true)], true).repositories.length, 1);
 });
 
@@ -57,8 +56,8 @@ it('plans existing repositories, conflicts, free targets, and symlink ancestors 
     ['shop-bare', 'conflict', 'origin-unreadable'], ['shop-file', 'conflict', 'not-a-checkout'], ['shop-folder', 'conflict', 'not-a-checkout'],
     ['shop-free', 'clone', undefined], ['shop-link', 'conflict', 'symlink'], ['shop-multi', 'conflict', 'origin-mismatch'],
     ['shop-other', 'conflict', 'origin-mismatch'], ['shop-repo', 'exists', undefined]]);
-  // An entry without a usable GitHub url cannot confirm the origin: never `exists`.
-  assert.deepEqual(planClone(dir, { repositories: [{ name: 'shop-other' }, { name: 'shop-repo', url: 'https://gitlab.com/acme/shop-repo' }] }).repositories.map(r => r.reason), ['origin-unknown', 'origin-unknown']);
+  // Without the owner that `match` reports, nothing can be confirmed: refuse instead of degrading.
+  for (const input of [{ repositories: [{ name: 'shop-repo' }] }, { owner: '-acme', repositories: [{ name: 'shop-repo' }] }, { owner: 7, repositories: [] }]) assert.throws(() => planClone(dir, input), /owner/);
   // The owner comes from `match`, not from an entry's url: a forged url for another owner changes nothing.
   assert.deepEqual(planClone(dir, { owner: 'acme', repositories: [{ name: 'shop-other', url: 'https://github.com/other/shop-other' }] }).repositories.map(r => r.reason), ['origin-mismatch']);
   // A `.git` file (worktree or submodule pointer) is not a plain clone.
@@ -70,7 +69,7 @@ it('plans existing repositories, conflicts, free targets, and symlink ancestors 
   mkdirSync(join(dir, 'outer', 'shop-y', '.git'), { recursive: true });
   assert.equal(planClone(join(dir, 'outer'), { owner: 'acme', repositories: [{ name: 'shop-y' }] }).repositories[0].reason, 'origin-unreadable');
   symlinkSync(dir, join(dir, 'parent'));
-  assert.equal(planClone(join(dir, 'parent'), { repositories: [{ name: 'shop-free' }] }).repositories[0].action, 'conflict');
+  assert.equal(planClone(join(dir, 'parent'), { owner: 'acme', repositories: [{ name: 'shop-free' }] }).repositories[0].action, 'conflict');
   assert.throws(() => cloneRepository(dir, 'shop-link', 'https://github.com/acme/shop-link', 'acme'));
   assert.throws(() => cloneRepository(join(dir, 'parent'), 'shop-free', 'https://github.com/acme/shop-free', 'acme'));
   assert.throws(() => cloneRepository(dir, 'shop-folder', 'https://github.com/acme/shop-folder', 'acme'));
@@ -161,4 +160,26 @@ it('keeps the skill command in sync with the list limit', () => {
   const skill = readFileSync(new URL('../skills/moiras-index/SKILL.md', import.meta.url), 'utf8');
   assert.ok(skill.includes(`--limit ${listLimit}`));
   assert.ok(skill.includes(`limite de ${listLimit}`));
+});
+
+it('counts repositories of another owner, reports a clone timeout and resolves --dir against --base', t => {
+  assert.equal(matchRepositories('acme/shop-*', [repo('shop-a'), repo('shop-b', false, 'https://github.com/newowner/shop-b')]).other_owner, 1);
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const timedOut = (() => ({ status: null, error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) })) as unknown as typeof spawnSync;
+  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, timedOut), { output: JSON.stringify({ cloned: false, status: null, timed_out: true, partial_path: join(dir, 'shop') }), code: 1 });
+  // A relative --dir starts at --base (the folder of the .moiras), not at the current directory.
+  mkdirSync(join(dir, 'repos'));
+  const result = JSON.parse(main(['plan-clone', '--dir', 'repos', '--base', dir], JSON.stringify({ owner: 'acme', repositories: [{ name: 'shop' }] })).output);
+  assert.equal(result.repositories[0].path, join(dir, 'repos', 'shop'));
+});
+
+it('treats a symlinked or file .git as not a checkout, also for local', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'shop-a'));
+  symlinkSync(dir, join(dir, 'shop-a', '.git'));
+  mkdirSync(join(dir, 'shop-b'));
+  writeFileSync(join(dir, 'shop-b', '.git'), 'gitdir: /elsewhere\n');
+  assert.deepEqual(localRepositories(dir, 'acme/shop-*').repositories.map(r => [r.name, r.reason]), [['shop-a', 'not-a-checkout'], ['shop-b', 'not-a-checkout']]);
 });
