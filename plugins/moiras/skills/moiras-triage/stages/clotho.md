@@ -212,7 +212,7 @@ Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem 
 - `key`, `summary`, `description`, `created_at`, `epic`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
-- `warnings`: os da issue (`no-due-date`, `no-end-date`, `exceeds-epic`, `creation-date-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
+- `warnings`: os da issue (`no-due-date`, `no-end-date`, `exceeds-epic`, `creation-date-unavailable`, `team-mismatch:<time atual>`, `team-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
 
 Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 
