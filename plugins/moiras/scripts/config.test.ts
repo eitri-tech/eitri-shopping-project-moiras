@@ -353,6 +353,10 @@ describe('index.github', () => {
     assert.deepEqual(rules(config([{}])), ['index.github[0].match:match-invalid:error', 'index.github[0].clone_dir:field-missing:error']);
     assert.deepEqual(rules(config([{ match: 'acme/shop?', clone_dir: '/repos', include_archived: 'yes' }])), ['index.github[0].clone_dir:absolute-path:warning', 'index.github[0].include_archived:field-invalid:error']);
   });
+  it('accepts two patterns sharing a clone folder and refuses an owner starting with a hyphen', () => {
+    assert.deepEqual(validate(config([{ match: 'acme/shop-*', clone_dir: 'repos' }, { match: 'acme/tool-*', clone_dir: 'repos' }])), []);
+    assert.ok(rules(config([{ match: '-acme/shop-*', clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
+  });
   it('refuses malformed matches', () => {
     for (const match of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
       assert.ok(rules(config([{ match, clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));

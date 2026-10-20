@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
+import { validPattern } from './github.ts';
 import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern } from './knowledge.ts';
 
 export const usage = 'Usage: node config.ts init [--dir <path>] [--dry-run] < config.json | check [<file>]';
@@ -201,7 +202,7 @@ export function validate(config: unknown): Finding[] {
       const matches = new Set<string>();
       list(index.github, 'index.github').forEach((entry, position) => {
         const path = `index.github[${position}]`;
-        if (typeof entry.match !== 'string' || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._*?-]+$/.test(entry.match) || entry.match.includes('..') || entry.match.split('/')[1] === '*') add(`${path}.match`, 'match-invalid');
+        if (typeof entry.match !== 'string' || !validPattern(entry.match)) add(`${path}.match`, 'match-invalid');
         else if (matches.has(entry.match.toLowerCase())) add(`${path}.match`, 'match-duplicate');
         else matches.add(entry.match.toLowerCase());
         if (!isText(entry.clone_dir)) add(`${path}.clone_dir`, 'field-missing');

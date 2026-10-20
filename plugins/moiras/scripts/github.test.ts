@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { canonicalRemote, cloneRepository, globMatch, listLimit, localRepositories, main, matchRepositories, planClone } from './github.ts';
+import { readFileSync } from 'node:fs';
+import { canonicalRemote, cloneRepository, cloneTimeout, globMatch, listLimit, localRepositories, main, matchRepositories, planClone, validPattern } from './github.ts';
 import { spawnSync as realSpawn } from 'node:child_process';
 import type { spawnSync } from 'node:child_process';
 
@@ -58,15 +59,21 @@ it('plans existing repositories, conflicts, free targets, and symlink ancestors 
     ['shop-other', 'conflict', 'origin-mismatch'], ['shop-repo', 'exists', undefined]]);
   // An entry without a usable GitHub url cannot confirm the origin: never `exists`.
   assert.deepEqual(planClone(dir, { repositories: [{ name: 'shop-other' }, { name: 'shop-repo', url: 'https://gitlab.com/acme/shop-repo' }] }).repositories.map(r => r.reason), ['origin-unknown', 'origin-unknown']);
+  // The owner comes from `match`, not from an entry's url: a forged url for another owner changes nothing.
+  assert.deepEqual(planClone(dir, { owner: 'acme', repositories: [{ name: 'shop-other', url: 'https://github.com/other/shop-other' }] }).repositories.map(r => r.reason), ['origin-mismatch']);
+  // A `.git` file (worktree or submodule pointer) is not a plain clone.
+  mkdirSync(join(dir, 'shop-gitfile'));
+  writeFileSync(join(dir, 'shop-gitfile', '.git'), 'gitdir: /elsewhere\n');
+  assert.equal(planClone(dir, { owner: 'acme', repositories: [{ name: 'shop-gitfile' }] }).repositories[0].reason, 'not-a-checkout');
   // An empty `.git` folder must not make Git discover the enclosing repository.
   checkout(dir, 'outer', ['https://github.com/acme/shop-y']);
   mkdirSync(join(dir, 'outer', 'shop-y', '.git'), { recursive: true });
-  assert.equal(planClone(join(dir, 'outer'), { repositories: [{ name: 'shop-y', url: 'https://github.com/acme/shop-y' }] }).repositories[0].reason, 'origin-unreadable');
+  assert.equal(planClone(join(dir, 'outer'), { owner: 'acme', repositories: [{ name: 'shop-y' }] }).repositories[0].reason, 'origin-unreadable');
   symlinkSync(dir, join(dir, 'parent'));
   assert.equal(planClone(join(dir, 'parent'), { repositories: [{ name: 'shop-free' }] }).repositories[0].action, 'conflict');
-  assert.throws(() => cloneRepository(dir, 'shop-link', 'https://github.com/acme/shop-link'));
-  assert.throws(() => cloneRepository(join(dir, 'parent'), 'shop-free', 'https://github.com/acme/shop-free'));
-  assert.throws(() => cloneRepository(dir, 'shop-folder', 'https://github.com/acme/shop-folder'));
+  assert.throws(() => cloneRepository(dir, 'shop-link', 'https://github.com/acme/shop-link', 'acme'));
+  assert.throws(() => cloneRepository(join(dir, 'parent'), 'shop-free', 'https://github.com/acme/shop-free', 'acme'));
+  assert.throws(() => cloneRepository(dir, 'shop-folder', 'https://github.com/acme/shop-folder', 'acme'));
 });
 
 it('runs clone with an argument array and suppresses git failure details', t => {
@@ -77,22 +84,25 @@ it('runs clone with an argument array and suppresses git failure details', t => 
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const run = ((command, args, options) => {
     assert.equal(command, 'git');
-    assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, 'clone', '--template=', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
+    assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--template=', '--no-recurse-submodules', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
     assert.equal(options?.env?.GIT_TERMINAL_PROMPT, '0');
+    assert.equal(options?.env?.GIT_ALLOW_PROTOCOL, 'https');
+    assert.equal(options?.timeout, cloneTimeout);
     assert.equal(options?.env?.GIT_WORK_TREE, undefined);
     assert.equal(options?.env?.GIT_DIR, undefined);
     return { status: 0 };
   }) as typeof spawnSync;
-  assert.deepEqual(JSON.parse(cloneRepository(dir, 'acme-shop-checkout', 'https://github.com/acme/acme-shop-checkout.git', '2', run).output), { cloned: true, path: join(dir, 'acme-shop-checkout') });
+  assert.deepEqual(JSON.parse(cloneRepository(dir, 'acme-shop-checkout', 'https://github.com/acme/acme-shop-checkout.git', 'ACME', '2', run).output), { cloned: true, path: join(dir, 'acme-shop-checkout') });
   const failed = (() => ({ status: 128, stderr: 'sensitive details' })) as unknown as typeof spawnSync;
-  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', undefined, failed), { output: '{"cloned":false,"status":128}', code: 1 });
+  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, failed), { output: '{"cloned":false,"status":128}', code: 1 });
 });
 
 it('rejects unsafe names, URLs and depths before invoking git', () => {
   const never = (() => { assert.fail('git must not run'); }) as typeof spawnSync;
-  for (const url of ['http://github.com/acme/shop', 'https://github.com.evil/acme/shop', 'https://user:pass@github.com/acme/shop', 'https://github.com/acme/other', 'https://github.com/acme/shop?x', 'https://github.com/acme/shop/']) assert.throws(() => cloneRepository('repos', 'shop', url, undefined, never));
-  for (const name of ['../shop', '-shop', '.', 'a/b']) assert.throws(() => cloneRepository('repos', name, 'https://github.com/acme/shop', undefined, never));
-  for (const depth of ['0', '-1', '1.5', '1e2', '9007199254740992']) assert.throws(() => cloneRepository('repos', 'shop', 'https://github.com/acme/shop', depth, never));
+  for (const url of ['http://github.com/acme/shop', 'https://github.com.evil/acme/shop', 'https://user:pass@github.com/acme/shop', 'https://github.com/acme/other', 'https://github.com/acme/shop?x', 'https://github.com/acme/shop/']) assert.throws(() => cloneRepository('repos', 'shop', url, 'acme', undefined, never));
+  for (const name of ['../shop', '-shop', '.', 'a/b']) assert.throws(() => cloneRepository('repos', name, 'https://github.com/acme/shop', 'acme', undefined, never));
+  for (const owner of ['other', '-acme', '', 'acme/x']) assert.throws(() => cloneRepository('repos', 'shop', 'https://github.com/acme/shop', owner, undefined, never));
+  for (const depth of ['0', '-1', '1.5', '1e2', '9007199254740992']) assert.throws(() => cloneRepository('repos', 'shop', 'https://github.com/acme/shop', 'acme', depth, never));
 });
 
 it('matches globs in linear time and with the usual wildcard rules', () => {
@@ -135,4 +145,20 @@ it('reads only the checkout config and refuses a symlinked clone folder in local
   assert.deepEqual(localRepositories(dir, 'acme/shop-*').repositories.map(r => [r.name, r.reason]), [['shop-env', 'origin-mismatch']]);
   symlinkSync(dir, join(dir, 'link'));
   assert.throws(() => localRepositories(join(dir, 'link'), 'acme/shop-*'), /Clone folder refused/);
+});
+
+it('drops listed repositories whose url is not the pattern owner\'s', () => {
+  const result = matchRepositories('acme/shop-*', [repo('shop-a'), repo('shop-b', false, 'https://github.com/other/shop-b'), repo('shop-c', false, 'https://gitlab.com/acme/shop-c'), repo('shop-d', false, 'https://github.com/acme/other-name')]);
+  assert.deepEqual(result.repositories.map(r => r.name), ['shop-a']);
+});
+
+it('validates patterns: no leading hyphen, no bare wildcard, no escapes', () => {
+  for (const pattern of ['acme/shop-*', 'Acme/a?c', 'a-b/x.y*']) assert.equal(validPattern(pattern), true);
+  for (const pattern of ['-x/foo', 'acme/*', '*/foo', 'acme', 'acme/a..b', 'acme/a/b', 'acme/@x']) assert.equal(validPattern(pattern), false);
+});
+
+it('keeps the skill command in sync with the list limit', () => {
+  const skill = readFileSync(new URL('../skills/moiras-index/SKILL.md', import.meta.url), 'utf8');
+  assert.ok(skill.includes(`--limit ${listLimit}`));
+  assert.ok(skill.includes(`limite de ${listLimit}`));
 });

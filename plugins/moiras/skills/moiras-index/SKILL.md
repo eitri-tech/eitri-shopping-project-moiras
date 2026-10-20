@@ -52,19 +52,19 @@ gh repo list <dono> --limit 4000 --json name,url,isArchived,description | node "
 
 A saída é `{ owner, repositories: [{ name, url, archived }], truncated }`. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit`. Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: liste os clones que já estão em `clone_dir` com `node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" local --dir <clone_dir> --pattern "<dono>/<glob>"` (mesma saída do `plan-clone`, mais o `owner`, só com o que está em disco; recusa uma `clone_dir` que seja link simbólico) e indexe só os `exists`; os `conflict` seguem a regra abaixo (avise e pule), mas nada é dado como ausente. Faça o mesmo quando a lista vier truncada.
 
-Depois veja o que já existe em disco:
+Os caminhos relativos de `clone_dir` valem a partir da pasta onde está o `.moiras/`, mas os scripts resolvem pelo diretório atual: **passe-os já resolvidos** (caminho absoluto, só no argumento, nunca gravado em registro). Depois veja o que já existe em disco:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" plan-clone --dir <clone_dir> < matches.json
 ```
 
-Cada repositório volta como `exists` (já clonado, com o `origin` esperado: entra na indexação), `clone` (livre) ou `conflict` (avise e pule; o `reason` diz por quê: `symlink`, `not-a-checkout` para uma pasta que não é um clone, `origin-mismatch` quando o `origin` do clone (qualquer um dos URLs do `.git/config` do próprio clone, sem seguir `include` nem ler a configuração global ou `GIT_CONFIG_*`) não é o repositório esperado (como um clone de outro dono com o mesmo nome, ou um fork), `origin-unknown` quando a entrada não traz uma URL do GitHub para comparar, `origin-unreadable` quando o `origin` não pôde ser lido (inclusive sem `origin` ou com o Git demorando mais de 5 s). Se um `conflict` for o que você quer indexar, declare-o em `repositories` com o `path`). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
+Cada repositório volta como `exists` (já clonado, com o `origin` esperado: entra na indexação), `clone` (livre) ou `conflict` (avise e pule; o `reason` diz por quê: `symlink`, `not-a-checkout` para uma pasta que não é um clone comum (sem `.git` como pasta: um worktree ou submódulo, cujo `.git` é um arquivo, precisa ser declarado em `repositories`), `origin-mismatch` quando o `origin` do clone (qualquer um dos URLs do `.git/config` do próprio clone, sem seguir `include` nem ler a configuração global ou `GIT_CONFIG_*`) não é o repositório esperado (como um clone de outro dono com o mesmo nome, ou um fork), `origin-unknown` quando a entrada não traz uma URL do GitHub para comparar, `origin-unreadable` quando o `origin` não pôde ser lido (inclusive sem `origin` ou com o Git demorando mais de 5 s). Se um `conflict` for o que você quer indexar, declare-o em `repositories` com o `path`). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --repo <nome> --url <url> [--depth 1]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --repo <nome> --owner <dono> --url <url> [--depth 1]
 ```
 
-Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário. O clone roda sem hooks (nem os do modelo do Git do usuário); filtros que a configuração do próprio usuário define (como o Git LFS) continuam valendo.
+Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário. O `--owner` é o dono do `match`, e o script recusa uma URL de outro dono. O clone roda só por `https` (um `insteadOf` do usuário não troca por `ssh`), sem hooks (nem os do modelo do Git do usuário), sem `fsmonitor`, sem submódulos e com limite de 10 minutos; filtros que a configuração do próprio usuário define (como o Git LFS) continuam valendo.
 
 ## Passos
 
