@@ -82,6 +82,8 @@ const required: Record<string, string[]> = {
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
+// Optional pointer of a solution (usually a GitHub PR): https only, no credentials, no whitespace.
+const referenceUrl = /^https:\/\/[^\s/@:?#]+(?:[/?#]\S*)?$/;
 const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
@@ -395,6 +397,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && asText(fields.category) && Array.isArray(fields.category)) add('category-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asScalar(fields.confidence)) && Number(asScalar(fields.confidence)) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
+      if (kind.type === 'solution' && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (asText(fields.reference_url) !== '' && !fieldPlaceholder.test(asScalar(fields.reference_url)) && !referenceUrl.test(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
       if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
         if (!Array.isArray(fields.repositories) || fields.repositories.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('repositories-invalid', 'error');
