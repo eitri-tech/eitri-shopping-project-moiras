@@ -845,12 +845,13 @@ describe('security regressions', () => {
     for (const line of [
       '"password": "hunter2hunter2"', '{"apiKey": "abcd1234efgh"}', "{'token': 'abc12345'}", "'secret': abc12345", 'password: "hunter"',
       'Authorization: Basic dXNlcjpwYXNz', 'Authorization: Bearer abcdef123456', 'Authorization: Token abcdef123456',
+      'Authorization: Digest abcdef123456', 'Authorization: Digest username="fulano", response="abcdef123456"', '{"Authorization": "Digest abcdef123456"}',
       '{"Authorization": "Basic dXNlcjpwYXNz"}', "{'headers': {'Authorization': 'Bearer abcdef123456'}}", 'TOKEN: abc123', 'PASSWORD=abc123',
       'password: correcthorsebatterystaple', 'secret: Abcdefghijkl', 'password: correcthorsebatterystaple.',
     ]) assert.equal(hasSecret(line), true, line);
     for (const line of [
       'Renovar o token: ao expirar a sessão', 'password: veja o cofre', 'Authorization: Basic <token>',
-      'Authorization: Basic xxxx', 'Authorization: Basic', 'Authorization: Bearer curto', '"password": "<token>"', '{"apiKey": "xxxx"}', "{'token': '<token>'}",
+      'Authorization: Basic xxxx', 'Authorization: Digest <token>', 'Authorization: Digest xxxx', 'Authorization: Digest curto', 'Authorization: Basic', 'Authorization: Bearer curto', '"password": "<token>"', '{"apiKey": "xxxx"}', "{'token': '<token>'}",
       '"password": ""', '"user": "fulano"',
     ]) assert.equal(hasSecret(line), false, line);
   });

@@ -154,15 +154,16 @@ export function hasSecret(line: string): boolean {
   for (const match of line.matchAll(assignments)) {
     const [, key = '', keyQuote = '', separator = '', valueQuote = '', value = ''] = match;
     if (!/(?:SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE_KEY|CREDENTIAL|SESSION_ID|DATABASE_URL)/i.test(key) || placeholder(value)) continue;
-    // A bare `key: word` is often prose ("o token: ao expirar"): without quotes, a letters-only value is skipped
-    // only when it is short or more words follow it. A long standalone value is still flagged.
+    // A bare `key: word` is often prose ("o token: ao expirar"): without quotes, a letters-only value is
+    // intentionally not flagged when it is short (< 8) or more words follow it, to avoid false positives on prose.
+    // A long standalone value is still flagged.
     if (separator === ':' && !keyQuote && !valueQuote && !/[^\p{L}-]/u.test(value)) {
       const tail = line.slice((match.index ?? 0) + match[0].length);
       if (value.length < 8 || /^\s+\p{L}/u.test(tail)) continue;
     }
     return true;
   }
-  for (const match of line.matchAll(/\bAuthorization["']?\s*[:=]\s*["']?(?:Basic|Bearer|Token)\s+(<[^>]{1,128}>|[^\s"'`;,]{8,2048})/gi)) {
+  for (const match of line.matchAll(/\bAuthorization["']?\s*[:=]\s*["']?(?:Basic|Bearer|Token|Digest)\s+(<[^>]{1,128}>|[^\s"'`;,]{8,2048})/gi)) {
     if (!placeholder(match[1]!)) return true;
   }
   for (const match of line.matchAll(/[?&](?:access_token|token|key|password|secret|api_key)=([^\s&#"'`]{1,2048})/gi)) {
