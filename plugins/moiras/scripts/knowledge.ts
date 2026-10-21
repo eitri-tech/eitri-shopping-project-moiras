@@ -163,9 +163,9 @@ export function hasSecret(line: string): boolean {
 }
 
 // What a record must never carry. Matches are reported by rule and line, never echoed.
-/** `owner/glob` for `index.github`: a GitHub login (no leading hyphen, no wildcard) and a glob of file-name characters with `*` and `?`, never a bare `*`. */
+/** `owner/glob` for `index.github`: a GitHub login (no leading hyphen, no wildcard) and a glob of file-name characters with `*` and `?`, that keeps at least one letter or digit, so a glob of only wildcards and punctuation (`*`, `**`, `*?`, `???`, `*-*`, `.*`) never matches a whole owner. */
 export function validPattern(pattern: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && pattern.split('/')[1] !== '*';
+  return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && /[A-Za-z0-9]/.test(pattern.split('/')[1]!);
 }
 
 export const patterns: { rule: string; test: RegExp }[] = [
