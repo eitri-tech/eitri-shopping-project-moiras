@@ -143,7 +143,7 @@ Onde mexer:
 | Repositórios do GitHub por padrão (`match`, `plan-clone`, `clone`) | `plugins/moiras/scripts/github.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |
 
-Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`Add ...`, `Fix ...`) e PR com título curto e descrição curta em português (o que muda e como testar). Não use dados reais da empresa em nenhum arquivo: os exemplos são fictícios (empresa Acme, `acme-shop-checkout`, `PROJ-123`).
+Fluxo: branch a partir da `main`, checagens, commits em inglês no imperativo (`Add ...`, `Fix ...`) e PR com título curto e descrição curta em inglês (o que muda e como testar); issues `[health]` também em inglês. Não use dados reais da empresa em nenhum arquivo: os exemplos são fictícios (empresa Acme, `acme-shop-checkout`, `PROJ-123`).
 
 ## Teste real das skills de knowledge
 

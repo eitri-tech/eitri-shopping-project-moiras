@@ -66,7 +66,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 
 ## Idioma
 
-O que a máquina lê é em inglês: flags, pastas, nomes de arquivo, chaves de configuração e de frontmatter, campos dos contratos e valores fixos (ex.: `action: needs-info`, `change: unchanged`, `result: resolved`). O que pessoas leem é em português: documentação, justificativas, relatórios e descrições.
+O que a máquina lê é em inglês: flags, pastas, nomes de arquivo, chaves de configuração e de frontmatter, campos dos contratos e valores fixos (ex.: `action: needs-info`, `change: unchanged`, `result: resolved`). Título e descrição de PR, mensagens de commit e issues `[health]` (saúde do repositório) também são em inglês, para que mais pessoas e agentes possam contribuir. O que pessoas leem é em português: documentação, justificativas, relatórios e descrições.
 
 Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_at`, `created_at`); na coleta e na memória, data e hora com fuso, de preferência em UTC (ex.: `2026-10-06T18:00:00Z` em `run_id`, `ts`, `resolved_at`). A issue tem o seu `created_at` com hora; o do knowledge é só data.
 
@@ -78,7 +78,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 
 ## Convenções
 
-- Documentação e textos voltados ao time em português; código, identificadores e mensagens de commit em inglês.
+- Documentação e textos voltados ao time em português; código, identificadores, mensagens de commit, título e descrição de PR e issues `[health]` em inglês.
 - Worktrees do Git ficam dentro da pasta do repositório, em `.worktrees/<nome>` (por exemplo, `git worktree add .worktrees/minha-correcao -b fix/minha-correcao origin/main`), nunca em `/tmp` nem em pastas irmãs. A pasta `.worktrees/` está no `.gitignore` e deve continuar assim: nada dela vai para um commit. Em cada worktree novo, ligue o `.direnv/types` ao do checkout principal com caminho absoluto. Ao terminar, remova o worktree (`git worktree remove`) e o branch.
 - Mantenha mudanças pequenas e focadas; não adicione dependências sem necessidade.
 - Scripts em TypeScript executado direto pelo Node LTS mais recente (`.nvmrc` = `lts/*`; use `nvm use`), sem build: só sintaxe apagável (sem `enum`, `namespace` nem parameter properties) e imports locais com extensão `.ts`. ESM; Python 3 só quando Node não servir. Use a biblioteca padrão (`node:*` ou stdlib do Python); dependência externa só com justificativa no PR.
@@ -89,4 +89,5 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 ## Commits e PRs
 
 - Commits em inglês, no imperativo (`Add ...`, `Fix ...`).
-- PRs com título curto e descrição em português, curta: o que muda em poucos bullets e como testar.
+- PRs com título curto e descrição em inglês, curta: o que muda em poucos bullets e como testar.
+- Issues `[health]` (saúde do repositório) também em inglês.
