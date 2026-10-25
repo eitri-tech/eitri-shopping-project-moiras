@@ -28,7 +28,7 @@ function patternParts(pattern: string): string[] {
   return pattern.split('/');
 }
 
-/** Number the skill passes to `gh repo list --limit`; a list this long may have been cut. */
+/** Default number the skill passes to `gh repo list --limit`; a list this long may have been cut. `match --limit` compares against the number actually used. */
 export const listLimit = 4000;
 
 /** Glob (`*` any run, `?` one character, case-insensitive) in O(pattern x name) time; no RegExp, so a pattern full of `*` cannot backtrack exponentially. */
@@ -53,7 +53,7 @@ function cleanUrl(value: unknown): value is string {
   } catch { return false; }
 }
 
-export function matchRepositories(pattern: string, input: unknown, includeArchived = false): Matches {
+export function matchRepositories(pattern: string, input: unknown, includeArchived = false, limit = listLimit): Matches {
   const [owner, glob] = patternParts(pattern);
   if (!Array.isArray(input)) throw new Error('Expected a repository list.');
   const repositories: Repository[] = [];
@@ -65,7 +65,7 @@ export function matchRepositories(pattern: string, input: unknown, includeArchiv
     repositories.push({ name: item.name, url: item.url, archived: item.isArchived });
   }
   repositories.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-  return { owner, repositories, truncated: input.length >= listLimit, other_owner: otherOwner };
+  return { owner, repositories, truncated: input.length >= limit, other_owner: otherOwner };
 }
 
 // Trust ancestors above the clone folder (platform symlinks such as /tmp); refuse a link on the folder or on the repository itself.
@@ -153,17 +153,18 @@ export function cloneRepository(dir: string, name: string, url: string, owner: s
 export function main(argv: string[], input?: string): { output: string; code: number } {
   let parsed;
   try {
-    parsed = parseArgs({ args: argv, allowPositionals: true, options: { pattern: { type: 'string' }, 'include-archived': { type: 'boolean' }, dir: { type: 'string' }, repo: { type: 'string' }, owner: { type: 'string' }, base: { type: 'string' }, url: { type: 'string' }, depth: { type: 'string' } } });
+    parsed = parseArgs({ args: argv, allowPositionals: true, options: { pattern: { type: 'string' }, 'include-archived': { type: 'boolean' }, limit: { type: 'string' }, dir: { type: 'string' }, repo: { type: 'string' }, owner: { type: 'string' }, base: { type: 'string' }, url: { type: 'string' }, depth: { type: 'string' } } });
   } catch { throw new Error(usage); }
   const { positionals, values: v } = parsed;
   const command = positionals[0];
   const dir = v.dir === undefined ? undefined : resolve(v.base ?? '.', v.dir); // `--base` is the folder of the `.moiras/`: relative paths in the configuration start there
-  const allowed = command === 'match' ? ['pattern', 'include-archived'] : command === 'plan-clone' ? ['dir', 'base'] : command === 'local' ? ['dir', 'pattern', 'base'] : command === 'clone' ? ['dir', 'base', 'repo', 'owner', 'url', 'depth'] : [];
+  const allowed = command === 'match' ? ['pattern', 'include-archived', 'limit'] : command === 'plan-clone' ? ['dir', 'base'] : command === 'local' ? ['dir', 'pattern', 'base'] : command === 'clone' ? ['dir', 'base', 'repo', 'owner', 'url', 'depth'] : [];
   if (positionals.length !== 1 || Object.keys(v).some(key => !allowed.includes(key))) throw new Error(usage);
   if (command === 'clone' && v.dir && v.repo && v.owner && v.url) return cloneRepository(dir!, v.repo, v.url, v.owner, v.depth);
   if (command === 'match' && v.pattern) {
     patternParts(v.pattern);
-    return { output: JSON.stringify(matchRepositories(v.pattern, JSON.parse(input ?? readFileSync(0, 'utf8')), v['include-archived'])), code: 0 };
+    if (v.limit !== undefined && (!/^[1-9][0-9]*$/.test(v.limit) || !Number.isSafeInteger(Number(v.limit)))) throw new Error(usage);
+    return { output: JSON.stringify(matchRepositories(v.pattern, JSON.parse(input ?? readFileSync(0, 'utf8')), v['include-archived'], v.limit === undefined ? listLimit : Number(v.limit))), code: 0 };
   }
   if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(localRepositories(dir!, v.pattern)), code: 0 };
   if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(planClone(dir!, JSON.parse(input ?? readFileSync(0, 'utf8')))), code: 0 };
