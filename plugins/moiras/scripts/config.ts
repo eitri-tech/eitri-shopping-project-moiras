@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
+import { cloneEnv } from './github.ts';
 import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern, validPattern } from './knowledge.ts';
 
 export const usage = 'Usage: node config.ts init [--dir <path>] [--dry-run] < config.json | check [<file>]';
@@ -266,12 +267,16 @@ function ignoresEverything(rules: string): boolean {
   return last !== -1 && !lines.slice(last + 1).some(line => line.startsWith('!'));
 }
 
+const gitTimeout = 5000;
+
 /** Runs Git read-only at the nearest existing ancestor of `file`; undefined when Git is missing or `file` is outside a repository. */
 function git(file: string, ...args: string[]): number | undefined {
   let base = dirname(resolve(file));
   while (!existsSync(base) && dirname(base) !== base) base = dirname(base);
-  if (spawnSync('git', ['-C', base, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' }).status !== 0) return undefined;
-  return spawnSync('git', ['-C', base, ...args, '--', resolve(file)], { stdio: 'ignore' }).status ?? undefined;
+  // Without GIT_DIR and friends (they would point Git at another repository) and bounded in time.
+  const options = { stdio: 'ignore', env: cloneEnv(), timeout: gitTimeout } as const;
+  if (spawnSync('git', ['-C', base, 'rev-parse', '--is-inside-work-tree'], options).status !== 0) return undefined;
+  return spawnSync('git', ['-C', base, ...args, '--', resolve(file)], options).status ?? undefined;
 }
 
 /**

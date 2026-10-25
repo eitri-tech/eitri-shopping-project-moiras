@@ -4,7 +4,7 @@
  *        node github.ts local --dir <dir> --pattern <owner/glob> [--base <dir>]
  *        node github.ts clone --dir <dir> [--base <dir>] --repo <name> --owner <owner> --url <https-url> [--depth <n>]
  */
-import { lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
@@ -127,7 +127,8 @@ export function localRepositories(dir: string, pattern: string, run: typeof spaw
 // Variables that move the Git directory, work tree or index away from the clone target.
 const locationVariables = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX'];
 
-function cloneEnv(): NodeJS.ProcessEnv {
+/** The environment without the variables that move the Git directory, work tree or index. */
+export function cloneEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const name of Object.keys(env)) if (locationVariables.includes(name.toUpperCase())) delete env[name];
   return env;
@@ -140,20 +141,32 @@ export function cloneRepository(dir: string, name: string, url: string, owner: s
   if (!url.startsWith('https://github.com/') || canonicalRemote(url) !== `https://github.com/${owner}/${name}`.toLowerCase() || ![name, `${name}.git`].includes(suffix)) throw new Error(usage);
   const path = join(resolve(dir), name);
   if (hasSymlink(path) || lstatSync(path, { throwIfNoEntry: false })) throw new Error('Clone target refused.');
+  // Clone into a fresh folder created next to the target (mkdtemp never follows a link) and rename it afterwards, so a link swapped in
+  // between the check above and the clone cannot send the checkout elsewhere.
+  mkdirSync(dirname(path), { recursive: true });
+  const staging = mkdtempSync(join(dirname(path), `.${name}-`));
+  if (hasSymlink(staging)) throw new Error('Clone target refused.');
   // https only (a user `insteadOf` cannot swap in ssh, file or ext), no hooks, no fsmonitor, no submodules, bounded time.
   const args = ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
-    'clone', '--template=', '--no-recurse-submodules', ...(depth ? ['--depth', depth] : []), '--', url, path];
+    'clone', '--template=', '--no-recurse-submodules', ...(depth ? ['--depth', depth] : []), '--', url, staging];
   const result = run('git', args, { env: { ...cloneEnv(), GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https' }, stdio: 'pipe', timeout: cloneTimeout });
-  if (result.status === 0) return { output: JSON.stringify({ cloned: true, path }), code: 0 };
+  if (result.status === 0) {
+    // Check again: the target must still be free and the folder still a real one.
+    if (hasSymlink(path) || hasSymlink(staging) || lstatSync(path, { throwIfNoEntry: false })) throw new Error('Clone target refused.');
+    try { renameSync(staging, path); } catch { throw new Error('Clone target refused.'); }
+    return { output: JSON.stringify({ cloned: true, path }), code: 0 };
+  }
   // A killed clone can leave a partial folder; the plugin never deletes it, so the user must remove it before trying again.
   const errorCode = (result.error as NodeJS.ErrnoException | undefined)?.code;
   const timedOut = errorCode === 'ETIMEDOUT';
+  // An empty staging folder (git failed before writing anything) is ours and safe to drop; `rmdir` refuses a folder with content.
+  if (!timedOut) try { rmdirSync(staging); } catch { /* has content: keep it */ }
   // Only the system error code and the signal name say why Git did not run or was killed (no message, so no URL or path can leak).
   const reason = {
     ...(typeof errorCode === 'string' && !timedOut && /^[A-Z][A-Z0-9_]*$/.test(errorCode) ? { error_code: errorCode } : {}),
     ...(typeof result.signal === 'string' && /^SIG[A-Z0-9]+$/.test(result.signal) ? { signal: result.signal } : {}),
   };
-  return { output: JSON.stringify({ cloned: false, status: result.status, ...reason, ...(timedOut ? { timed_out: true, partial_path: path } : {}) }), code: 1 };
+  return { output: JSON.stringify({ cloned: false, status: result.status, ...reason, ...(timedOut ? { timed_out: true, partial_path: staging } : {}) }), code: 1 };
 }
 
 function readJson(input?: string): unknown {
