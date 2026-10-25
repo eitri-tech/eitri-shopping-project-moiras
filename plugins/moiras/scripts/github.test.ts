@@ -34,7 +34,7 @@ it('escapes dots and supports question marks and truncation', () => {
 });
 
 it('rejects invalid arguments and malformed inputs', () => {
-  for (const pattern of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/../shop', 'acme/a[b]']) assert.throws(() => matchRepositories(pattern, []), /Usage:/);
+  for (const pattern of ['*', 'acme', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'ac*/shop', 'acme/../shop', 'acme/a[b]']) assert.throws(() => matchRepositories(pattern, []), /Usage:/);
   assert.throws(() => matchRepositories('acme/shop*', {}));
   for (const argv of [[], ['match'], ['clone'], ['plan-clone'], ['match', '--pattern', 'acme/shop*', '--dir', 'repos'], ['clone', '--unknown']]) assert.throws(() => main(argv, '[]'), /Usage:/);
   assert.equal(JSON.parse(main(['match', '--pattern', 'acme/shop*'], '[]').output).owner, 'acme');
@@ -152,8 +152,8 @@ it('drops listed repositories whose url is not the pattern owner\'s', () => {
 });
 
 it('validates patterns: no leading hyphen, no bare wildcard, no escapes', () => {
-  for (const pattern of ['acme/shop-*', 'Acme/a?c', 'a-b/x.y*']) assert.equal(validPattern(pattern), true);
-  for (const pattern of ['-x/foo', 'acme/*', '*/foo', 'acme', 'acme/a..b', 'acme/a/b', 'acme/@x']) assert.equal(validPattern(pattern), false);
+  for (const pattern of ['acme/shop-*', 'Acme/a?c', 'a-b/x.y*', 'acme/shop', 'acme/*-api', 'acme/*2']) assert.equal(validPattern(pattern), true);
+  for (const pattern of ['-x/foo', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'acme/???', 'acme/*-*', 'acme/.*', '*/foo', 'acme', 'acme/a..b', 'acme/a/b', 'acme/@x']) assert.equal(validPattern(pattern), false);
 });
 
 it('keeps the skill command in sync with the list limit', () => {

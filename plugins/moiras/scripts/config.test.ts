@@ -366,7 +366,7 @@ describe('index.github', () => {
     assert.ok(rules(config([{ match: '-acme/shop-*', clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
   });
   it('refuses malformed matches', () => {
-    for (const match of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
+    for (const match of ['*', 'acme', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'acme/???', 'acme/*-*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
       assert.ok(rules(config([{ match, clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
     }
   });
