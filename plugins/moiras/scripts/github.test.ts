@@ -33,6 +33,17 @@ it('escapes dots and supports question marks and truncation', () => {
   assert.equal(matchRepositories('acme/shop*', Array.from({ length: 999 }, () => repo('other'))).truncated, false);
 });
 
+it('compares the list with the limit actually used', () => {
+  const list = Array.from({ length: listLimit + 500 }, () => repo('other'));
+  assert.equal(matchRepositories('acme/shop*', list, false, 10000).truncated, false);
+  assert.equal(matchRepositories('acme/shop*', list, false, listLimit + 500).truncated, true);
+  const run = (limit: string) => JSON.parse(main(['match', '--pattern', 'acme/shop*', '--limit', limit], JSON.stringify(list)).output).truncated;
+  assert.equal(run('10000'), false);
+  assert.equal(run(String(listLimit + 500)), true);
+  assert.throws(() => main(['match', '--pattern', 'acme/shop*', '--limit', '0'], '[]'));
+  assert.throws(() => main(['match', '--pattern', 'acme/shop*', '--limit', 'abc'], '[]'));
+});
+
 it('rejects invalid arguments and malformed inputs', () => {
   for (const pattern of ['*', 'acme', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'ac*/shop', 'acme/../shop', 'acme/a[b]']) assert.throws(() => matchRepositories(pattern, []), /Usage:/);
   assert.throws(() => matchRepositories('acme/shop*', {}));
