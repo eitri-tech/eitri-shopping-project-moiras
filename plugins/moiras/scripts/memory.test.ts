@@ -53,6 +53,15 @@ describe('record', () => {
     assert.equal(records.at(-1).hash, digest('changed'));
   });
 
+  it('marks an issue changed when its slack or end date changes, even with the same own due date', t => {
+    const { dir } = fixture(t);
+    const content = { duedate: '2026-11-30', end_date: '2026-11-30', end_date_source: 'issue', buffer_days: 15 };
+    assert.equal(record('clotho', { key: 'PROJ-1', content }, { dir })[0].change, 'new');
+    assert.equal(record('clotho', { key: 'PROJ-1', content: { ...content } }, { dir })[0].change, 'unchanged');
+    assert.equal(record('clotho', { key: 'PROJ-1', content: { ...content, buffer_days: 5 } }, { dir })[0].change, 'changed');
+    assert.equal(record('clotho', { key: 'PROJ-1', content: { ...content, buffer_days: null } }, { dir })[0].change, 'changed');
+  });
+
   it('compares batch duplicates against earlier entries and the stored file', t => {
     const { dir } = fixture(t);
     record('clotho', { key: 'A', hash: digest('old') }, { dir });

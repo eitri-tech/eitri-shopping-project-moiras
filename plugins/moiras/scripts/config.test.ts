@@ -77,6 +77,10 @@ describe('validate', () => {
     assert.deepEqual(rules(config), ['jira:jira-missing:warning']);
   });
 
+  it('accepts a Jira block without project_end', () => {
+    assert.deepEqual(validate({ ...minimal(), jira: { site: 'example.atlassian.net', epic: 'PROJ-100' } }), []);
+  });
+
   it('checks dates, Slack ids and the lookback', () => {
     const bad = {
       ...minimal(),
