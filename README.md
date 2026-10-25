@@ -9,12 +9,30 @@
 
 Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
 
+## Como funciona
+
+Na mitologia grega, as três Moiras fiam, medem e cortam o fio da vida. Aqui o fio é a issue: cada irmã cuida de uma etapa, e cada etapa só segue adiante se entregar o que prometeu.
+
+```mermaid
+flowchart LR
+    fontes[("Jira, Slack<br/>e outras fontes")] --> cloto
+    cloto["<b>Cloto</b><br/>fia"] --> laquesis["<b>Láquesis</b><br/>mede"]
+    laquesis --> atropos["<b>Átropos</b><br/>corta"]
+    kb[("Knowledge<br/>do time")] -.-> laquesis
+    kb -.-> atropos
+    atropos --> voce{{"Você decide"}}
+    voce -. "a escolha vira aprendizado" .-> kb
 ```
-Cloto (coleta das fontes configuradas) → Láquesis (classifica, acha duplicados) → Átropos (veredito e de 3 a 5 soluções com % de confiança)
-```
+
+- **Cloto (fia):** junta o material cru das fontes configuradas, em paralelo: as issues sem responsável do escopo e as conversas relevantes. Ainda não opina; só puxa os fios.
+- **Láquesis (mede):** descobre onde a issue mora (repositório e componente), classifica (categoria, origem, confiança) e confere se alguém já abriu a mesma coisa.
+- **Átropos (corta):** dá o veredito (`duplicate`, `blocked`, `ready-for-dev`, `needs-info` ou `close`), justifica e propõe de 3 a 5 soluções com % de confiança. Quem corta o fio, no fim, é você: a solução escolhida volta para o knowledge.
+
+O plugin só lê e sugere; nada é escrito no Jira ou no Slack sem o seu "sim".
 
 ## Sumário
 
+- [Como funciona](#como-funciona)
 - [Instalação](#instalação)
 - [Uso](#uso)
 - [Segurança](#segurança)
