@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, rmSync, wri
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { check, issues, main, parseDoc, plan, provenance, sourcesHash } from './knowledge.ts';
+import { check, hasSecret, issues, main, parseDoc, plan, provenance, sourcesHash } from './knowledge.ts';
 
 const script = join(import.meta.dirname, 'knowledge.ts');
 const sha = `sha256:${'a'.repeat(64)}`;
@@ -839,6 +839,21 @@ describe('security regressions', () => {
     write('local', 'criteria/c.md', criterion('c').replace('Beltrana', 'Fulano Silva'));
     write('local', 'learnings/solutions/PROJ-1-1.md', solution('pending').replace('chosen_by: Fulano', 'chosen_by: fulano@example.com'));
     assert.equal(check(local).findings.filter(f => f.rule === 'pseudonym-required').length, 2);
+  });
+
+  it('detects secrets under quoted keys and Authorization headers, and ignores prose and placeholders', () => {
+    for (const line of [
+      '"password": "hunter2hunter2"', '{"apiKey": "abcd1234efgh"}', "{'token': 'abc12345'}", "'secret': abc12345", 'password: "hunter"',
+      'Authorization: Basic dXNlcjpwYXNz', 'Authorization: Bearer abcdef123456', 'Authorization: Token abcdef123456',
+      'Authorization: Digest abcdef123456', 'Authorization: Digest username="fulano", response="abcdef123456"', '{"Authorization": "Digest abcdef123456"}',
+      '{"Authorization": "Basic dXNlcjpwYXNz"}', "{'headers': {'Authorization': 'Bearer abcdef123456'}}", 'TOKEN: abc123', 'PASSWORD=abc123',
+      'password: correcthorsebatterystaple', 'secret: Abcdefghijkl', 'password: correcthorsebatterystaple.',
+    ]) assert.equal(hasSecret(line), true, line);
+    for (const line of [
+      'Renovar o token: ao expirar a sessão', 'password: veja o cofre', 'Authorization: Basic <token>',
+      'Authorization: Basic xxxx', 'Authorization: Digest <token>', 'Authorization: Digest xxxx', 'Authorization: Digest curto', 'Authorization: Basic', 'Authorization: Bearer curto', '"password": "<token>"', '{"apiKey": "xxxx"}', "{'token': '<token>'}",
+      '"password": ""', '"user": "fulano"',
+    ]) assert.equal(hasSecret(line), false, line);
   });
 
   it('accepts an optional https reference_url on a solution and refuses anything else', t => {
