@@ -119,7 +119,7 @@ Regras:
     "status": "ok | failed",
     "scope": ["epics", "categories"],
     "epics": [
-      { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15", "end_date_field": "duedate | target | null" }
+      { "key": "PROJ-100", "summary": "", "end_date": "2026-12-15 | null", "end_date_field": "duedate | target | null" }
     ],
     "issues": [
       {
@@ -131,7 +131,7 @@ Regras:
         "priority": "High",
         "status": "To Do",
         "duedate": "2026-11-30",
-        "end_date": "2026-11-30",
+        "end_date": "2026-11-30 | null",
         "end_date_source": "issue | epic | project | null",
         "buffer_days": 15,
         "agency": "Agência Aurora | null",
