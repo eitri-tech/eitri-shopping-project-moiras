@@ -103,7 +103,7 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 
 ## Desenvolvimento
 
-Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`; o Node precisa ser ≥ 22.18). O Node executa os `.ts` direto, sem build. A CI (`.github/workflows/ci.yml`) roda os testes, o `tsc` e o `claude plugin validate` em cada PR.
+Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`; o Node precisa ser ≥ 22.18). O Node executa os `.ts` direto, sem build. Não há CI: rode as checagens abaixo antes de commitar.
 
 Checagens:
 
