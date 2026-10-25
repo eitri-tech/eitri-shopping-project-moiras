@@ -105,9 +105,21 @@ const fieldPlaceholder = /<[^>]*>/;
 export const placeholder = (value: string) => /^(?:<[^>]+>|x{4,}|\*{4,})$/i.test(value);
 const email = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,190}\.[A-Z]{2,24}\b/i;
 
-// Inspect every path component before resolving; even links within the base are skipped.
+// Inspect every path component below the base before resolving; even links within the base are skipped.
+// Ancestors of the base are trusted (platform links such as /tmp and /var), but the base itself must not be a link.
 function pathIssue(base: string, path: string): string | undefined {
-  const root = resolve(base);
+  const supplied = resolve(base);
+  let root: string;
+  try {
+    if (lstatSync(supplied).isSymbolicLink()) return 'symlink';
+    root = realpathSync(supplied);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return 'missing';
+    if (code === 'ENOTDIR') return 'not-directory';
+    if (code === 'EACCES' || code === 'EPERM') return 'unreadable';
+    throw error;
+  }
   const target = resolve(root, path);
   const rel = relative(root, target);
   if (rel === '..' || rel.startsWith(`..${sep}`)) throw new Error('Path escapes base');
@@ -126,8 +138,6 @@ function pathIssue(base: string, path: string): string | undefined {
       throw error;
     }
   }
-  // Also reject a symlink in an ancestor of the supplied base.
-  if (realpathSync(root) !== root) return 'symlink';
   if (realpathSync(target) !== target) return 'symlink';
   return undefined;
 }
