@@ -308,6 +308,22 @@ describe('init', () => {
 describe('check storage', () => {
   const rulesOf = (file: string) => (JSON.parse(main(['check', file]).output).findings as Finding[]).map(finding => `${finding.rule}:${finding.severity}`);
 
+  it('ignores GIT_DIR and GIT_WORK_TREE from the environment when asking Git about the file', t => {
+    const { dir, target } = workspace(t);
+    const git = (...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    if (git('init', '-q').status !== 0) return t.skip('git is not available');
+    mkdirSync(target);
+    const file = join(target, 'sources.json');
+    writeFileSync(file, `${JSON.stringify(minimal())}\n`);
+    assert.equal(git('add', '-f', '.moiras/sources.json').status, 0);
+    const other = mkdtempSync(join(tmpdir(), 'moiras-other-git-'));
+    t.after(() => rmSync(other, { recursive: true, force: true }));
+    assert.equal(spawnSync('git', ['-C', other, 'init', '-q']).status, 0);
+    process.env.GIT_DIR = join(other, '.git');
+    t.after(() => { delete process.env.GIT_DIR; });
+    assert.deepEqual(rulesOf(file), ['sources-tracked:warning']);
+  });
+
   it('warns about a configuration Git would commit, tracks, or reach through a link', t => {
     const { dir, target } = workspace(t);
     const git = (...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });

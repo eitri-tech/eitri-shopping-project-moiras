@@ -1,6 +1,6 @@
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonicalRemote, cloneRepository, cloneTimeout, globMatch, listLimit, localRepositories, main, matchRepositories, planClone, validPattern } from './github.ts';
@@ -94,7 +94,8 @@ it('runs clone with an argument array and suppresses git failure details', t => 
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const run = ((command, args, options) => {
     assert.equal(command, 'git');
-    assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--template=', '--no-recurse-submodules', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', join(dir, 'acme-shop-checkout')]);
+    assert.deepEqual(args, ['-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--template=', '--no-recurse-submodules', '--depth', '2', '--', 'https://github.com/acme/acme-shop-checkout.git', args.at(-1)]);
+    assert.ok(args.at(-1)!.startsWith(join(dir, '.acme-shop-checkout-')), 'clones into a staging folder next to the target');
     assert.equal(options?.env?.GIT_TERMINAL_PROMPT, '0');
     assert.equal(options?.env?.GIT_ALLOW_PROTOCOL, 'https');
     assert.equal(options?.timeout, cloneTimeout);
@@ -119,6 +120,26 @@ it('reports the cause of failures with fixed messages and no details from the in
   assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, noGit), { output: '{"cloned":false,"status":null,"error_code":"ENOENT"}', code: 1 });
   const killed = (() => ({ status: null, signal: 'SIGKILL' })) as unknown as typeof spawnSync;
   assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, killed), { output: '{"cloned":false,"status":null,"signal":"SIGKILL"}', code: 1 });
+});
+
+it('clones into a staging folder and renames it, refusing a target or folder swapped for a link meanwhile', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const elsewhere = mkdtempSync(join(tmpdir(), 'moiras-elsewhere-'));
+  t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
+  const ok = ((_command, args) => { writeFileSync(join(args.at(-1) as string, 'README'), 'x'); return { status: 0 }; }) as typeof spawnSync;
+  assert.equal(JSON.parse(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, ok).output).cloned, true);
+  assert.deepEqual(readdirSync(dir), ['shop'], 'no staging folder is left behind');
+  // The target appears (as a link) while Git runs: the checkout stays in staging and nothing is written through the link.
+  const raced = ((_command, args) => { symlinkSync(elsewhere, join(dir, 'raced')); return ok('git', args, {}); }) as typeof spawnSync;
+  assert.throws(() => cloneRepository(dir, 'raced', 'https://github.com/acme/raced', 'acme', undefined, raced), /Clone target refused\./);
+  assert.deepEqual(readdirSync(elsewhere), []);
+  // A failed clone that wrote nothing leaves no staging folder; one that wrote something (or was refused after cloning) keeps it.
+  const failedEmpty = (() => ({ status: 128 })) as unknown as typeof spawnSync;
+  cloneRepository(dir, 'empty', 'https://github.com/acme/empty', 'acme', undefined, failedEmpty);
+  const failedPartial = ((_command, args) => { writeFileSync(join(args.at(-1) as string, 'half'), 'x'); return { status: 128 }; }) as typeof spawnSync;
+  cloneRepository(dir, 'partial', 'https://github.com/acme/partial', 'acme', undefined, failedPartial);
+  assert.deepEqual(readdirSync(dir).filter(name => name.startsWith('.')).map(name => name.replace(/-[A-Za-z0-9]+$/, '')), ['.partial', '.raced']);
 });
 
 it('rejects unsafe names, URLs and depths before invoking git', () => {
@@ -192,7 +213,11 @@ it('counts repositories of another owner, reports a clone timeout and resolves -
   const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const timedOut = (() => ({ status: null, error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) })) as unknown as typeof spawnSync;
-  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, timedOut), { output: JSON.stringify({ cloned: false, status: null, timed_out: true, partial_path: join(dir, 'shop') }), code: 1 });
+  const timedOutResult = JSON.parse(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, timedOut).output);
+  assert.match(timedOutResult.partial_path, new RegExp(`^${join(dir, '.shop-').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  const { partial_path: _partial, ...timedOutRest } = timedOutResult;
+  assert.deepEqual(timedOutRest, { cloned: false, status: null, timed_out: true });
+  assert.equal(existsSync(join(dir, 'shop')), false);
   // A relative --dir starts at --base (the folder of the .moiras), not at the current directory.
   mkdirSync(join(dir, 'repos'));
   const result = JSON.parse(main(['plan-clone', '--dir', 'repos', '--base', dir], JSON.stringify({ owner: 'acme', repositories: [{ name: 'shop' }] })).output);
