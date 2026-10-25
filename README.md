@@ -32,7 +32,7 @@ Cloto (coleta das fontes configuradas) → Láquesis (classifica, acha duplicado
 **Outros agentes** (Codex, Cursor, Copilot, opencode, Antigravity etc.): use o [`npx skills`](https://github.com/vercel-labs/skills), que copia ou liga as skills na pasta de cada agente.
 
 ```bash
-npx skills add eitri-tech/eitri-shopping-project-moiras --list                      # lista as sete skills
+npx skills add eitri-tech/eitri-shopping-project-moiras --list                      # lista as oito skills
 npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
@@ -108,7 +108,7 @@ Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript
 Checagens:
 
 ```bash
-node --test plugins/moiras/scripts/*.test.ts   # testes de memória e de knowledge (node:test)
+node --test plugins/moiras/scripts/*.test.ts   # testes de memória, configuração, GitHub, .gitignore e knowledge (node:test)
 tsc -p tsconfig.json                           # tipos; no Nix já vem pronto
 claude plugin validate plugins/moiras && claude plugin validate .
 ```
@@ -158,7 +158,7 @@ Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-pub
    }
    ```
 
-2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as sete skills.
+2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as oito skills.
 3. **Indexe** com `/moiras:moiras-index` (nada é gravado antes do "sim"). Confira com `node <clone>/plugins/moiras/scripts/knowledge.ts check .moiras/knowledge`: sem achados, `url` sem credencial, `local_path` relativo, nenhum trecho de código e `indexed_commit` e `indexed_commit_date` (em UTC) conferindo com `git -C <repositório> log -1`, e `indexed_dirty` com `git -C <repositório> status --porcelain`.
 4. **Reindexe**: sem mudanças, volta `unchanged`; com um commit novo que não mexe nas evidências, continua `unchanged` e o relatório só informa o commit atual. Para ver `changed`, crie um arquivo em `src/` do repositório, rode de novo, **responda "não" à gravação** e apague o arquivo. Prefira um clone descartável se o repositório tiver alterações suas.
 5. **Audite** com `/moiras:moiras-audit glossary`: sem achados graves. Para ver o aviso de glossário velho, copie o arquivo, ponha um `indexed_at` de mais de 6 meses e rode de novo (ela só sugere `moiras-index`); **restaure a cópia antes do passo 7**.
