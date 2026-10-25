@@ -99,6 +99,8 @@ moiras/
 ├── .claude-plugin/plugin.json      # manifesto
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
 ├── scripts/config.ts               # cria e valida o .moiras/sources.json
+├── scripts/github.ts               # repositórios do GitHub por padrão (index.github): match, plan-clone, local e clone
+├── scripts/gitignore.ts            # leitor de .gitignore sem Git, usado pelo hash do knowledge.ts
 ├── scripts/knowledge.ts            # hash das fontes, checagem, issues já citadas e plano de publicação do knowledge
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
@@ -150,7 +152,7 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar a triagem: ela pergunta o q
 - `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse que só o usuário envia; o plugin apenas prepara o rascunho;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
 - `interactions` (opcional, desligado por padrão): deixa a Cloto reagir no Slack (emoji `slack.reaction`) e comentar no Jira que a issue foi citada, sempre depois do seu "sim" à lista; no `--auto` só as reações (`auto_types`) são aplicadas sem perguntar, e o comentário fica no relatório; comentários nunca vão para issues com agência ou agência ambígua;
-- `index` (opcional): onde estão os repositórios para o `moiras-index`: `roots` (pastas com repositórios dentro) e `repositories` (`name`, `path` e, se quiser, `url`, `owner`, `agency`, `platform`, que valem mais que o detectado);
+- `index` (opcional): onde estão os repositórios para o `moiras-index`: `roots` (pastas com repositórios dentro) e `repositories` (`name`, `path` e, se quiser, `url`, `owner`, `agency`, `platform`, que valem mais que o detectado), e `github` (padrões `match` no formato `dono/glob`, como `acme/acme-shop-*`, com `clone_dir` e, se quiser, `include_archived`: a lista vem de `gh repo list`, só leitura, e o que faltar em `clone_dir` só é clonado com o seu "sim");
 - `audit` (opcional): `auditors`, a lista de pseudônimos não identificáveis escolhidos pelas pessoas que podem fazer ajustes no knowledge pela skill `moiras-audit`; sem a chave, qualquer pessoa pode auditar;
 - `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
 - `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
