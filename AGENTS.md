@@ -8,7 +8,7 @@ Instruções para agentes de código (Claude Code, Codex, Copilot etc.) neste re
 
 A triagem segue três etapas, cada uma com entrada e saída verificáveis:
 
-1. **Cloto**: coleta em paralelo das fontes configuradas e suportadas (as documentadas em `stages/clotho.md`; bloco de fonte ainda não documentada é ignorado). Das issues, as sem responsável do escopo (um ou vários épicos e categorias), por prioridade e data fim, comparando com o fim do épico da issue ou do projeto. Das conversas, as mensagens relevantes de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
+1. **Cloto**: coleta em paralelo das fontes configuradas e suportadas (as documentadas em `stages/clotho.md`; bloco de fonte ainda não documentada é ignorado). Das issues, as sem responsável do escopo (um ou vários épicos e categorias), por prioridade e data fim (a da própria issue; sem ela, a do épico; por último, a do projeto, que é opcional), comparando a data da issue com o teto do épico ou do projeto. Das conversas, as mensagens relevantes de pessoas e canais definidos. Hoje Jira e Slack são as fontes esperadas; outras podem ser adicionadas seguindo o padrão descrito em `stages/clotho.md`
 2. **Láquesis**: identifica repositório e componente pelo glossário, classifica (categoria, origem, confiança) e avalia duplicados
 3. **Átropos**: justifica o problema, decide a ação (`duplicate`, `blocked`, `ready-for-dev`, `needs-info`, `close`), sugere normalmente de 3 a 5 soluções com % de confiança e guarda a escolhida no aprendizado
 
@@ -73,7 +73,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 ## Ambiente
 
 - `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
-- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`).
+- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`). O Node precisa ser ≥ 22.18 (`engines` em `scripts/package.json`): antes disso os scripts falham.
 - Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
 
 ## Convenções

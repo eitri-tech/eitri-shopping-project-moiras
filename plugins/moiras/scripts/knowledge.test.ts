@@ -926,6 +926,19 @@ describe('security regressions', () => {
     assert.equal(sourcesHash(local, [deep]), sourcesHash(local, ['missing']));
   });
 
+  it('trusts a symlinked ancestor of the base but refuses links inside it and the base itself', t => {
+    const { dir, local, write } = workspace(t);
+    write('local', 'criteria/good.md', criterion('good'));
+    symlinkSync(dir, join(dir, 'ancestor'));
+    const viaAncestor = join(dir, 'ancestor', 'local');
+    assert.deepEqual(check(viaAncestor).findings, check(local).findings);
+    assert.equal(sourcesHash(viaAncestor, ['.']), sourcesHash(local, ['.']));
+    symlinkSync(join(local, 'criteria/good.md'), join(local, 'criteria/link.md'));
+    assert.ok(check(viaAncestor).findings.some(f => f.rule === 'symlink' && f.path.endsWith('link.md')));
+    symlinkSync(local, join(dir, 'base-link'));
+    assert.ok(check(join(dir, 'base-link')).findings.every(f => f.rule === 'symlink' || f.rule === 'missing'));
+  });
+
   it('fails the hash for a path it cannot traverse instead of treating it as absent', t => {
     const { local, write } = workspace(t);
     write('local', 'src/a.txt', 'a');
