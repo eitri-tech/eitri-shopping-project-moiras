@@ -146,8 +146,26 @@ export function cloneRepository(dir: string, name: string, url: string, owner: s
   const result = run('git', args, { env: { ...cloneEnv(), GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https' }, stdio: 'pipe', timeout: cloneTimeout });
   if (result.status === 0) return { output: JSON.stringify({ cloned: true, path }), code: 0 };
   // A killed clone can leave a partial folder; the plugin never deletes it, so the user must remove it before trying again.
-  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
-  return { output: JSON.stringify({ cloned: false, status: result.status, ...(timedOut ? { timed_out: true, partial_path: path } : {}) }), code: 1 };
+  const errorCode = (result.error as NodeJS.ErrnoException | undefined)?.code;
+  const timedOut = errorCode === 'ETIMEDOUT';
+  // Only the system error code and the signal name say why Git did not run or was killed (no message, so no URL or path can leak).
+  const reason = {
+    ...(typeof errorCode === 'string' && !timedOut && /^[A-Z][A-Z0-9_]*$/.test(errorCode) ? { error_code: errorCode } : {}),
+    ...(typeof result.signal === 'string' && /^SIG[A-Z0-9]+$/.test(result.signal) ? { signal: result.signal } : {}),
+  };
+  return { output: JSON.stringify({ cloned: false, status: result.status, ...reason, ...(timedOut ? { timed_out: true, partial_path: path } : {}) }), code: 1 };
+}
+
+function readJson(input?: string): unknown {
+  try { return JSON.parse(input ?? readFileSync(0, 'utf8')); } catch { throw new Error('Invalid JSON input.'); }
+}
+
+// A file-system failure (not a directory, no permission) on the clone folder; the message stays fixed because the path is the user's.
+function folderRead<T>(read: () => T): T {
+  try { return read(); } catch (error) {
+    if (typeof (error as NodeJS.ErrnoException)?.code === 'string') throw new Error('Clone folder unreadable.');
+    throw error;
+  }
 }
 
 export function main(argv: string[], input?: string): { output: string; code: number } {
@@ -163,10 +181,10 @@ export function main(argv: string[], input?: string): { output: string; code: nu
   if (command === 'clone' && v.dir && v.repo && v.owner && v.url) return cloneRepository(dir!, v.repo, v.url, v.owner, v.depth);
   if (command === 'match' && v.pattern) {
     patternParts(v.pattern);
-    return { output: JSON.stringify(matchRepositories(v.pattern, JSON.parse(input ?? readFileSync(0, 'utf8')), v['include-archived'])), code: 0 };
+    return { output: JSON.stringify(matchRepositories(v.pattern, readJson(input), v['include-archived'])), code: 0 };
   }
-  if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(localRepositories(dir!, v.pattern)), code: 0 };
-  if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(planClone(dir!, JSON.parse(input ?? readFileSync(0, 'utf8')))), code: 0 };
+  if (command === 'local' && v.dir && v.pattern) return { output: JSON.stringify(folderRead(() => localRepositories(dir!, v.pattern))), code: 0 };
+  if (command === 'plan-clone' && v.dir) return { output: JSON.stringify(folderRead(() => planClone(dir!, readJson(input)))), code: 0 };
   throw new Error(usage);
 }
 

@@ -32,6 +32,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    Peça também o pai de cada issue (`parent` ou, nos projetos antigos, `"Epic Link"`) com o tipo dele. O `epic` da issue é o pai **só quando o tipo do pai é Epic**; numa subtarefa o pai é a tarefa ou história, então use o pai dela, também só se o tipo for Epic, ou, se o conector não o der ou o tipo for outro, `null`. Issue sem épico tem `epic: null`.
 
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
+   Se `jira.team` estiver configurado (`field` e `value`, um só, porque o Team do Jira é de valor único), peça também esse campo na mesma busca. No formato REST do Jira o Team vem como objeto (`id`, `name`, ...): compare o `id` dele com `value`, nunca o objeto nem o nome. O time **não filtra**: é só uma expectativa, porque as issues são criadas à mão e o time pode faltar ou variar. O épico é o escopo forte. Issue cujo time for diferente de `value`, ou sem time, continua na triagem e ganha o aviso `team-mismatch:<time atual>` (`team-mismatch:none` sem time). Não leia o time das issues se o campo não vier do conector: aviso `team-unavailable` no lugar, uma vez por issue. Sem `jira.team`, nada disso vale.
    Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
 3. Para cada issue, calcule a data fim efetiva (`end_date`) e de onde ela veio (`end_date_source`), nesta ordem de prioridade:
    1. a `duedate` da **própria issue** (`end_date_source: issue`);
@@ -219,7 +220,7 @@ Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem 
 - `key`, `summary`, `description`, `created_at`, `epic`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
-- `warnings`: os da issue (`no-due-date`: a issue não tem data própria; `no-end-date`: nem o épico nem o projeto têm data, então não há teto para comparar; `exceeds-epic`, `creation-date-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
+- `warnings`: os da issue (`no-due-date`: a issue não tem data própria; `no-end-date`: nem o épico nem o projeto têm data, então não há teto para comparar; `exceeds-epic`, `creation-date-unavailable`, `team-mismatch:<time atual>`, `team-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
 
 Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 

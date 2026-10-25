@@ -4,7 +4,8 @@
     "epics": ["PROJ-100", "PROJ-101"],
     "categories": [{ "field": "labels", "values": ["checkout"] }],
     "project_end": "2026-12-15",
-    "agency_field": "Agency"
+    "agency_field": "Agency",
+    "team": { "field": "Team", "value": "00000000-0000-0000-0000-000000000000" }
   },
   "agencies": [
     { "name": "Agência Aurora", "channel": "#proj-agency" }

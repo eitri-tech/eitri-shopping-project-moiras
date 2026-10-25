@@ -82,6 +82,14 @@ const required: Record<string, string[]> = {
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
+// Optional pointer of a solution (usually a GitHub PR): a real https URL, no credentials, no whitespace.
+export function validReferenceUrl(value: string): boolean {
+  if (!value || /\s/.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname !== '' && url.username === '' && url.password === '';
+  } catch { return false; }
+}
 const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
@@ -141,10 +149,22 @@ function readSafe(file: string): { text?: string; issue?: string } {
 }
 
 export function hasSecret(line: string): boolean {
-  const assignments = /\b([A-Z_][A-Z0-9_-]{0,127})\s*[:=]\s*["']?(<[^>]{1,128}>|[^\s"'`;,]{1,2048})/gi;
+  // The key may be quoted (JSON, quoted YAML) and so may the value.
+  const assignments = /\b([A-Z_][A-Z0-9_-]{0,127})(["']?)\s*([:=])\s*(["']?)(<[^>]{1,128}>|[^\s"'`;,]{1,2048})/gi;
   for (const match of line.matchAll(assignments)) {
-    const [, key = '', value = ''] = match;
-    if (/(?:SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE_KEY|CREDENTIAL|SESSION_ID|DATABASE_URL)/i.test(key) && !placeholder(value)) return true;
+    const [, key = '', keyQuote = '', separator = '', valueQuote = '', value = ''] = match;
+    if (!/(?:SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE_KEY|CREDENTIAL|SESSION_ID|DATABASE_URL)/i.test(key) || placeholder(value)) continue;
+    // A bare `key: word` is often prose ("o token: ao expirar"): without quotes, a letters-only value is
+    // intentionally not flagged when it is short (< 8) or more words follow it, to avoid false positives on prose.
+    // A long standalone value is still flagged.
+    if (separator === ':' && !keyQuote && !valueQuote && !/[^\p{L}-]/u.test(value)) {
+      const tail = line.slice((match.index ?? 0) + match[0].length);
+      if (value.length < 8 || /^\s+\p{L}/u.test(tail)) continue;
+    }
+    return true;
+  }
+  for (const match of line.matchAll(/\bAuthorization["']?\s*[:=]\s*["']?(?:Basic|Bearer|Token|Digest)\s+(<[^>]{1,128}>|[^\s"'`;,]{8,2048})/gi)) {
+    if (!placeholder(match[1]!)) return true;
   }
   for (const match of line.matchAll(/[?&](?:access_token|token|key|password|secret|api_key)=([^\s&#"'`]{1,2048})/gi)) {
     let value = match[1]!;
@@ -155,9 +175,9 @@ export function hasSecret(line: string): boolean {
 }
 
 // What a record must never carry. Matches are reported by rule and line, never echoed.
-/** `owner/glob` for `index.github`: a GitHub login (no leading hyphen, no wildcard) and a glob of file-name characters with `*` and `?`, never a bare `*`. */
+/** `owner/glob` for `index.github`: a GitHub login (no leading hyphen, no wildcard) and a glob of file-name characters with `*` and `?`, that keeps at least one letter or digit, so a glob of only wildcards and punctuation (`*`, `**`, `*?`, `???`, `*-*`, `.*`) never matches a whole owner. */
 export function validPattern(pattern: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && pattern.split('/')[1] !== '*';
+  return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && /[A-Za-z0-9]/.test(pattern.split('/')[1]!);
 }
 
 export const patterns: { rule: string; test: RegExp }[] = [
@@ -395,6 +415,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && asText(fields.category) && Array.isArray(fields.category)) add('category-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asScalar(fields.confidence)) && Number(asScalar(fields.confidence)) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
+      if (kind.type === 'solution' && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (!fieldPlaceholder.test(asScalar(fields.reference_url)) && !validReferenceUrl(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
       if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
         if (!Array.isArray(fields.repositories) || fields.repositories.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('repositories-invalid', 'error');

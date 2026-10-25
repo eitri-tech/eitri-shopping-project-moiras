@@ -99,6 +99,8 @@ moiras/
 ├── .claude-plugin/plugin.json      # manifesto
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
 ├── scripts/config.ts               # cria e valida o .moiras/sources.json
+├── scripts/github.ts               # repositórios do GitHub por padrão (index.github): match, plan-clone, local e clone
+├── scripts/gitignore.ts            # leitor de .gitignore sem Git, usado pelo hash do knowledge.ts
 ├── scripts/knowledge.ts            # hash das fontes, checagem, issues já citadas e plano de publicação do knowledge
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
@@ -146,11 +148,11 @@ Para revisar o knowledge fora de uma triagem, use a skill `moiras-audit`: ela ap
 
 Rode `/moiras:moiras-init` no projeto onde vai rodar a triagem: ela pergunta o que falta, mostra o arquivo inteiro e cria o `.moiras/sources.json` depois do seu "sim" (e nunca sobrescreve um existente). Para validar um arquivo editado à mão: `/moiras:moiras-init --check`. Se preferir montar à mão, copie `config/sources.example.json` para `.moiras/sources.json`. Hoje Jira e Slack são o foco, mas o arquivo aceita blocos de outras fontes (ver `stages/clotho.md`). Os campos:
 
-- `jira`: site e o escopo (a data fim do projeto, `project_end`, é opcional). O escopo é de épicos e/ou categorias (`epics`, vários; `epic` aceita um só; `categories`: lista de `field` e `values`, como `labels`, `Story Points` ou `cf[10020]`; as duas valem juntas, em AND). Sem épico, inclua o `project` numa categoria. A data fim de cada issue é, nesta ordem, a `duedate` dela, a do épico dela e, por último, `project_end`. Opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task; sem valor nele, usa-se `agency` do glossário, recalculado inclusive para issues `unchanged`;
+- `jira`: site e o escopo (a data fim do projeto, `project_end`, é opcional). O escopo é de épicos e/ou categorias (`epics`, vários; `epic` aceita um só; `categories`: lista de `field` e `values`, como `labels`, `Story Points` ou `cf[10020]`; as duas valem juntas, em AND). Sem épico, inclua o `project` numa categoria. A data fim de cada issue é, nesta ordem, a `duedate` dela, a do épico dela e, por último, `project_end`. Opcionalmente `team` (`field` e `value`, um só, porque o Team do Jira é de valor único): o time esperado, que não filtra e só gera o aviso `team-mismatch:<time atual>` nas issues do épico fora dele ou sem time (o épico é o escopo forte; vários épicos valem em OU). Opcionalmente `agency_field`, o campo do Jira que diz qual agência cuida da task; sem valor nele, usa-se `agency` do glossário, recalculado inclusive para issues `unchanged`;
 - `agencies` (opcional): as agências, com o `name` igual ao valor do campo e, se quiser, um `channel` sugerido para o repasse que só o usuário envia; o plugin apenas prepara o rascunho;
 - `slack`: pessoas e canais (quantos precisar; cada canal pode ter pessoas próprias), com os IDs `U…` e `C…`;
 - `interactions` (opcional, desligado por padrão): deixa a Cloto reagir no Slack (emoji `slack.reaction`) e comentar no Jira que a issue foi citada, sempre depois do seu "sim" à lista; no `--auto` só as reações (`auto_types`) são aplicadas sem perguntar, e o comentário fica no relatório; comentários nunca vão para issues com agência ou agência ambígua;
-- `index` (opcional): onde estão os repositórios para o `moiras-index`: `roots` (pastas com repositórios dentro) e `repositories` (`name`, `path` e, se quiser, `url`, `owner`, `agency`, `platform`, que valem mais que o detectado);
+- `index` (opcional): onde estão os repositórios para o `moiras-index`: `roots` (pastas com repositórios dentro) e `repositories` (`name`, `path` e, se quiser, `url`, `owner`, `agency`, `platform`, que valem mais que o detectado), e `github` (padrões `match` no formato `dono/glob`, como `acme/acme-shop-*`, com `clone_dir` e, se quiser, `include_archived`: a lista vem de `gh repo list`, só leitura, e o que faltar em `clone_dir` só é clonado com o seu "sim");
 - `audit` (opcional): `auditors`, a lista de pseudônimos não identificáveis escolhidos pelas pessoas que podem fazer ajustes no knowledge pela skill `moiras-audit`; sem a chave, qualquer pessoa pode auditar;
 - `knowledge`: os knowledges (`name`, `scope`, `dir` e, se compartilhado, `repository`); sem nenhum, vale só `.moiras/knowledge/`;
 - `memory.dir` e `runs.dir`: onde ficam a memória e os relatórios (padrão `.moiras/memory/` e `.moiras/runs/`).
@@ -171,7 +173,7 @@ Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto`
 
 ## Memória
 
-Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl`, pelo script `scripts/memory.ts` (Node LTS mais recente, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes. A memória é local e nunca vai para um knowledge.
+Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl`, pelo script `scripts/memory.ts` (Node ≥ 22.18, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes. A memória é local e nunca vai para um knowledge.
 
 ## Instalação
 

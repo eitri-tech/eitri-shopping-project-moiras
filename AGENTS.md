@@ -58,6 +58,7 @@ Este repositório é público. Nada de informação da empresa nem dados sensív
 - Memória das etapas só pelo script, só de acréscimo e sem conteúdo bruto (hash e metadados derivados da etapa, como ação, categoria e confiança). Ela é local e nunca vai para um knowledge.
 - Configuração (`moiras-init`): só interativa, só com o "sim" ao arquivo inteiro, só pelo `config.ts init`. Cria apenas `.moiras/sources.json` e `.moiras/.gitignore`, nunca sobrescreve e recusa segredo (inclusive qualquer valor sob chave de credencial), credencial em URL, nome de repositório ou de knowledge que não seja um nome de arquivo seguro ou que se repita um `.moiras/.gitignore` existente que não cubra a pasta um `sources.json` que o Git ainda rastreia e qualquer link simbólico no caminho (pasta, ancestral, `.gitignore` ou arquivo). O `check` aplica as mesmas conferências como aviso (link simbólico, rastreado, não ignorado pelo Git) e não bloqueia a leitura. Os conectores só leem. O arquivo aceita blocos de outras fontes além de Jira e Slack, que hoje são o foco.
 - Fora a memória, os relatórios e a configuração, o plugin só escreve no knowledge local (`glossary/` pelo `moiras-index`; `learnings/` pelas Moiras, pelo `moiras-learn` e pela auditoria; `criteria/` pelas Moiras, pelo `moiras-teach` e pela auditoria), no modo interativo e depois da escolha ou do "sim" do usuário. O único caminho para um knowledge compartilhado é o `moiras-publish`, por PR. Aprendizado não é apagado; só `result` e a observação mudam. Critérios conflitantes são unidos num critério regenerado (`replaces`).
+- `reference_url` (opcional, só em aprendizado do tipo solução): URL de referência da solução, normalmente a PR do GitHub. Só `https`, sem credencial; o `knowledge.ts check` recusa o resto (`reference-url-invalid`) e o plugin nunca abre nem valida a URL.
 - O knowledge nunca tem cópia de código: no máximo um trecho por registro, de até 20 linhas, sempre com referência (repositório, caminho, commit). Sem segredos.
 - Arquivos do knowledge levam frontmatter com `indexed_at` ou `created_at`; conteúdo antigo deve ser sinalizado na saída.
 - O que conta como problema de plataforma de terceiros ou do app vem dos critérios do time. Sem critérios aplicáveis, os padrões do plugin são apenas fallback, sempre sinalizado com `criteria-missing`; não são regras do time.
@@ -72,7 +73,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 ## Ambiente
 
 - `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
-- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`).
+- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`). O Node precisa ser ≥ 22.18 (`engines` em `scripts/package.json`): antes disso os scripts falham.
 - Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
 
 ## Convenções

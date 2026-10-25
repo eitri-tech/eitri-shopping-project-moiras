@@ -32,13 +32,13 @@ Cloto (coleta das fontes configuradas) → Láquesis (classifica, acha duplicado
 **Outros agentes** (Codex, Cursor, Copilot, opencode, Antigravity etc.): use o [`npx skills`](https://github.com/vercel-labs/skills), que copia ou liga as skills na pasta de cada agente.
 
 ```bash
-npx skills add eitri-tech/eitri-shopping-project-moiras --list                      # lista as sete skills
+npx skills add eitri-tech/eitri-shopping-project-moiras --list                      # lista as oito skills
 npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
 O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts` e `scripts/github.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
 
-Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node LTS, sem dependências.
+Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node 22.18 ou mais novo (o LTS atual serve), sem dependências: eles usam `import.meta.main` e executam `.ts` direto, e o Node 20 e o 22.17 falham.
 
 ## Uso
 
@@ -103,12 +103,12 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 
 ## Desenvolvimento
 
-Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`). O Node executa os `.ts` direto, sem build.
+Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`; o Node precisa ser ≥ 22.18). O Node executa os `.ts` direto, sem build. Não há CI: rode as checagens abaixo antes de commitar.
 
 Checagens:
 
 ```bash
-node --test plugins/moiras/scripts/*.test.ts   # testes de memória e de knowledge (node:test)
+node --test plugins/moiras/scripts/*.test.ts   # testes de memória, configuração, GitHub, .gitignore e knowledge (node:test)
 tsc -p tsconfig.json                           # tipos; no Nix já vem pronto
 claude plugin validate plugins/moiras && claude plugin validate .
 ```
@@ -158,7 +158,7 @@ Roteiro para validar `moiras-index`, `moiras-audit`, `moiras-sync` e `moiras-pub
    }
    ```
 
-2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as sete skills.
+2. Abra o Claude nela com `claude --plugin-dir <clone>/plugins/moiras`; o `/help` lista as oito skills.
 3. **Indexe** com `/moiras:moiras-index` (nada é gravado antes do "sim"). Confira com `node <clone>/plugins/moiras/scripts/knowledge.ts check .moiras/knowledge`: sem achados, `url` sem credencial, `local_path` relativo, nenhum trecho de código e `indexed_commit` e `indexed_commit_date` (em UTC) conferindo com `git -C <repositório> log -1`, e `indexed_dirty` com `git -C <repositório> status --porcelain`.
 4. **Reindexe**: sem mudanças, volta `unchanged`; com um commit novo que não mexe nas evidências, continua `unchanged` e o relatório só informa o commit atual. Para ver `changed`, crie um arquivo em `src/` do repositório, rode de novo, **responda "não" à gravação** e apague o arquivo. Prefira um clone descartável se o repositório tiver alterações suas.
 5. **Audite** com `/moiras:moiras-audit glossary`: sem achados graves. Para ver o aviso de glossário velho, copie o arquivo, ponha um `indexed_at` de mais de 6 meses e rode de novo (ela só sugere `moiras-index`); **restaure a cópia antes do passo 7**.

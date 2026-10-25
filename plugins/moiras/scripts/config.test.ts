@@ -48,6 +48,14 @@ describe('validate', () => {
     assert.deepEqual(rules({ jira: { site, categories: [{ field: 'labels', values: ['checkout'] }, { field: 'customfield_10020', values: ['Sprint 12'] }, { field: 'Story Points', values: ['3'] }, { field: 'Área responsável', values: ['Pagamentos'] }, { field: 'A\u0301rea responsa\u0301vel', values: ['Pagamentos'] }, { field: 'cf[10021]', values: ['x'] }] } }), []);
   });
 
+  it('validates the optional jira.team like a category, without making it a scope', () => {
+    const site = 'example.atlassian.net';
+    assert.deepEqual(rules({ jira: { site, epics: ['PROJ-1'], team: { field: 'Team', value: '94e3990e' } } }), []);
+    assert.deepEqual(rules({ jira: { site, epics: ['PROJ-1'], team: 'Team' } }), ['jira.team:not-an-object:error']);
+    assert.deepEqual(rules({ jira: { site, epics: ['PROJ-1'], team: {} } }), ['jira.team.field:field-missing:error', 'jira.team.value:field-missing:error']);
+    assert.deepEqual(rules({ jira: { site, team: { field: 'Team', value: 'x' } } }), ['jira:scope-missing:warning']);
+  });
+
   it('rejects a bad scope without echoing values', () => {
     const site = 'example.atlassian.net';
     assert.deepEqual(rules({ jira: { site, epics: [] } }), ['jira.epics:not-a-list:error']);
@@ -362,7 +370,7 @@ describe('index.github', () => {
     assert.ok(rules(config([{ match: '-acme/shop-*', clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
   });
   it('refuses malformed matches', () => {
-    for (const match of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
+    for (const match of ['*', 'acme', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'acme/???', 'acme/*-*', 'ac*/shop', 'acme/a..b', 'acme/a/b', 'acme/@shop', 'https://github.com/acme/shop', '', 1]) {
       assert.ok(rules(config([{ match, clone_dir: 'repos' }])).includes('index.github[0].match:match-invalid:error'));
     }
   });

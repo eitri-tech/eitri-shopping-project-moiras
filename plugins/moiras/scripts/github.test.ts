@@ -34,7 +34,7 @@ it('escapes dots and supports question marks and truncation', () => {
 });
 
 it('rejects invalid arguments and malformed inputs', () => {
-  for (const pattern of ['*', 'acme', 'acme/*', 'ac*/shop', 'acme/../shop', 'acme/a[b]']) assert.throws(() => matchRepositories(pattern, []), /Usage:/);
+  for (const pattern of ['*', 'acme', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'ac*/shop', 'acme/../shop', 'acme/a[b]']) assert.throws(() => matchRepositories(pattern, []), /Usage:/);
   assert.throws(() => matchRepositories('acme/shop*', {}));
   for (const argv of [[], ['match'], ['clone'], ['plan-clone'], ['match', '--pattern', 'acme/shop*', '--dir', 'repos'], ['clone', '--unknown']]) assert.throws(() => main(argv, '[]'), /Usage:/);
   assert.equal(JSON.parse(main(['match', '--pattern', 'acme/shop*'], '[]').output).owner, 'acme');
@@ -96,6 +96,20 @@ it('runs clone with an argument array and suppresses git failure details', t => 
   assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, failed), { output: '{"cloned":false,"status":128}', code: 1 });
 });
 
+it('reports the cause of failures with fixed messages and no details from the input', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'moiras-github-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.throws(() => main(['match', '--pattern', 'acme/a*'], '{bad'), /^Error: Invalid JSON input\.$/);
+  assert.throws(() => main(['plan-clone', '--dir', dir], '{bad'), /^Error: Invalid JSON input\.$/);
+  const file = join(dir, 'plain-file');
+  writeFileSync(file, '');
+  assert.throws(() => main(['plan-clone', '--dir', file], JSON.stringify({ owner: 'acme', repositories: [{ name: 'shop', url: 'https://github.com/acme/shop', archived: false }] })), /^Error: Clone folder unreadable\.$/);
+  const noGit = (() => ({ status: null, error: Object.assign(new Error('spawnSync git ENOENT /secret/path'), { code: 'ENOENT' }) })) as unknown as typeof spawnSync;
+  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, noGit), { output: '{"cloned":false,"status":null,"error_code":"ENOENT"}', code: 1 });
+  const killed = (() => ({ status: null, signal: 'SIGKILL' })) as unknown as typeof spawnSync;
+  assert.deepEqual(cloneRepository(dir, 'shop', 'https://github.com/acme/shop', 'acme', undefined, killed), { output: '{"cloned":false,"status":null,"signal":"SIGKILL"}', code: 1 });
+});
+
 it('rejects unsafe names, URLs and depths before invoking git', () => {
   const never = (() => { assert.fail('git must not run'); }) as typeof spawnSync;
   for (const url of ['http://github.com/acme/shop', 'https://github.com.evil/acme/shop', 'https://user:pass@github.com/acme/shop', 'https://github.com/acme/other', 'https://github.com/acme/shop?x', 'https://github.com/acme/shop/']) assert.throws(() => cloneRepository('repos', 'shop', url, 'acme', undefined, never));
@@ -152,8 +166,8 @@ it('drops listed repositories whose url is not the pattern owner\'s', () => {
 });
 
 it('validates patterns: no leading hyphen, no bare wildcard, no escapes', () => {
-  for (const pattern of ['acme/shop-*', 'Acme/a?c', 'a-b/x.y*']) assert.equal(validPattern(pattern), true);
-  for (const pattern of ['-x/foo', 'acme/*', '*/foo', 'acme', 'acme/a..b', 'acme/a/b', 'acme/@x']) assert.equal(validPattern(pattern), false);
+  for (const pattern of ['acme/shop-*', 'Acme/a?c', 'a-b/x.y*', 'acme/shop', 'acme/*-api', 'acme/*2']) assert.equal(validPattern(pattern), true);
+  for (const pattern of ['-x/foo', 'acme/*', 'acme/**', 'acme/*?', 'acme/?*', 'acme/???', 'acme/*-*', 'acme/.*', '*/foo', 'acme', 'acme/a..b', 'acme/a/b', 'acme/@x']) assert.equal(validPattern(pattern), false);
 });
 
 it('keeps the skill command in sync with the list limit', () => {

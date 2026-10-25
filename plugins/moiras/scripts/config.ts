@@ -122,6 +122,18 @@ export function validate(config: unknown): Finding[] {
     if (jira.jql !== undefined) add('jira.jql', 'jql-unsupported');
     if ([jira.epic, jira.epics, jira.categories].every(part => part === undefined)) add('jira', 'scope-missing', 'warning');
     if (jira.project_end !== undefined && !(typeof jira.project_end === 'string' && isCalendarDate(jira.project_end))) add('jira.project_end', 'date-invalid');
+    // The team is an expectation, not a scope: the Clotho only warns about issues of the epics that are outside it.
+    if (jira.team !== undefined) {
+      const team = jira.team;
+      if (!isObject(team)) add('jira.team', 'not-an-object');
+      else {
+        if (!isText(team.field)) add('jira.team.field', 'field-missing');
+        else if (!jiraField.test(team.field.normalize('NFC'))) add('jira.team.field', 'field-invalid');
+        // The Jira team is single-valued: an issue has one team, so the expectation is one value too.
+        if (!isText(team.value)) add('jira.team.value', 'field-missing');
+        else if (!jiraValue.test(team.value)) add('jira.team.value', 'value-invalid');
+      }
+    }
     if (jira.agency_field !== undefined && !isText(jira.agency_field)) add('jira.agency_field', 'field-invalid');
   }
 
