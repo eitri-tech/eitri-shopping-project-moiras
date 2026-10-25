@@ -38,7 +38,7 @@ npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triag
 
 O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts` e `scripts/github.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
 
-Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node LTS, sem dependências.
+Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node 22.18 ou mais novo (o LTS atual serve), sem dependências: eles usam `import.meta.main` e executam `.ts` direto, e o Node 20 e o 22.17 falham.
 
 ## Uso
 
@@ -103,7 +103,7 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 
 ## Desenvolvimento
 
-Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`). O Node executa os `.ts` direto, sem build.
+Ambiente: `nix develop` (ou `direnv allow`) entra num shell com Node, TypeScript, Python 3 e jq fixados pelo `flake.lock`. Sem Nix, instale `git`, `curl` e `jq` (`sudo apt install -y git curl jq`), o [nvm](https://github.com/nvm-sh/nvm) e rode `nvm install && nvm use` (lê o `.nvmrc`; o Node precisa ser ≥ 22.18). O Node executa os `.ts` direto, sem build. A CI (`.github/workflows/ci.yml`) roda os testes, o `tsc` e o `claude plugin validate` em cada PR.
 
 Checagens:
 
