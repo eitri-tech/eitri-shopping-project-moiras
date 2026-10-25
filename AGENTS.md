@@ -74,7 +74,6 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 
 - `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
 - Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`). O Node precisa ser ≥ 22.18 (`engines` em `scripts/package.json`): antes disso os scripts falham.
-- A CI (`.github/workflows/ci.yml`) roda testes, `tsc` e `claude plugin validate` em cada PR.
 - Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
 
 ## Convenções
