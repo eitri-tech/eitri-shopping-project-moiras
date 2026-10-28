@@ -1,8 +1,8 @@
 ---
 name: moiras-learn
-description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e/ou categorias) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\")."
-argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N]"
-allowed-tools: Bash(node:*)
+description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e/ou categorias) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\"). Com `--from-github`, aprende também com PRs mergeados e issues fechadas como resolvidas do GitHub (ex.: \"aprende com os PRs mergeados do acme-shop-checkout em outubro\")."
+argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N] | --from-github <repositório>... [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]... | --from-github --pending"
+allowed-tools: Bash(node:*), Bash(gh pr list:*), Bash(gh issue list:*), Bash(gh pr view:*), Bash(gh issue view:*)
 ---
 
 # Aprender com o histórico
@@ -13,7 +13,7 @@ Resolva `<local-dir>` pelo `dir` da entrada com `scope: local` em `knowledge` no
 
 A triagem só aprende com o que ela mesma tria. Esta skill dá a partida a frio: transforma o que o time já resolveu em registros que a Láquesis e a Átropos passam a consultar. Ela **não substitui** a Cloto nem a indexação: a Cloto continua coletando só o que está pendente, e o glossário continua vindo só do `moiras-index`.
 
-Só roda no modo interativo: não existe `--auto`, porque todo registro depende do "sim" do usuário à lista exata.
+Só roda no modo interativo: não existe `--auto`, porque todo registro depende do "sim" do usuário à lista exata. A coleta automática do GitHub (dentro do `moiras-sync`) só monta uma **lista pendente**; quem grava é esta skill, com `--from-github --pending`, depois do "sim" (ver "Aprender com o GitHub").
 
 ## O que ela lê e o que ela escreve
 
@@ -58,6 +58,46 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
    ```
 
 9. **Relatar**, sem texto de issue: quantos registros por tipo, o que ficou de fora e por quê, os avisos (`criteria-missing`, `knowledge-stale`) e a sugestão de `moiras-audit learnings` e, se o knowledge tem `repository`, de `moiras-publish`.
+
+## Aprender com o GitHub (`--from-github`)
+
+Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovação, gravação, conferência e relatório), trocando só a fonte: em vez das issues do Jira, os **PRs mergeados** e as **issues fechadas como resolvidas** de repositórios do GitHub. O PR costuma ter o que a issue não tem: os arquivos alterados e a conversa da revisão.
+
+**Fontes válidas.** Só PR **mergeado** e issue fechada como `COMPLETED`. Ficam de fora, com o motivo: PR fechado sem merge (`not-merged`), PR revertido (`reverted`) e o próprio PR de revert (`is-revert`), issue fechada como não planejada ou duplicada (`not-completed`) e issue que um PR já cobre (`covered-by-pr`, o aprendizado é o do PR). Só leitura: `gh pr list`, `gh issue list` e `gh pr view`/`gh issue view`; nada é comentado, rotulado nem fechado.
+
+**Repositórios.** Os do argumento (`<repositório>`, o nome do repositório) ou, sem argumento, os clones que o `github.ts local` encontra para o padrão de `index.github`. O dono vem da URL do GitHub; só entra PR ou issue cuja URL é do próprio repositório.
+
+**Filtros.** `--since` e `--until` (`AAAA-MM-DD`, inclusivos; filtram `mergedAt` do PR e `closedAt` da issue) e `--label` (repetível; basta uma das labels). Servem também para reprocessar um período: o que o knowledge já cita é pulado, então rodar duas vezes não duplica.
+
+**Passos.**
+
+1. **Coletar** (só leitura), por repositório, com um limite alto o bastante para o período (avise se a lista chegar ao limite). Peça ao `gh` `--state merged` e os campos `number,title,url,state,mergedAt,headRefName,labels,body,closingIssuesReferences,files`; para as issues, `--state closed` e `number,title,url,state,stateReason,closedAt,labels,body`. Para achar reverts, os PRs vão **até hoje**, mesmo com `--until`: o revert costuma vir depois do período. Junte tudo em `{ "prs": [...], "issues": [...] }` num arquivo temporário (fora do repositório do plugin e do knowledge) e apague-o ao terminar.
+2. **Selecionar.** Rode, passando o `dir` de **todos** os knowledges em disco (como no passo 3 de "Passos"):
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" eligible --repo <repositório> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+   ```
+
+   A saída tem `candidates` (referência `repositório#número`, `url`, `closed_at`, `jira_key` quando o título ou a branch do PR tem a chave, `closes` e `suggested_id`) e `skipped` (referência e motivo: os acima, mais `outside-period`, `label-mismatch`, `already-known`, `already-pending`, `secret` e `invalid`). Ela nunca imprime texto de PR ou de issue. **Segredo**: item com segredo em qualquer texto (título, descrição, branch, labels, arquivos, comentários) sai com `secret` e nunca vira registro; mostre-o ao usuário só pela referência.
+3. **Pular, classificar e propor** como nos passos 3 a 5: o `issues` do `knowledge.ts` já foi aplicado pelo `--knowledge` (cobre a referência e também a chave do Jira); a Láquesis usa o glossário e os arquivos do PR para repositório e componente; a síntese (problema, causa, solução e arquivos) é sua, em português, lida do PR (`gh pr view`, só o necessário) e nunca copiada.
+4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:
+   - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `repositório#número` (o `knowledge.ts check` aceita as duas).
+   - `reference_url`: a `url` do PR ou da issue. **Obrigatória** neste modo (`reference-url-missing` no `check`): é como se audita e se remove o registro depois.
+   - `imported_from: github` e, na `Observação`, "Importado do GitHub; confira antes de publicar."
+   - `result: resolved` só para PR mergeado (a evidência é o merge); issue fechada sem PR ligado precisa do comentário de fechamento dizendo o que foi feito, senão não vira solução (`no-evidence`).
+   - `id` e nome de arquivo: `suggested_id`.
+   Depois do "sim", **tire** da lista pendente o que foi gravado ou descartado: `learn-github.ts pending remove --state .moiras/learn-github --ref <ref>...`.
+5. **Conferir e relatar** como nos passos 8 e 9. O `check` roda sobre o que foi gravado; registro que falhar não é entregue.
+
+**Onde fica.** Só `learnings/` do knowledge `local`, fora do repositório do plugin. A lista pendente e a marca d'água ficam em `.moiras/learn-github/` (`pending.json` e `watermark.json`), estado da máquina que nunca vai para um knowledge nem para um PR.
+
+### Lista pendente da coleta automática
+
+O `moiras-sync` (`--auto`, ou o interativo, depois da sincronização) roda `learn-github.ts auto`: pega só o que fechou **desde a rodada anterior** (marca d'água por repositório, uma para PRs e outra para issues), aplica as mesmas regras e filtros e **só acrescenta à lista pendente**. Não grava nenhum registro: a regra de que o `moiras-learn` só escreve com o "sim" do usuário à lista exata continua valendo.
+
+Com `--from-github --pending`, esta skill lê `learn-github.ts pending list`, relê no GitHub cada item (síntese, arquivos) e segue pelos passos de 3 a 5 acima, com a aprovação do usuário à lista exata. A lista pendente nunca tem texto de PR ou de issue: só referência, URL, data e chave do Jira.
+
+> **Ponto de decisão.** A escolha de a coleta automática só montar a lista é única e está marcada em `autoDisposition`, em `scripts/learn-github.ts`. Gravar direto, sem o "sim", seria outra decisão: exigiria mudar essa constante, o ramo correspondente do `auto`, esta seção e a regra do `AGENTS.md`. Não está implementado.
 
 ## Modelos de reserva
 
@@ -141,14 +181,14 @@ imported_from: history
 ## O que vai em cada registro
 
 - Siga o modelo do tipo em `_templates/` ou, sem ele, nos "Modelos de reserva". O corpo é uma **síntese curta em português**, escrita por você; nunca cole título, descrição, comentário ou mensagem da issue.
-- `Fontes` leva a chave da issue e o PR (`repositório#número`) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
+- `Fontes` leva a chave da issue e o PR (`repositório#número`; no modo `--from-github`, a referência do PR ou da issue de origem) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
 - `agency` do registro segue a seção 3 de `stages/lachesis.md`: o campo configurado (`jira.agency_field`) e, sem ele, o `agency` do glossário quando todos os repositórios concordam; ambíguo ou vazio fica `null`. De issue de agência ficam a síntese técnica e a chave; nada da conversa com a agência nem de outros clientes.
 - `confidence` reflete a evidência: PR mergeado e ligado, mais alta; só o comentário de fechamento, mais baixa. Sem critérios aplicáveis, vale o limite do fallback e o aviso `criteria-missing`.
 - Datas dos registros em `AAAA-MM-DD`.
 
 ## Limites
 
-- Só leitura no Jira e no Slack; nunca comenta, transiciona nem reage.
+- Só leitura no Jira, no Slack e no GitHub; nunca comenta, transiciona, rotula, fecha nem reage.
 - `result: resolved` só com evidência; na dúvida, a issue fica de fora.
 - Nada de nomes reais de pessoas, e-mails, identificadores de conta, segredos nem texto bruto de issue ou conversa.
 - Não apaga nem reescreve registros; não edita o glossário nem os critérios.

@@ -54,7 +54,7 @@ npx skills add eitri-tech/eitri-shopping-project-moiras --list                  
 npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
-O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts` e `scripts/github.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
+O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts`, `scripts/github.ts` e `scripts/learn-github.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
 
 Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node 22.18 ou mais novo (o LTS atual serve), sem dependências: eles usam `import.meta.main` e executam `.ts` direto, e o Node 20 e o 22.17 falham.
 
@@ -88,10 +88,11 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 | `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
 | `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-learn [PROJ-100] [--since AAAA-MM-DD]` | Aprende com as issues já concluídas do escopo: propõe soluções, padrões e decisões e grava no knowledge local só o que você aprovar |
+| `/moiras:moiras-learn --from-github <repositório> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]` | Mesmo fluxo, a partir dos PRs mergeados e das issues fechadas como resolvidas do GitHub (PR fechado sem merge, revertido ou issue não planejada ficam de fora); cada registro leva o link do PR ou da issue de origem. `--pending` revisa a lista montada pelo `moiras-sync --github` |
 | `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: mexeu no checkout, confira a flag de homologação): grava um critério no knowledge local só depois do seu "sim" |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios (pastas ou um padrão do GitHub, como `acme/acme-shop-*`); grava no knowledge local depois do seu "sim" e só clona o que faltar com o seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
-| `/moiras:moiras-sync <nome>` | Traz o que foi mergeado nos knowledges compartilhados |
+| `/moiras:moiras-sync <nome> [--github <repositório>]` | Traz o que foi mergeado nos knowledges compartilhados. Com `--github`, também monta a **lista pendente** do que fechou no GitHub desde a última rodada (marca d'água); não grava aprendizado |
 | `/moiras:moiras-publish <nome>` | Abre um PR com o que é novo no knowledge local |
 
 **Primeira vez**, nesta ordem:
@@ -99,7 +100,7 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 1. `/moiras:moiras-init` (uma vez).
 2. `/moiras:moiras-sync <nome>`, só se houver knowledge compartilhado (`repository` em `knowledge`). Rode antes do `moiras-learn`: ele só vê os knowledges que já estão no disco ao pular issues conhecidas e reservar ids.
 3. `/moiras:moiras-index`.
-4. `/moiras:moiras-learn`, opcional: só compensa se houver issues concluídas no histórico do escopo.
+4. `/moiras:moiras-learn`, opcional: só compensa se houver issues concluídas no histórico do escopo (ou PRs mergeados, com `--from-github`).
 5. `/moiras:moiras-triage`.
 
 O desfecho de uma solução escolhida também passa pela triagem: quando você informa o `result` na análise seguinte, só ele e a observação do registro mudam — a solução nunca é apagada nem reescrita.
@@ -157,6 +158,7 @@ Onde mexer:
 | Configuração, aprendizado do histórico, regras ensinadas, auditoria, indexação, sincronização e publicação | `plugins/moiras/skills/moiras-{init,learn,teach,audit,index,sync,publish}/SKILL.md` |
 | Memória das etapas | `plugins/moiras/scripts/memory.ts` |
 | Regras dos registros do knowledge (`hash`, `check`, `issues`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
+| Seleção do aprendizado do GitHub, marca d'água e lista pendente | `plugins/moiras/scripts/learn-github.ts` |
 | Criação e validação da configuração | `plugins/moiras/scripts/config.ts` |
 | Repositórios do GitHub por padrão (`match`, `plan-clone`, `clone`) | `plugins/moiras/scripts/github.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |

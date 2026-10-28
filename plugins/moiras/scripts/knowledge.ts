@@ -82,6 +82,9 @@ const required: Record<string, string[]> = {
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
+/** Origin of a learning taken from GitHub with no Jira key: `<repository>#<number>` (a merged PR or an issue closed as completed). */
+const githubRef = /^[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
+const issueKey = (value: string): boolean => jiraKey.test(value) || githubRef.test(value);
 // Optional pointer of a solution (usually a GitHub PR): a real https URL, no credentials, no whitespace.
 export function validReferenceUrl(value: string): boolean {
   if (!value || /\s/.test(value)) return false;
@@ -426,13 +429,15 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asScalar(fields.confidence)) && Number(asScalar(fields.confidence)) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
       if (kind.type === 'solution' && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (!fieldPlaceholder.test(asScalar(fields.reference_url)) && !validReferenceUrl(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
-      if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
+      if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !issueKey(asScalar(fields.issue))))) add('issue-invalid', 'error');
+      // A learning imported from GitHub points at its source PR or issue, so it can be audited and removed later.
+      if (kind.type === 'solution' && asScalar(fields.imported_from) === 'github' && !validReferenceUrl(asScalar(fields.reference_url))) add('reference-url-missing', 'error');
       if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
         if (!Array.isArray(fields.repositories) || fields.repositories.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('repositories-invalid', 'error');
       }
       if (kind.type === 'pattern' && asText(fields.issues)) {
         const list = (Array.isArray(fields.issues) ? fields.issues : fields.issues.split(',')).map(item => item.trim()).filter(Boolean);
-        if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !jiraKey.test(item))) add('issues-invalid', 'error');
+        if (list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && !issueKey(item))) add('issues-invalid', 'error');
       }
       if (kind.type === 'decision' && asText(fields.source)) {
         if (!Array.isArray(fields.source) || fields.source.some(item => !fieldPlaceholder.test(item) && !safeName.test(item) && !learningSource.test(item))) add('source-invalid', 'error');

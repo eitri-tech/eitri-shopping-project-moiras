@@ -1,8 +1,8 @@
 ---
 name: moiras-sync
 description: "Traz para a máquina o que foi mergeado nos repositórios de knowledge compartilhados (projeto, grupo, global), só avançando o clone local, e mostra o que chegou. Nunca envia nada. Use antes de uma triagem quando algum knowledge tiver `repository`, ou quando o usuário pedir para sincronizar (ex.: \"sincroniza o knowledge do time\", \"traz as novidades do knowledge\")."
-argument-hint: "[knowledge...] [--auto]"
-allowed-tools: Bash(node:*)
+argument-hint: "[knowledge...] [--auto] [--github <repositório>... [--since AAAA-MM-DD] [--label NOME]...]"
+allowed-tools: Bash(node:*), Bash(gh pr list:*), Bash(gh issue list:*)
 ---
 
 # Sincronização do knowledge
@@ -51,6 +51,22 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
 
    Liste-os no relatório como "já no compartilhado". A cópia local **não é apagada** por esta skill (aprendizado não se apaga); na leitura, o `local` já tem precedência sobre o compartilhado.
 
+## Coleta do GitHub (opcional, `--github`)
+
+Com `--github <repositório>...`, depois de sincronizar, a skill procura o que fechou no GitHub desde a última rodada para o `moiras-learn --from-github`. É **só uma lista pendente**: nenhum registro é criado, nem no `local` (o `<local-dir>` continua intocado). Quem grava é o `moiras-learn --from-github --pending`, com o "sim" do usuário à lista exata.
+
+1. Leia (só leitura) os PRs mergeados e as issues fechadas de cada repositório (`gh pr list --state merged` e `gh issue list --state closed`, com os campos descritos em `moiras-learn/SKILL.md`, "Aprender com o GitHub") e junte em `{ "prs": [...], "issues": [...] }` num arquivo temporário, apagado ao terminar.
+2. Rode, por repositório (`--label` repetível filtra por label; `--since` só é exigido na primeira rodada, quando ainda não há marca d'água):
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" auto --repo <repositório> --state .moiras/learn-github [--since AAAA-MM-DD] [--label <nome>]... --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+   ```
+
+   Pega só o que fechou depois da marca d'água (uma para PRs e outra para issues, por repositório), pula o que o knowledge já cita e o que já está pendente, bloqueia item com segredo e ignora PR não mergeado ou revertido e issue fechada como não planejada. A marca d'água só avança depois de a lista pendente ser salva: se falhar, a rodada seguinte pega os mesmos itens.
+3. Relate quantos itens entraram na lista pendente (`candidates`), quantos ficaram de fora e por quê (`skipped`, só referência e motivo) e sugira `/moiras:moiras-learn --from-github --pending`.
+
+No `--auto` a coleta pergunta nada e só escreve `pending.json` e `watermark.json` em `.moiras/learn-github/` (estado local, fora de qualquer knowledge). Falha do `gh` (rede, permissão) é "não coletado", nunca "nada novo": a marca d'água não se mexe.
+
 ## Relatório
 
 Por knowledge: `name`, `scope`, situação (`updated`, `unchanged`, `cloned`, `skipped`, `stopped`), commit efetivamente lido (`git rev-parse HEAD` depois da atualização, ou ao parar), commits trazidos, arquivos por pasta e ação, os achados da validação e os registros já no compartilhado. Quando parar ou pular, o motivo vem em uma frase. Sem texto bruto de issues ou conversas.
@@ -58,6 +74,6 @@ Por knowledge: `name`, `scope`, situação (`updated`, `unchanged`, `cloned`, `s
 ## Limites
 
 - Só `git fetch` e `git merge --ff-only` num clone que já é do knowledge (e `git clone` de um knowledge declarado, com o "sim"). Nada de `push`, `commit`, `checkout`, `reset`, `rebase`, `stash` ou `clean`.
-- O sync não cria nem altera registros em nenhum knowledge: não escreve no `local` e não altera o clone além de avançá-lo.
+- O sync não cria nem altera registros em nenhum knowledge: não escreve no `local` e não altera o clone além de avançá-lo. A coleta do GitHub só escreve a lista pendente e a marca d'água em `.moiras/learn-github/`; no GitHub só lê.
 - Se o knowledge declarado tem `repository` mas o usuário não quer sincronizar, a triagem funciona com o que já estiver no clone, e o conteúdo velho é sinalizado por `indexed_at` e `created_at`.
 - Identificadores (campos, valores fixos) em inglês; relatórios em português.
