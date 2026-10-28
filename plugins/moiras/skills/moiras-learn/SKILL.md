@@ -1,7 +1,7 @@
 ---
 name: moiras-learn
 description: "Aprende com o histórico: lê as issues já concluídas do escopo (épicos e/ou categorias) no Jira (com os PRs e o comentário de fechamento), agrupa as recorrentes por repositório e componente e propõe registros de aprendizado (soluções já resolvidas, padrões e decisões) para o knowledge local, sempre com a lista exata aprovada pelo usuário. Use para dar partida num knowledge vazio ou ao entrar num projeto com muito histórico (ex.: \"aprende com as issues concluídas\", \"importa o histórico do épico PROJ-100 dos últimos 90 dias\"). Com `--from-github`, aprende também com PRs mergeados e issues fechadas como resolvidas do GitHub (ex.: \"aprende com os PRs mergeados do acme-shop-checkout em outubro\")."
-argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N] | --from-github <repositório>... [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]... | --from-github --pending"
+argument-hint: "[EPIC...] [--since AAAA-MM-DD] [--limit N] | --from-github <dono/repo>... [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]... | --from-github --pending"
 allowed-tools: Bash(node:*), Bash(gh pr list:*), Bash(gh issue list:*), Bash(gh pr view:*), Bash(gh issue view:*)
 ---
 
@@ -65,20 +65,29 @@ Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovaçã
 
 **Fontes válidas.** Só PR **mergeado** e issue fechada como `COMPLETED`. Ficam de fora, com o motivo: PR fechado sem merge (`not-merged`), PR revertido (`reverted`) e o próprio PR de revert (`is-revert`), issue fechada como não planejada ou duplicada (`not-completed`) e issue que um PR já cobre (`covered-by-pr`, o aprendizado é o do PR). Só leitura: `gh pr list`, `gh issue list` e `gh pr view`/`gh issue view`; nada é comentado, rotulado nem fechado.
 
-**Repositórios.** Os do argumento (`<repositório>`, o nome do repositório) ou, sem argumento, os clones que o `github.ts local` encontra para o padrão de `index.github`. O dono vem da URL do GitHub; só entra PR ou issue cuja URL é do próprio repositório.
+**Repositórios.** Os do argumento (`<dono/repo>`) ou, sem argumento, os clones que o `github.ts local` encontra para o padrão de `index.github` (o dono vem do padrão). Só entra PR ou issue cuja URL é do **dono e** do repositório informados (um fork ou outro repositório de mesmo nome é `invalid`). A referência gravada continua `repositório#número`.
 
 **Filtros.** `--since` e `--until` (`AAAA-MM-DD`, inclusivos; filtram `mergedAt` do PR e `closedAt` da issue) e `--label` (repetível; basta uma das labels). Servem também para reprocessar um período: o que o knowledge já cita é pulado, então rodar duas vezes não duplica.
 
 **Passos.**
 
-1. **Coletar** (só leitura), por repositório, com um limite alto o bastante para o período (avise se a lista chegar ao limite). Peça ao `gh` `--state merged` e os campos `number,title,url,state,mergedAt,headRefName,labels,body,closingIssuesReferences,files`; para as issues, `--state closed` e `number,title,url,state,stateReason,closedAt,labels,body`. Para achar reverts, os PRs vão **até hoje**, mesmo com `--until`: o revert costuma vir depois do período. Junte tudo em `{ "prs": [...], "issues": [...] }` num arquivo temporário (fora do repositório do plugin e do knowledge) e apague-o ao terminar.
+1. **Coletar** (só leitura), por repositório (`<dono/repo>`), com os comandos exatos abaixo. `<N>` é um limite alto o bastante para o período (sugestão 500; se a lista vier com `<N>` itens, **avise**: pode ter sido cortada). `AAAA-MM-DD` é o `--since` (ou, sem ele, o início do recorte combinado com o usuário). **Sem `--until`** na busca: os PRs vão até hoje, porque o revert costuma vir depois do período e é preciso vê-lo para descartar o PR revertido; o `--until` é aplicado pelo `eligible`, no passo seguinte.
+
+   ```bash
+   gh pr list --repo <dono/repo> --state merged --limit <N> --search 'merged:>=AAAA-MM-DD' --json number,title,url,state,mergedAt,headRefName,labels,body,closingIssuesReferences,files
+   gh issue list --repo <dono/repo> --state closed --limit <N> --search 'closed:>=AAAA-MM-DD' --json number,title,url,state,stateReason,closedAt,labels,body
+   ```
+
+   Junte as duas saídas em `{ "prs": [...], "issues": [...] }` num arquivo temporário (fora do repositório do plugin e do knowledge) e apague-o ao terminar. O `gh` falhar (rede, permissão) é "não coletado", nunca "sem resultados".
 2. **Selecionar.** Rode, passando o `dir` de **todos** os knowledges em disco (como no passo 3 de "Passos"):
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" eligible --repo <repositório> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" eligible --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
    ```
 
    A saída tem `candidates` (referência `repositório#número`, `url`, `closed_at`, `jira_key` quando o título ou a branch do PR tem a chave, `closes` e `suggested_id`) e `skipped` (referência e motivo: os acima, mais `outside-period`, `label-mismatch`, `already-known`, `already-pending`, `secret` e `invalid`). Ela nunca imprime texto de PR ou de issue. **Segredo**: item com segredo em qualquer texto (título, descrição, branch, labels, arquivos, comentários) sai com `secret` e nunca vira registro; mostre-o ao usuário só pela referência.
+
+   > **Nota.** PR ou issue que **fala do próprio detector de segredos** (por exemplo, um PR que altera o `hasSecret` ou que cita um token de exemplo no texto) pode ser barrado como `secret`. Isso é **intencional**: o detector não distingue um segredo de um exemplo dele, e é preferível perder esse aprendizado a gravar algo que pareça um segredo. Se o usuário quiser aprender com esse item, escreva a síntese à mão, sem o trecho que parece segredo, e rode o `check`; a skill não contorna o bloqueio.
 3. **Pular, classificar e propor** como nos passos 3 a 5: o `issues` do `knowledge.ts` já foi aplicado pelo `--knowledge` (cobre a referência e também a chave do Jira); a Láquesis usa o glossário e os arquivos do PR para repositório e componente; a síntese (problema, causa, solução e arquivos) é sua, em português, lida do PR (`gh pr view`, só o necessário) e nunca copiada.
 4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:
    - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `repositório#número` (o `knowledge.ts check` aceita as duas).

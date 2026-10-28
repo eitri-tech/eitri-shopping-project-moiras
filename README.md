@@ -88,11 +88,11 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 | `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
 | `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-learn [PROJ-100] [--since AAAA-MM-DD]` | Aprende com as issues já concluídas do escopo: propõe soluções, padrões e decisões e grava no knowledge local só o que você aprovar |
-| `/moiras:moiras-learn --from-github <repositório> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]` | Mesmo fluxo, a partir dos PRs mergeados e das issues fechadas como resolvidas do GitHub (PR fechado sem merge, revertido ou issue não planejada ficam de fora); cada registro leva o link do PR ou da issue de origem. `--pending` revisa a lista montada pelo `moiras-sync --github` |
+| `/moiras:moiras-learn --from-github <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]` | Mesmo fluxo, a partir dos PRs mergeados e das issues fechadas como resolvidas do GitHub (PR fechado sem merge, revertido ou issue não planejada ficam de fora); cada registro leva o link do PR ou da issue de origem. PR ou issue que fala do próprio detector de segredos pode ser barrado como `secret`: é intencional. `--pending` revisa a lista montada pelo `moiras-sync --github` |
 | `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: mexeu no checkout, confira a flag de homologação): grava um critério no knowledge local só depois do seu "sim" |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios (pastas ou um padrão do GitHub, como `acme/acme-shop-*`); grava no knowledge local depois do seu "sim" e só clona o que faltar com o seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
-| `/moiras:moiras-sync <nome> [--github <repositório>]` | Traz o que foi mergeado nos knowledges compartilhados. Com `--github`, também monta a **lista pendente** do que fechou no GitHub desde a última rodada (marca d'água); não grava aprendizado |
+| `/moiras:moiras-sync <nome> [--github <dono/repo>]` | Traz o que foi mergeado nos knowledges compartilhados. Com `--github`, também monta a **lista pendente** do que fechou no GitHub desde a última rodada (marca d'água); não grava aprendizado |
 | `/moiras:moiras-publish <nome>` | Abre um PR com o que é novo no knowledge local |
 
 **Primeira vez**, nesta ordem:

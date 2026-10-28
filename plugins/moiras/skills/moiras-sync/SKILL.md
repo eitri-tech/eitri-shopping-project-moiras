@@ -1,7 +1,7 @@
 ---
 name: moiras-sync
 description: "Traz para a máquina o que foi mergeado nos repositórios de knowledge compartilhados (projeto, grupo, global), só avançando o clone local, e mostra o que chegou. Nunca envia nada. Use antes de uma triagem quando algum knowledge tiver `repository`, ou quando o usuário pedir para sincronizar (ex.: \"sincroniza o knowledge do time\", \"traz as novidades do knowledge\")."
-argument-hint: "[knowledge...] [--auto] [--github <repositório>... [--since AAAA-MM-DD] [--label NOME]...]"
+argument-hint: "[knowledge...] [--auto] [--github <dono/repo>... [--since AAAA-MM-DD] [--label NOME]...]"
 allowed-tools: Bash(node:*), Bash(gh pr list:*), Bash(gh issue list:*)
 ---
 
@@ -53,19 +53,26 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
 
 ## Coleta do GitHub (opcional, `--github`)
 
-Com `--github <repositório>...`, depois de sincronizar, a skill procura o que fechou no GitHub desde a última rodada para o `moiras-learn --from-github`. É **só uma lista pendente**: nenhum registro é criado, nem no `local` (o `<local-dir>` continua intocado). Quem grava é o `moiras-learn --from-github --pending`, com o "sim" do usuário à lista exata.
+Com `--github <dono/repo>...`, depois de sincronizar, a skill procura o que fechou no GitHub desde a última rodada para o `moiras-learn --from-github`. É **só uma lista pendente**: nenhum registro é criado, nem no `local` (o `<local-dir>` continua intocado). Quem grava é o `moiras-learn --from-github --pending`, com o "sim" do usuário à lista exata.
 
-1. Leia (só leitura) os PRs mergeados e as issues fechadas de cada repositório (`gh pr list --state merged` e `gh issue list --state closed`, com os campos descritos em `moiras-learn/SKILL.md`, "Aprender com o GitHub") e junte em `{ "prs": [...], "issues": [...] }` num arquivo temporário, apagado ao terminar.
+1. Leia (só leitura) os PRs mergeados e as issues fechadas de cada repositório, com os comandos exatos abaixo. `AAAA-MM-DD` é a data da marca d'água (`learn-github.ts watermark get --state .moiras/learn-github --repo <dono/repo>`, só o dia) ou, na primeira rodada, o `--since`; `<N>` é um limite alto (sugestão 500; se a lista vier com `<N>` itens, avise que pode ter sido cortada, e a marca d'água **não** deve avançar além do que foi lido). O `auto` descarta o que é anterior à marca d'água, então o dia inteiro pode ser lido sem duplicar.
+
+   ```bash
+   gh pr list --repo <dono/repo> --state merged --limit <N> --search 'merged:>=AAAA-MM-DD' --json number,title,url,state,mergedAt,headRefName,labels,body,closingIssuesReferences,files
+   gh issue list --repo <dono/repo> --state closed --limit <N> --search 'closed:>=AAAA-MM-DD' --json number,title,url,state,stateReason,closedAt,labels,body
+   ```
+
+   Junte as saídas em `{ "prs": [...], "issues": [...] }` num arquivo temporário, apagado ao terminar. Os campos estão explicados em `moiras-learn/SKILL.md`, "Aprender com o GitHub".
 2. Rode, por repositório (`--label` repetível filtra por label; `--since` só é exigido na primeira rodada, quando ainda não há marca d'água):
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" auto --repo <repositório> --state .moiras/learn-github [--since AAAA-MM-DD] [--label <nome>]... --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" auto --repo <dono/repo> --state .moiras/learn-github [--since AAAA-MM-DD] [--label <nome>]... --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
    ```
 
    Pega só o que fechou depois da marca d'água (uma para PRs e outra para issues, por repositório), pula o que o knowledge já cita e o que já está pendente, bloqueia item com segredo e ignora PR não mergeado ou revertido e issue fechada como não planejada. A marca d'água só avança depois de a lista pendente ser salva: se falhar, a rodada seguinte pega os mesmos itens.
 3. Relate quantos itens entraram na lista pendente (`candidates`), quantos ficaram de fora e por quê (`skipped`, só referência e motivo) e sugira `/moiras:moiras-learn --from-github --pending`.
 
-No `--auto` a coleta pergunta nada e só escreve `pending.json` e `watermark.json` em `.moiras/learn-github/` (estado local, fora de qualquer knowledge). Falha do `gh` (rede, permissão) é "não coletado", nunca "nada novo": a marca d'água não se mexe.
+No `--auto` a coleta pergunta nada e só escreve `pending.json` e `watermark.json` em `.moiras/learn-github/` (estado local, fora de qualquer knowledge). PR ou issue que fala do próprio detector de segredos pode ser barrado como `secret` (intencional; ver `moiras-learn/SKILL.md`). Falha do `gh` (rede, permissão) é "não coletado", nunca "nada novo": a marca d'água não se mexe.
 
 ## Relatório
 

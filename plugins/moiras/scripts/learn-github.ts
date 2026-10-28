@@ -1,7 +1,7 @@
 /** Selection for `moiras-learn --from-github` and for the automatic run inside `moiras-sync`.
- * Usage: node learn-github.ts eligible --repo <name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... < gh.json
- *        node learn-github.ts auto --repo <name> --state <dir> [--since <date>] [--label <name>]... [--knowledge <dir>]... < gh.json
- *        node learn-github.ts watermark get --state <dir> --repo <name> | set --state <dir> --repo <name> [--pr <ts>] [--issue <ts>]
+ * Usage: node learn-github.ts eligible --repo <owner/name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... < gh.json
+ *        node learn-github.ts auto --repo <owner/name> --state <dir> [--since <date>] [--label <name>]... [--knowledge <dir>]... < gh.json
+ *        node learn-github.ts watermark get --state <dir> --repo <owner/name> | set --state <dir> --repo <owner/name> [--pr <ts>] [--issue <ts>]
  *        node learn-github.ts pending list --state <dir> | remove --state <dir> --ref <name#n>...
  *
  * Reads the JSON of `gh pr list --state merged` and `gh issue list --state closed` from stdin ({ prs, issues })
@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hasSecret, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
 
-export const usage = 'Usage: node learn-github.ts eligible --repo <name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... | auto --repo <name> --state <dir> [--since <date>] [--label <name>]... [--knowledge <dir>]... | watermark get|set --state <dir> --repo <name> [--pr <ts>] [--issue <ts>] | pending list|remove --state <dir> [--ref <name#n>]...';
+export const usage = 'Usage: node learn-github.ts eligible --repo <owner/name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... | auto --repo <owner/name> --state <dir> [--since <date>] [--label <name>]... [--knowledge <dir>]... | watermark get|set --state <dir> --repo <owner/name> [--pr <ts>] [--issue <ts>] | pending list|remove --state <dir> [--ref <name#n>]...';
 
 /**
  * DECISION POINT (issue #68): what the automatic run does with what it finds. Today it only builds a pending list
@@ -47,6 +47,7 @@ export interface Candidate {
 export interface Skipped { ref: string; kind: Kind; reason: Reason }
 
 export interface Selection {
+  owner: string;
   repository: string;
   candidates: Candidate[];
   skipped: Skipped[];
@@ -55,6 +56,8 @@ export interface Selection {
 }
 
 export interface Options {
+  /** GitHub owner of the repository: the URL of a PR or issue must belong to `owner/repository`. */
+  owner: string;
   repository: string;
   since?: string;
   until?: string;
@@ -69,6 +72,7 @@ export interface Options {
 }
 
 const safeName = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const ownerName = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const timestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 const jiraKeyIn = /(?<![A-Za-z0-9])[A-Z][A-Z0-9]*-\d+(?![A-Za-z0-9])/;
 const secretPattern = patterns.find(entry => entry.rule === 'secret')!.test;
@@ -91,24 +95,30 @@ function hasSecretIn(value: unknown, depth = 0): boolean {
 
 const labelNames = (item: Json): string[] => (Array.isArray(item.labels) ? item.labels : []).map(label => (isObject(label) ? text(label.name) : text(label))).filter(Boolean);
 
-/** The URL must be this repository's PR or issue on github.com, so a record never points anywhere else. */
-function urlFor(kind: Kind, repository: string, number: number, url: unknown): string | undefined {
-  const match = typeof url === 'string' ? /^https:\/\/github\.com\/[A-Za-z0-9-]+\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(pull|issues)\/(\d+)$/.exec(url) : null;
+/** The URL must be this `owner/repository` PR or issue on github.com, so a record never points anywhere else (not even to a fork or a repository of the same name). */
+function urlFor(kind: Kind, owner: string, repository: string, number: number, url: unknown): string | undefined {
+  const match = typeof url === 'string' ? /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(pull|issues)\/(\d+)$/.exec(url) : null;
   if (!match || !validReferenceUrl(url as string)) return undefined;
-  if (match[1]!.toLowerCase() !== repository.toLowerCase() || match[2] !== (kind === 'pr' ? 'pull' : 'issues') || Number(match[3]) !== number) return undefined;
+  if (match[1]!.toLowerCase() !== owner.toLowerCase() || match[2]!.toLowerCase() !== repository.toLowerCase() || match[3] !== (kind === 'pr' ? 'pull' : 'issues') || Number(match[4]) !== number) return undefined;
   return url as string;
 }
 
-/** Numbers of the PRs that a revert PR names: `Revert "<title>"` by title, or `Reverts #n` / `This reverts ... #n` in the text. */
+// Revert PRs in English and Portuguese: "Revert", "Reverts", "Reverte", "Reverter", "Revertendo", "Desfaz", "Desfazer".
+const revertTitle = /^(?:revert(?:s|e|er|ing|endo)?|desfaz(?:er)?)(?![\p{L}\p{N}])/iu;
+const revertQuoted = /^(?:revert(?:s|e|er|ing|endo)?|desfaz(?:er)?)\s+"(.+)"\s*$/iu;
+// A plain English "revert" counts only in the title of a revert PR ("does not revert #3" is not one); the other verbs name a PR in any text.
+const revertNamed = /(?<![\p{L}\p{N}])(?:reverts|reverte|reverter|revertendo|desfaz|desfazer)(?![\p{L}\p{N}])[^\n#]{0,80}?#(\d{1,9})\b/giu;
+const revertNamedInTitle = /(?<![\p{L}\p{N}])(?:reverts?|reverte|reverter|reverting|revertendo|desfaz|desfazer)(?![\p{L}\p{N}])[^\n#]{0,80}?#(\d{1,9})\b/giu;
+const isRevert = (pr: Json): boolean => revertTitle.test(text(pr.title).trim());
+
+/** PRs that a revert PR names: `Revert "<title>"` by title, or `Reverts #n` / `Reverte o #n` / `Desfaz o #n` in the text. */
 function revertedBy(prs: Json[]): { titles: Set<string>; numbers: Set<number> } {
   const titles = new Set<string>(), numbers = new Set<number>();
   for (const pr of prs) {
     const title = text(pr.title).trim();
-    const byTitle = /^revert\s+"(.+)"\s*$/i.exec(title);
+    const byTitle = revertQuoted.exec(title);
     if (byTitle) titles.add(byTitle[1]!.trim().toLowerCase());
-    // `Reverts #n` names a PR in any PR; a plain "revert" counts only in the title of a revert PR ("does not revert #3" is not one).
-    const phrase = /^revert\b/i.test(title) ? /\breverts?\b[^\n#]{0,80}?#(\d{1,9})\b/gi : /\b(?:this\s+)?reverts\b[^\n#]{0,80}?#(\d{1,9})\b/gi;
-    for (const match of `${title}\n${text(pr.body)}`.matchAll(phrase)) numbers.add(Number(match[1]));
+    for (const match of `${title}\n${text(pr.body)}`.matchAll(isRevert(pr) ? revertNamedInTitle : revertNamed)) numbers.add(Number(match[1]));
   }
   return { titles, numbers };
 }
@@ -123,8 +133,8 @@ export function select(input: unknown, options: Options): Selection {
   const prs = input.prs === undefined ? [] : input.prs;
   const issues = input.issues === undefined ? [] : input.issues;
   if (!Array.isArray(prs) || !Array.isArray(issues) || prs.length + issues.length > maxItems) throw new Error('Expected { prs, issues }.');
-  const { repository } = options;
-  if (!safeName.test(repository)) throw new Error(usage);
+  const { owner, repository } = options;
+  if (!ownerName.test(owner) || !safeName.test(repository)) throw new Error(usage);
   for (const date of [options.since, options.until]) if (date !== undefined && !isCalendarDate(date)) throw new Error(usage);
   const since = options.since === undefined ? undefined : Date.parse(`${options.since}T00:00:00Z`);
   const until = options.until === undefined ? undefined : Date.parse(`${options.until}T00:00:00Z`) + 86_400_000;
@@ -132,7 +142,7 @@ export function select(input: unknown, options: Options): Selection {
   const known = options.known ?? new Set<string>();
   const used = new Set(options.ids ?? []);
   const pending = options.pending ?? new Set<string>();
-  const result: Selection = { repository, candidates: [], skipped: [], watermark: {} };
+  const result: Selection = { owner, repository, candidates: [], skipped: [], watermark: {} };
 
   const records = (list: unknown[]): Json[] => list.filter(isObject);
   const allPrs = records(prs);
@@ -140,7 +150,7 @@ export function select(input: unknown, options: Options): Selection {
   const reverted = (pr: Json): boolean => revertNumbers.has(Number(pr.number)) || revertTitles.has(text(pr.title).trim().toLowerCase());
   const closedBy = new Map<number, { good: boolean }>();
   for (const pr of allPrs) {
-    if (text(pr.state).toUpperCase() !== 'MERGED' || !moment(pr.mergedAt) || /^revert\b/i.test(text(pr.title).trim())) continue;
+    if (text(pr.state).toUpperCase() !== 'MERGED' || !moment(pr.mergedAt) || isRevert(pr)) continue;
     for (const closing of Array.isArray(pr.closingIssuesReferences) ? pr.closingIssuesReferences : []) {
       const number = isObject(closing) ? Number(closing.number) : NaN;
       if (Number.isInteger(number)) closedBy.set(number, { good: (closedBy.get(number)?.good ?? false) || !reverted(pr) });
@@ -152,7 +162,7 @@ export function select(input: unknown, options: Options): Selection {
     const ref = Number.isInteger(number) && number > 0 ? `${repository}#${number}` : `${repository}#?`;
     const skip = (reason: Reason) => { result.skipped.push({ ref, kind, reason }); };
     const when = moment(kind === 'pr' ? item.mergedAt : item.closedAt);
-    const url = Number.isInteger(number) && number > 0 ? urlFor(kind, repository, number, item.url) : undefined;
+    const url = Number.isInteger(number) && number > 0 ? urlFor(kind, owner, repository, number, item.url) : undefined;
     if (!url) return skip(kind === 'pr' && text(item.state).toUpperCase() !== 'MERGED' ? 'not-merged' : 'invalid');
     const early = verdict(ref);
     if (early && (early === 'not-merged' || early === 'not-completed' || early === 'is-revert' || early === 'reverted')) return skip(early);
@@ -178,7 +188,7 @@ export function select(input: unknown, options: Options): Selection {
   for (const pr of allPrs) {
     take('pr', pr, options.afterPr, () => {
       if (text(pr.state).toUpperCase() !== 'MERGED' || !moment(pr.mergedAt)) return 'not-merged';
-      if (/^revert\b/i.test(text(pr.title).trim())) return 'is-revert';
+      if (isRevert(pr)) return 'is-revert';
       return reverted(pr) ? 'reverted' : undefined;
     }, item => {
       const key = jiraKeyIn.exec(text(item.title))?.[0] ?? jiraKeyIn.exec(text(item.headRefName))?.[0];
@@ -225,8 +235,15 @@ function writeState(dir: string, name: string, value: unknown): void {
 }
 
 const watermarkFile = 'watermark.json';
+const slug = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const splitRepo = (value: string): { owner: string; repository: string } => {
+  if (!slug.test(value)) throw new Error(usage);
+  const [owner, repository] = value.split('/');
+  return { owner: owner!, repository: repository! };
+};
 const pendingFile = 'pending.json';
 
+/** The watermark is kept per `owner/repository`. */
 export function readWatermark(dir: string, repository: string): Watermark {
   const all = readState<{ repositories?: Record<string, Watermark> }>(dir, watermarkFile, {});
   const entry = Object.hasOwn(all.repositories ?? {}, repository) ? all.repositories![repository] : undefined;
@@ -235,7 +252,7 @@ export function readWatermark(dir: string, repository: string): Watermark {
 
 /** The watermark only moves forward: an older value never replaces a newer one. */
 export function writeWatermark(dir: string, repository: string, next: Watermark): Watermark {
-  if (!safeName.test(repository) || [next.pr, next.issue].some(value => value !== undefined && !moment(value))) throw new Error(usage);
+  if (!slug.test(repository) || [next.pr, next.issue].some(value => value !== undefined && !moment(value))) throw new Error(usage);
   const all = readState<{ version: number; repositories: Record<string, Watermark> }>(dir, watermarkFile, { version: 1, repositories: {} });
   const current = readWatermark(dir, repository);
   const merged: Watermark = {
@@ -280,13 +297,14 @@ function knowledgeIndex(dirs: string[]): { known: Set<string>; ids: Set<string> 
  */
 export function auto(input: unknown, options: Omit<Options, 'afterPr' | 'afterIssue' | 'pending' | 'until'> & { state: string }): Selection & { disposition: typeof autoDisposition; pending: number; first_run: boolean } {
   if (autoDisposition !== 'pending') throw new Error('Automatic mode only builds the pending list.');
-  const mark = readWatermark(options.state, options.repository);
+  const key = `${options.owner}/${options.repository}`;
+  const mark = readWatermark(options.state, key);
   const first = mark.pr === undefined && mark.issue === undefined;
   // Without a watermark the run would take the whole history: it needs an explicit starting date.
   if (first && options.since === undefined) throw new Error('First automatic run needs --since.');
   const selection = select(input, { ...options, afterPr: mark.pr, afterIssue: mark.issue, pending: new Set(readPending(options.state).map(item => item.ref)) });
   const items = addPending(options.state, selection.candidates);
-  writeWatermark(options.state, options.repository, selection.watermark);
+  writeWatermark(options.state, key, selection.watermark);
   return { ...selection, disposition: autoDisposition, pending: items.length, first_run: first };
 }
 
@@ -316,10 +334,10 @@ export function main(argv: string[], input?: string): { output: string; code: nu
     if (v.after !== undefined && !moment(v.after)) throw new Error(usage);
     if (command === 'auto') {
       if (!v.state) throw new Error(usage);
-      return out(auto(readJson(input), { repository: v.repo, since: v.since, labels: v.label, known: index.known, ids: index.ids, state: v.state }));
+      return out(auto(readJson(input), { ...splitRepo(v.repo), since: v.since, labels: v.label, known: index.known, ids: index.ids, state: v.state }));
     }
     const pending = v.state ? new Set(readPending(v.state).map(item => item.ref)) : undefined;
-    return out(select(readJson(input), { repository: v.repo, since: v.since, until: v.until, afterPr: v.after, afterIssue: v.after, labels: v.label, known: index.known, ids: index.ids, pending }));
+    return out(select(readJson(input), { ...splitRepo(v.repo), since: v.since, until: v.until, afterPr: v.after, afterIssue: v.after, labels: v.label, known: index.known, ids: index.ids, pending }));
   }
   if (command === 'watermark' && v.state && v.repo && Object.keys(v).every(key => key === 'state' || key === 'repo' || (sub === 'set' && (key === 'pr' || key === 'issue')))) {
     if (sub === 'get') return out(readWatermark(v.state, v.repo));
