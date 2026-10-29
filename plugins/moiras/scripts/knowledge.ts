@@ -81,6 +81,8 @@ const required: Record<string, string[]> = {
 /** A rejected approach (`outcome: rejected`, a decision): no `source`; its reason and its PR are the record. */
 const rejectedOutcome = 'rejected';
 const maxReasonLength = 300;
+/** Issue closed by a rejected PR: `<owner>/<repository>#<n>` (GitHub's bare identity). */
+const closedIssueRef = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
 /** Origins of a learning taken from a git provider's history: they carry the PR or issue URL (`reference_url`). */
 const historyOrigins = ['github', 'git'];
 /** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
@@ -457,6 +459,8 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (!asText(fields.reason)) add('reason-missing', 'error');
         else if (asScalar(fields.reason).length > maxReasonLength) add('reason-too-long', 'error');
         if (asScalar(fields.imported_from) !== 'git') add('rejected-import-invalid', 'error');
+        // Optional: the issue the rejected PR closes, `<owner>/<repository>#<n>` (same owner and repository as the PR).
+        if (fields.issue !== undefined && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !closedIssueRef.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
       }
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');

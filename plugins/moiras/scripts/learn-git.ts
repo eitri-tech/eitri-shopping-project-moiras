@@ -43,6 +43,8 @@ export interface Candidate {
   jira_key?: string;
   /** Issues of the same owner and repository that the PR closes (`Closes #n`); a reference to another repository is dropped. */
   closes?: string[];
+  /** Rejected PRs that close an issue: the first of `closes`, the `issue` of the rejected record (`<owner>/<repository>#<n>`). */
+  issue?: string;
   /** Rejected PRs only: where the reason is. `comment` or `review` (the PR itself), or `superseded` (another PR replaces it). */
   reason_kind?: 'comment' | 'review' | 'superseded';
   /** Rejected PRs with a comment or a review: when it was written (the text is read by the skill, never printed). */
@@ -273,6 +275,7 @@ export function selectItems(input: Input, options: Options): Selection {
       provider, kind, outcome: verdict.outcome, ref, key, url, closed_at: when,
       ...(record.jira ? { jira_key: record.jira } : {}),
       ...(record.closes?.length ? { closes: record.closes } : {}),
+      ...(verdict.outcome === 'rejected' && record.closes?.length ? { issue: record.closes[0] } : {}),
       ...verdict.extra,
       suggested_id: suggested,
     });
