@@ -34,7 +34,7 @@ describe('which sources count', () => {
       issues: [ticket(10), ticket(11, { stateReason: 'NOT_PLANNED' }), ticket(12, { stateReason: 'DUPLICATE' }), ticket(13, { state: 'OPEN', stateReason: null })],
     }, { owner: 'acme', repository: repo });
     assert.deepEqual(refs(selection), [`${slug}#1`, `${slug}#10`]);
-    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'no-reason', [`${slug}#3`]: 'not-merged',[`${slug}#11`]: 'not-completed', [`${slug}#12`]: 'not-completed', [`${slug}#13`]: 'not-completed' });
+    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'no-reason', [`${slug}#3`]: 'not-merged', [`${slug}#11`]: 'not-completed', [`${slug}#12`]: 'not-completed', [`${slug}#13`]: 'not-completed' });
   });
 
   it('takes a PR closed without merge as a rejected approach when a comment gives the reason, with the records of `gh pr list --state all`', () => {
