@@ -19,6 +19,13 @@ const child = (value: unknown, key: string): Json | undefined => (isObject(value
 /** Names of the labels of a record (GitHub gives objects with `name`; anything else is read as text). */
 export const labelNames = (item: Json): string[] => (Array.isArray(item.labels) ? item.labels : []).map(label => (isObject(label) ? text(label.name) : text(label))).filter(Boolean);
 
+/** A provider timestamp as UTC ISO 8601 ending in `Z` (`2026-10-10T12:00:00+00:00` becomes `2026-10-10T12:00:00Z`); undefined when it is not one. */
+export const utcStamp = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) return undefined;
+  const time = Date.parse(value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(time) ? undefined : new Date(time).toISOString().replace('.000Z', 'Z');
+};
+
 /** A comment or a review of a PR. Its text tells the reason of a closing and is scanned for secrets: it is never printed. */
 export interface Discussion {
   kind: 'comment' | 'review';
@@ -100,7 +107,10 @@ function closingNumbers(pr: Json, owner: string, repository: string): number[] {
 
 /** Comments or reviews of a record: `when` is the key of the timestamp, `body` reads the text. */
 const discussion = (list: unknown, kind: Discussion['kind'], when: string, body: (item: Json) => string): Discussion[] =>
-  (Array.isArray(list) ? list : []).filter(isObject).map(item => ({ kind, ...(text(item[when]) ? { at: text(item[when]) } : {}), text: body(item) }));
+  (Array.isArray(list) ? list : []).filter(isObject).map(item => {
+    const at = utcStamp(item[when]);
+    return { kind, ...(at ? { at } : {}), text: body(item) };
+  });
 
 const github: Adapter = {
   provider: 'github',
@@ -158,7 +168,7 @@ const bitbucket: Adapter = {
   pull(raw, workspace, repository) {
     if (!isObject(raw)) return undefined;
     const state = text(raw.state).toUpperCase();
-    const updated = text(raw.updated_on);
+    const updated = utcStamp(raw.updated_on);
     const mapped = state === 'MERGED' ? 'merged' : state === 'DECLINED' ? 'closed' : state === 'SUPERSEDED' ? 'superseded' : 'open';
     return {
       provider: 'bitbucket',

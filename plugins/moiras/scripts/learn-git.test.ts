@@ -56,6 +56,15 @@ describe('providers', () => {
     assert.deepEqual(pr.discussion, [{ kind: 'comment', at: '2026-10-08T12:00:00Z', text: 'Não seguimos.' }]);
   });
 
+  it('normalizes Bitbucket timestamps with an offset to UTC, so a merged PR is not dropped', () => {
+    const merged = { id: 12, title: 'Keep the orderFormId', state: 'MERGED', updated_on: '2026-10-10T12:00:00+00:00', links: { html: { href: `https://bitbucket.org/acme/${repo}/pull-requests/12` } }, comments: [{ created_on: '2026-10-09T09:30:00-03:00', content: { raw: 'Ok.' } }] };
+    const pr = bitbucket(merged);
+    assert.deepEqual([pr.mergedAt, pr.discussion[0]!.at], ['2026-10-10T12:00:00Z', '2026-10-09T12:30:00Z']);
+    const selection = selectItems({ pulls: [pr] }, { provider: 'bitbucket', ...options });
+    assert.deepEqual(refs(selection), [`${slug}#12`]);
+    assert.equal(selection.candidates[0]!.closed_at, '2026-10-10T12:00:00Z');
+  });
+
   it('refuses an unknown provider', () => {
     assert.throws(() => adapterFor('gitlab'), /Unknown provider/);
     assert.equal(adapterFor('bitbucket').pullUrl('acme', repo, 7), `https://bitbucket.org/acme/${repo}/pull-requests/7`);
