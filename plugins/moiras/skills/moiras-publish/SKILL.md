@@ -28,6 +28,8 @@ Ela copia do knowledge `local` (`<local-dir>`) para um clone do destino, num bra
 
 5. **Validar a seleção.** Depois de escolher os itens e antes de pedir o "sim", monte uma pasta temporária só com os arquivos exatos a copiar, preservando os caminhos relativos, e rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <seleção>`. Erros (`error`) interrompem a publicação; avisos (`warning`) não bloqueiam, mas entram na lista marcados e o usuário os vê antes do "sim". Falha ou resultado inconclusivo também interrompe. Registro com erro (segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência — em bloco com ``` ou ~~~, indentado, ou dentro de citação ou lista —, campo obrigatório do tipo faltando, data que não existe no calendário, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte só caminho e regra, sem repetir conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados. `chosen_by` e `approved_by` devem ser pseudônimos não identificáveis: recuse e-mail (também sinalizado pelo `check`), nome real aparente ou identificador de conta, mesmo que o script não detecte. Dúvida exige correção antes de publicar.
 
+O plano também traz as skills de `skills/<id>/SKILL.md` (ver `moiras-export`). Elas seguem a mesma tabela, com estas regras: `add` quando não existem no destino; `update` (`regenerated`) quando a local foi gerada depois da do destino; `skip` quando são iguais ou a do destino é mais nova; e `conflict` quando as duas têm o mesmo fingerprint com conteúdo diferente, ou a mesma data com conteúdo diferente, ou um lado não pode ser lido. Skill nunca apaga outra no destino. Elas vão no **mesmo PR** que os aprendizados que citam, e a validação do passo 5 vale para elas também.
+
 ## O que o plano significa
 
 | Ação | Quando | O que a skill faz |
@@ -58,7 +60,7 @@ A skill nunca reescreve um aprendizado do destino além de `result` e da observa
 6. **Commitar.** `git add` com os caminhos exatos (nunca `-A` nem `.`) e um commit em inglês, no imperativo (ex.: `Add Moiras criteria and learnings from triage`). A autoria é a identidade git de quem está rodando.
 7. **Enviar.** Imediatamente antes do push, repita, nesta ordem, a comparação de `origin` com `repository` e a consulta de visibilidade dos passos 2 e 3, agora no worktree temporário. Qualquer falha, diferença ou resultado inconclusivo interrompe o envio. Só então rode `git push -u origin <branch>`. Nunca use `--force`.
 8. **Abrir o PR** na branch padrão, com o `gh pr create --base <padrão> --head <branch>` se o `gh` estiver instalado e autenticado. Se o `gh` ficar indisponível, pare e explique. Siga o modelo de PR do repositório, se houver. Título curto; descrição em português, curta:
-   - o que muda, em bullets por pasta (`criteria/`, `learnings/`, `glossary/`) e por ação (novo, atualizado, removido), citando só os `id`;
+   - o que muda, em bullets por pasta (`criteria/`, `learnings/`, `glossary/`, `skills/`) e por ação (novo, atualizado, removido), citando só os `id`;
    - como revisar (rodar `knowledge.ts check` no branch).
 
    A descrição **não leva** texto de issue, de conversa, nome de cliente nem o conteúdo dos registros.
@@ -71,7 +73,7 @@ Depois do merge, o `moiras-sync` traz o resultado de volta e o `plan` passa a mo
 
 - Só lê o knowledge local e só escreve na seleção temporária, no worktree temporário, no remoto (branch novo) e no relatório. Não altera o `local`, o clone principal, o Jira, o Slack nem outros sistemas.
 - Nunca faz push na branch padrão, `force push`, merge, aprovação de PR, nem fecha PR de outra pessoa.
-- Nenhum registro vai sem passar no `check`: sem segredos, dados pessoais, caminhos pessoais, texto bruto de issue ou conversa, e sem código acima de 20 linhas ou sem referência (repositório, caminho, commit).
+- Nenhuma skill vai sem passar no `check` (que também confere as regras de skill: nome igual à pasta, sem referência ao plugin, sem código, sem segredo). Nenhum registro vai sem passar no `check`: sem segredos, dados pessoais, caminhos pessoais, texto bruto de issue ou conversa, e sem código acima de 20 linhas ou sem referência (repositório, caminho, commit).
 - `.moiras/memory` e `.moiras/runs` nunca são copiados para o destino.
 - Rascunhos de repasse à agência nunca são publicados: não são gravados no knowledge.
 - Se o `gh` não estiver disponível ou o `push` for recusado, pare e explique; não tente outro caminho (outro branch, outro remoto, outra credencial).

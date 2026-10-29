@@ -65,6 +65,7 @@ Todo knowledge tem a mesma estrutura:
 | `learnings/solutions/` | Soluções escolhidas e o resultado delas | Átropos (e `moiras-learn`, para as já resolvidas no histórico) |
 | `learnings/patterns/` | Padrões de problema recorrentes | Láquesis / Átropos (e `moiras-learn`) |
 | `learnings/decisions/` | Decisões que valem para casos futuros | as Moiras e `moiras-learn`, a partir de soluções que funcionaram |
+| `skills/<id>/SKILL.md` | Skill exportada de cada aprendizado resolvido, para harnesses sem o Moiras. A triagem não lê esta pasta | `moiras-export`, depois do "sim" à lista exata (ver `moiras-export/SKILL.md`) |
 
 Regras de leitura:
 
@@ -86,7 +87,7 @@ Regras de escrita (só no modo interativo e só no knowledge de escopo `local`):
 
 ### Fingerprint do knowledge
 
-Antes de filtrar issues ou reutilizar classificações, forme um manifesto de todos os knowledges configurados: `name`, `scope`, `dir` e a lista ordenada por caminho dos arquivos em `glossary/`, `criteria/` e `learnings/`, cada um com SHA-256 dos bytes atuais. Inclua pastas vazias e ausentes de forma distinta. Ordene os knowledges por `scope`, `name` e `dir` e calcule o SHA-256 do manifesto com `memory.ts hash`: esse é `knowledge_fingerprint`. Não basta o commit Git: alterações locais, inclusões e exclusões também contam. Se algum arquivo não puder ser lido, avise e desative a reutilização e o descarte de issues nesta execução.
+Antes de filtrar issues ou reutilizar classificações, forme um manifesto de todos os knowledges configurados: `name`, `scope`, `dir` e a lista ordenada por caminho dos arquivos em `glossary/`, `criteria/` e `learnings/`, cada um com SHA-256 dos bytes atuais. Inclua pastas vazias e ausentes de forma distinta. Ordene os knowledges por `scope`, `name` e `dir` e calcule o SHA-256 do manifesto com `memory.ts hash`: esse é `knowledge_fingerprint`. Não basta o commit Git: alterações locais, inclusões e exclusões também contam. `skills/` fica de fora do manifesto, porque as skills são derivadas destas pastas (gerá-las não pode mudar o fingerprint). Se algum arquivo não puder ser lido, avise e desative a reutilização e o descarte de issues nesta execução.
 
 O hash de reutilização é o SHA-256 de `{ "input": <entrada completa da Láquesis>, "knowledge_fingerprint": "<fingerprint>" }`, usando `memory.ts hash`. Guarde esse par nas saídas completas do relatório, junto do `ticket`, da classificação e do veredito por chave. Use o snapshot anterior à classificação; se o knowledge mudar durante a execução, a próxima deve reprocessar as issues afetadas (conservadoramente, todas). Registros antigos sem essa evidência não autorizam reutilização nem descarte.
 

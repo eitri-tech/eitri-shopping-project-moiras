@@ -27,7 +27,8 @@ Quando usar cada skill:
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.
 - [moiras-sync](skills/moiras-sync/SKILL.md): trazer o que foi mergeado nos knowledges compartilhados, por exemplo antes da triagem.
-- [moiras-publish](skills/moiras-publish/SKILL.md): compartilhar registros locais aprovados por meio de um PR num knowledge privado.
+- [moiras-publish](skills/moiras-publish/SKILL.md): compartilhar registros locais aprovados por meio de um PR num knowledge privado (skills vão no mesmo PR).
+- [moiras-export](skills/moiras-export/SKILL.md): exportar o aprendizado resolvido como skills, uma por aprendizado, para um harness que não tem o Moiras; só grava depois do "sim" à lista exata. A Átropos também oferece isso logo depois de gravar um aprendizado resolvido.
 
 Quem escreve onde:
 
@@ -50,8 +51,11 @@ Quem escreve onde:
 - A triagem persiste saídas completas e pendências; no `--auto`, também o relatório.
   Auditoria, publish e sync automático salvam seus relatórios em `runs.dir`
   (padrão `.moiras/runs/`). Veja também [Memória](#memória).
+- `moiras-export` grava só em `skills/<id>/SKILL.md` do knowledge local, depois do
+  "sim" à lista exata; nunca no `--auto` e nunca apaga skill.
 - `moiras-sync` só avança clones limpos com `fetch` e `merge --ff-only`;
   pode clonar com aprovação no modo interativo, sem alterar o knowledge local.
+  Quando o fingerprint muda, informa as skills desatualizadas e oferece regenerar.
 - Só `moiras-publish` leva registros ao compartilhado: valida a seleção com
   `knowledge.ts check`, escreve numa seleção e num worktree temporários,
   envia um branch novo e abre PR; não altera o knowledge local nem o clone principal.
@@ -103,6 +107,7 @@ moiras/
 ├── scripts/github.ts               # repositórios do GitHub por padrão (index.github): match, plan-clone, local e clone
 ├── scripts/gitignore.ts            # leitor de .gitignore sem Git, usado pelo hash do knowledge.ts
 ├── scripts/knowledge.ts            # hash das fontes, checagem, issues já citadas e plano de publicação do knowledge
+├── scripts/skills.ts               # gera as skills do aprendizado (plan, write com digest aprovado, stale)
 ├── config/sources.example.json     # modelo de .moiras/sources.json
 └── skills/
     ├── moiras-triage/
@@ -123,6 +128,8 @@ moiras/
     │   └── SKILL.md                # traz o que foi mergeado nos knowledges compartilhados
     ├── moiras-publish/
     │   └── SKILL.md                # leva o knowledge local a um compartilhado, por PR
+    ├── moiras-export/
+    │   └── SKILL.md                # exporta o aprendizado resolvido como skills (uma por aprendizado)
     └── moiras-audit/
         └── SKILL.md                # auditoria e ajustes do knowledge
 ```
@@ -135,6 +142,15 @@ O knowledge não vem no plugin: é o que o time sabe e não está no código (gl
 - **Compartilhado**: repositórios privados criados a partir do template público de knowledge, com escopo `project`, `group` ou `global`. Na leitura, o mais específico vence (`local` > `project` > `group` > `global`).
 
 Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,patterns,decisions}/`, um arquivo Markdown por registro. Sem glossário nem critérios, a Láquesis pode usar categorias padrão quando houver evidência; usa `unknown` quando ela não basta. Em ambos os casos, `confidence` ≤ 0.3 e aviso `criteria-missing`. Detalhes em `skills/moiras-triage/SKILL.md`.
+
+### Skills para outros harnesses
+
+O `skills/<id>/SKILL.md` do knowledge local é o aprendizado em formato de skill, para um harness que lê `SKILL.md` usar sem conhecer o Moiras. Uma skill por solução resolvida, padrão ou decisão, com `name` (`<repositório>-<componente>-<id>`) e `description` (sintoma concreto e componente), e seções de sintoma, causa, como confirmar, correção (com o link do PR), o que não resolveu (tentativas não resolvidas e decisões rejeitadas da mesma `issue`, ou que citam a PR rejeitada), regras e termos. Ela não cita o plugin, scripts, comandos nem caminhos `.moiras/`.
+
+- **Gerar:** `/moiras:moiras-export` mostra a lista exata (criar, atualizar, deixar de fora, órfãs) e grava só com o seu "sim". Rodar de novo não duplica: o `name` é o mesmo.
+- **Usar:** copie a pasta `skills/<id>/` para a pasta de skills do harness (por exemplo `.claude/skills/` do projeto), ou aponte o harness para a pasta `skills/` do knowledge. Não precisa do Moiras instalado.
+- **Atualizar:** quando o knowledge muda, `metadata.source_hash` deixa de bater com o fingerprint. O `moiras-sync` informa as skills desatualizadas e oferece regenerar; conflitos (desfecho que mudou, critério substituído, skill editada à mão) vêm num caminho separado.
+- **Publicar:** o `moiras-publish` leva as skills no mesmo PR dos aprendizados que citam.
 
 Como o knowledge circula:
 
