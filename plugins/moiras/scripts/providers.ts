@@ -29,10 +29,23 @@ export const utcStamp = (value: unknown): string | undefined => {
 /** A comment or a review of a PR. Its text tells the reason of a closing and is scanned for secrets: it is never printed. */
 export interface Discussion {
   kind: 'comment' | 'review';
-  /** When it was written, as the provider gives it (an ISO 8601 timestamp, checked by the selector). */
+  /** When it was written, as UTC ISO 8601 (see `utcStamp`; the selector checks it). */
   at?: string;
+  /** Who wrote it: the GitHub login or the Bitbucket nickname; empty when the record does not say. */
+  author: string;
+  /** A bot (see `isBotLogin`): its text never gives the reason of a closing. */
+  bot: boolean;
   text: string;
 }
+
+/** Logins of bots that comment without the `[bot]` suffix. */
+export const knownBots = ['copilot', 'codex', 'chatgpt-codex-connector', 'github-actions'];
+
+/** A bot by its login (a `[bot]` suffix or a known name) or by a flag the record gives (`flagged`). */
+export const isBotLogin = (login: string, flagged = false): boolean => {
+  const name = login.trim().toLowerCase();
+  return flagged || name.endsWith('[bot]') || knownBots.includes(name);
+};
 
 /** A pull request (GitHub) or pull request (Bitbucket), in the format every provider is normalized to. */
 export interface Pull {
@@ -106,11 +119,26 @@ function closingNumbers(pr: Json, owner: string, repository: string): number[] {
 }
 
 /** Comments or reviews of a record: `when` is the key of the timestamp, `body` reads the text. */
-const discussion = (list: unknown, kind: Discussion['kind'], when: string, body: (item: Json) => string): Discussion[] =>
+const discussion = (list: unknown, kind: Discussion['kind'], when: string, body: (item: Json) => string, who: (item: Json) => Pick<Discussion, 'author' | 'bot'>): Discussion[] =>
   (Array.isArray(list) ? list : []).filter(isObject).map(item => {
     const at = utcStamp(item[when]);
-    return { kind, ...(at ? { at } : {}), text: body(item) };
+    return { kind, ...(at ? { at } : {}), ...who(item), text: body(item) };
   });
+
+/** Author of a GitHub comment or review: its login, and the bot flag the record gives (`is_bot`, `isBot` or type `Bot`). */
+const githubWho = (item: Json): Pick<Discussion, 'author' | 'bot'> => {
+  const who = child(item, 'author');
+  const login = text(who?.login);
+  const flagged = who?.is_bot === true || who?.isBot === true || who?.__typename === 'Bot' || who?.type === 'Bot';
+  return { author: login, bot: isBotLogin(login, flagged) };
+};
+
+/** Author of a Bitbucket comment: its nickname, and a bot when the user is of type `Bot`. */
+const bitbucketWho = (item: Json): Pick<Discussion, 'author' | 'bot'> => {
+  const who = child(item, 'user');
+  const login = text(who?.nickname) || text(who?.username);
+  return { author: login, bot: isBotLogin(login, who?.type === 'Bot') };
+};
 
 const github: Adapter = {
   provider: 'github',
@@ -132,8 +160,8 @@ const github: Adapter = {
       ...(typeof raw.closedAt === 'string' ? { closedAt: raw.closedAt } : {}),
       closes: closingNumbers(raw, owner, repository),
       discussion: [
-        ...discussion(raw.comments, 'comment', 'createdAt', item => text(item.body)),
-        ...discussion(raw.reviews, 'review', 'submittedAt', item => text(item.body)),
+        ...discussion(raw.comments, 'comment', 'createdAt', item => text(item.body), githubWho),
+        ...discussion(raw.reviews, 'review', 'submittedAt', item => text(item.body), githubWho),
       ],
       raw,
     };
@@ -182,7 +210,7 @@ const bitbucket: Adapter = {
       ...(mapped === 'merged' && updated ? { mergedAt: updated } : {}),
       ...(mapped !== 'merged' && mapped !== 'open' && updated ? { closedAt: updated } : {}),
       closes: [],
-      discussion: discussion(raw.comments, 'comment', 'created_on', item => text(child(item, 'content')?.raw)),
+      discussion: discussion(raw.comments, 'comment', 'created_on', item => text(child(item, 'content')?.raw), bitbucketWho),
       raw,
     };
   },

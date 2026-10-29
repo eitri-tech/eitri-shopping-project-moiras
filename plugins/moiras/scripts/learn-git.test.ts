@@ -53,7 +53,7 @@ describe('providers', () => {
   it('gives Bitbucket PRs no closing links and no labels, and reads the comments the reader fetched', () => {
     const pr = bitbucket({ id: 2, state: 'DECLINED', updated_on: '2026-10-10T12:00:00Z', links: { html: { href: `https://bitbucket.org/acme/${repo}/pull-requests/2` } }, source: { branch: { name: 'feat/2' } }, comments: [{ created_on: '2026-10-08T12:00:00Z', content: { raw: 'Não seguimos.' } }] });
     assert.deepEqual([pr.closes, pr.labels, pr.closedAt, pr.branch], [[], [], '2026-10-10T12:00:00Z', 'feat/2']);
-    assert.deepEqual(pr.discussion, [{ kind: 'comment', at: '2026-10-08T12:00:00Z', text: 'Não seguimos.' }]);
+    assert.deepEqual(pr.discussion, [{ kind: 'comment', at: '2026-10-08T12:00:00Z', author: '', bot: false, text: 'Não seguimos.' }]);
   });
 
   it('normalizes Bitbucket timestamps with an offset to UTC, so a merged PR is not dropped', () => {
@@ -76,7 +76,29 @@ describe('merged PRs and rejected approaches', () => {
     const selection = selectItems({ pulls: [pull(1), closed(2)] }, options);
     assert.deepEqual(refs(selection), [`${slug}#1`]);
     assert.equal(selection.candidates[0]!.outcome, 'resolved');
-    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'not-merged' });
+    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'no-reason' });
+  });
+
+  it('a bot comment and a command to a bot are not the reason of a closing: no-reason', () => {
+    const noise = closed(7, {
+      comments: [
+        { createdAt: '2026-10-08T12:00:00Z', body: 'Copilot was unable to review this pull request.', author: { login: 'copilot-pull-request-reviewer[bot]' } },
+        { createdAt: '2026-10-08T13:00:00Z', body: '@codex review', author: { login: 'maintainer-01' } },
+        { createdAt: '2026-10-08T14:00:00Z', body: '/retest', author: { login: 'maintainer-01' } },
+        { createdAt: '2026-10-08T15:00:00Z', body: 'Abriu sem querer.', author: { login: 'copilot' } },
+      ],
+      reviews: [{ submittedAt: '2026-10-08T16:00:00Z', body: 'Looks fine to me.', author: { login: 'github-actions' } }],
+    });
+    const selection = selectItems({ pulls: [noise] }, options);
+    assert.deepEqual(selection.candidates, []);
+    assert.deepEqual(reasons(selection), { [`${slug}#7`]: 'no-reason' });
+  });
+
+  it('a person reason next to a command still counts, and the author is kept on the discussion', () => {
+    const human = closed(8, { comments: [{ createdAt: '2026-10-08T12:00:00Z', body: '@codex review\nNão seguimos: quebra a troca de seller.', author: { login: 'maintainer-01' } }] });
+    assert.deepEqual(human.discussion, [{ kind: 'comment', at: '2026-10-08T12:00:00Z', author: 'maintainer-01', bot: false, text: '@codex review\nNão seguimos: quebra a troca de seller.' }]);
+    const [candidate] = selectItems({ pulls: [human] }, options).candidates;
+    assert.equal(candidate!.reason_kind, 'comment');
   });
 
   it('only a merged revert invalidates a solution: an open or closed revert leaves the original', () => {
@@ -111,7 +133,7 @@ describe('merged PRs and rejected approaches', () => {
   it('a comment older than the window, or with no date, gives no reason', () => {
     const selection = selectItems({ pulls: [closed(6, { comments: [{ createdAt: '2026-09-01T12:00:00Z', body: 'Talvez' }, { body: 'Sem data' }] })] }, options);
     assert.deepEqual(refs(selection), []);
-    assert.deepEqual(reasons(selection), { [`${slug}#6`]: 'not-merged' });
+    assert.deepEqual(reasons(selection), { [`${slug}#6`]: 'no-reason' });
   });
 
   it('a PR that another PR replaces says so at the start of a line, and that is its reason', () => {
@@ -124,7 +146,7 @@ describe('merged PRs and rejected approaches', () => {
   it('a mention of a number in the middle of a sentence is not a replacement', () => {
     const selection = selectItems({ pulls: [closed(5), closed(8, { body: 'This change replaces the #5 logic in part.' })] }, options);
     assert.deepEqual(refs(selection), []);
-    assert.equal(reasons(selection)[`${slug}#5`], 'not-merged');
+    assert.equal(reasons(selection)[`${slug}#5`], 'no-reason');
   });
 
   it('a superseded PR (Bitbucket) with no reason stays out as no-reason; with a comment it is a rejected approach', () => {

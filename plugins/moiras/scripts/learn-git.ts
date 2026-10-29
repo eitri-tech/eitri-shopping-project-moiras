@@ -7,8 +7,9 @@
  *
  * Decisions: a merged PR that was not reverted is a solution (`outcome: resolved`). A PR closed without merge, or superseded,
  * is a rejected approach (`outcome: rejected`) only with an explicit reason in the PR itself: a comment or a review written
- * in the week before its closing, or another PR that says it replaces it at the start of a line ("Replaces #n"). Without one it
- * stays out (`not-merged` or `no-reason`). The selector never reads text to show it: it prints references, reasons and dates.
+ * in the week before its closing, or another PR that says it replaces it at the start of a line ("Replaces #n"). Bots and
+ * commands to a bot do not count as a reason. Without one it stays out (`no-reason`). The selector never reads text to show
+ * it: it prints references, reasons and dates; the skill reads the text of the reason and discards `no-reason` when it has none.
  *
  * It never calls a provider and never writes a learning: the only files it writes are the watermark and the pending list
  * under `--state` (run state, outside any knowledge).
@@ -19,7 +20,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { hasSecret, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
-import { adapterFor, isObject, type Adapter, type Discussion, type Issue, type Json, type Provider, type Pull } from './providers.ts';
+import { adapterFor, isBotLogin, isObject, type Adapter, type Discussion, type Issue, type Json, type Provider, type Pull } from './providers.ts';
 
 export const usage = 'Usage: node learn-git.ts eligible --provider <github|bitbucket> --repo <owner/name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... [--limit <n>]';
 
@@ -164,6 +165,12 @@ function supersessions(pulls: Pull[]): Map<number, number> {
   return replaced;
 }
 
+/** A comment that only gives commands to a bot (every line starts with `@codex` or `/`): it gives no reason. */
+const commandOnly = (body: string): boolean => {
+  const lines = body.split('\n').map(line => line.trim()).filter(Boolean);
+  return lines.length > 0 && lines.every(line => /^(?:@codex\b|\/)/i.test(line));
+};
+
 /** The explicit reason of a PR closed without merge: another PR that replaces it, or a comment or review of the week before the closing. */
 function motiveOf(pr: Pull, replaced: Map<number, number>): { kind: 'comment' | 'review' | 'superseded'; at?: string; by?: number } | undefined {
   const by = replaced.get(pr.number);
@@ -174,7 +181,8 @@ function motiveOf(pr: Pull, replaced: Map<number, number>): { kind: 'comment' | 
   let found: { item: Discussion; at: string } | undefined;
   for (const item of pr.discussion) {
     const at = moment(item.at);
-    if (!at || !item.text.trim()) continue;
+    // A bot's text and a command to a bot ("@codex review") say nothing about why the PR was closed.
+    if (!at || !item.text.trim() || item.bot || isBotLogin(item.author) || commandOnly(item.text)) continue;
     const time = Date.parse(at);
     if (time < start || time > end + 60_000) continue;
     if (!found || time > Date.parse(found.at)) found = { item, at };
@@ -235,7 +243,7 @@ export function selectItems(input: Input, options: Options): Selection {
     if (pr.state === 'open') return { skip: 'not-merged', outcome: 'rejected' };
     if (isRevert(pr)) return { skip: 'is-revert', outcome: 'rejected' };
     const motive = motiveOf(pr, replaced);
-    if (!motive) return { skip: pr.state === 'superseded' ? 'no-reason' : 'not-merged', outcome: 'rejected' };
+    if (!motive) return { skip: 'no-reason', outcome: 'rejected' };
     return {
       outcome: 'rejected',
       extra: {
