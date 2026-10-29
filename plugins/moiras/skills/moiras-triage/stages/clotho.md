@@ -1,6 +1,6 @@
 # Cloto — coleta
 
-Fia a matéria-prima da triagem: busca, **em paralelo**, as issues pendentes do escopo (um ou vários épicos e categorias) e as conversas relevantes, nas fontes configuradas e suportadas (as seções A e B trazem as fontes de hoje; ver também "Outras fontes").
+Fia a matéria-prima da triagem: busca, **em paralelo**, o material das **fontes configuradas**: as issues pendentes do escopo (um ou vários épicos e categorias) e as conversas relevantes. Hoje estão implementadas duas fontes, o **Jira** (seção A) e o **Slack** (seção B). Qualquer outra fonte entra pelo padrão genérico de "Outras fontes", no fim desta etapa. Uma fonte que não está configurada ou não está documentada aqui não é consultada.
 
 **Entrada:** configuração em `.moiras/sources.json` no diretório do projeto (modelo em `${CLAUDE_PLUGIN_ROOT}/config/sources.example.json`). Se o usuário informar na conversa um ou mais épicos, eles substituem os épicos da configuração (`jira.epic` e `jira.epics`); as categorias da configuração continuam valendo. Sem `.moiras/sources.json`: no modo interativo, ofereça a skill `moiras-init` (ela cria o arquivo); no `--auto`, encerre com erro no relatório.
 
@@ -76,15 +76,46 @@ Uma fonte com `status: failed` e listas vazias é uma saída válida pelo contra
 
 ### Outras fontes
 
-Hoje as fontes esperadas são o **Jira** (obrigatório: é dele que vêm as issues a triar) e o **Slack** (contexto). A Cloto pode monitorar outras fontes no futuro (ex.: PRs e issues do GitHub, alertas de observabilidade, wikis, e-mail), desde que cada nova fonte siga o mesmo padrão:
+A Cloto trata **qualquer fonte configurada** do mesmo jeito: um bloco de configuração, um conector só de leitura e um bloco na saída. Jira (obrigatório: é dele que vêm as issues a triar) e Slack (contexto) são as duas implementadas hoje. Exemplos de fontes que podem entrar depois, **nenhuma delas implementada**:
 
-- um bloco próprio em `.moiras/sources.json`, com o que filtrar (pessoas, canais, repositórios, consultas);
-- coleta disparada na mesma rodada paralela do Jira e do Slack;
-- um bloco próprio na saída, com `status: ok | partial | failed` e listas vazias quando falhar;
-- itens ligados às issues pelas chaves citadas (padrão `[A-Z][A-Z0-9]+-\d+`), entrando em `evidence` no formato de fonte;
-- registro na memória com chave `<source>:<id>` e os mesmos `with_whom`/`content`.
+- monitoramento de backend (erro 5xx recorrente depois de um deploy);
+- crashes do app (crash novo depois de uma versão);
+- issues do GitHub ou do Bitbucket (bug aberto direto no repositório);
+- erros de front-end com breadcrumbs (a trilha de ações antes do erro);
+- fila de atendimento (relatos repetidos viram uma task com contagem);
+- status de plataforma de terceiros.
 
-Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver documentada nesta etapa, não a use.
+Uma fonte só é usada depois que esta seção a descreve por completo. Os passos abaixo valem para qualquer uma delas, nesta ordem.
+
+**Passo 1. Configuração.** Acrescente um bloco de primeiro nível em `.moiras/sources.json`, com chave em inglês, minúscula e com `_` (ex.: `backend_monitoring`). O bloco traz só o que filtra a coleta: serviços, repositórios, canais, consultas salvas, janela de tempo. **Credenciais não entram no arquivo**: quem guarda a credencial é o conector do usuário. O `scripts/config.ts` mantém o bloco como foi dado, sem validar campos que não conhece, mas confere, em qualquer profundidade do bloco, segredos, credenciais em URL e caminhos pessoais; o `init` recusa o arquivo inteiro se achar segredo. Um campo que precisa de regra própria (formato de id, lista obrigatória, data) entra em `validate()` do `config.ts`, com teste (passo 6). A Cloto ignora sem aviso o bloco que esta seção não documenta, então a configuração só deve ser usada depois de prontos os passos 2 a 6.
+
+**Passo 2. Coleta só de leitura.** O conector da fonte precisa ser de leitura. Dispare a coleta na mesma rodada de chamadas das outras fontes, sem esperar uma terminar para começar a outra. Peça só o período e os filtros do bloco. Nada de criar, atribuir, transicionar, comentar ou reagir fora da seção "Interações" (passo 4). Se o conector falhar (sem permissão, erro da API), a fonte tem `status: failed`, as listas ficam vazias e as issues ganham o aviso `<fonte>-unavailable`, como o Slack faz com `slack-unavailable`. Não invente dados da fonte que falhou.
+
+**Passo 3. Detector de segredos.** Todo texto bruto que a fonte devolve (título, corpo, log, trecho de erro, comentário, mensagem) passa pelo detector antes de sair da coleta: `node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan`, com o texto na entrada. O comando sai com código 1 quando encontra segredo. Item com segredo é **descartado inteiro**: não vai à Láquesis, não entra na memória, e a coleta acrescenta o aviso `secret-blocked:<fonte>`, sem nenhum trecho do conteúdo. Para a Láquesis segue um excerto curto, sem dado pessoal além do pseudônimo, nunca o texto completo. Os avisos `<fonte>-unavailable` e `secret-blocked:<fonte>` são convenções desta seção: não existem para nenhuma fonte até ela ser implementada.
+
+**Passo 4. Nada gravado sem o "sim".** A fonte só lê. Se ela tiver algum tipo de interação, o tipo precisa estar previsto nesta seção e segue as regras 1 a 8 de "Interações": a lista proposta, o "sim" que aplica exatamente a lista, o `--auto` só com o tipo autorizado em `interactions.auto_types` (hoje só `reaction`; o `config.ts` recusa outro tipo), nenhum comentário em issue com agência e a regra de não repetir (`interaction:<id>`). Fonte sem interação prevista fica só de leitura.
+
+**Passo 5. Formato que a Láquesis recebe.** Na saída, a fonte tem um bloco próprio, no mesmo formato dos de Jira e Slack:
+
+```json
+"<fonte>": {
+  "status": "ok | partial | failed",
+  "items": [
+    { "id": "<id da fonte>", "ref": "<link ou id>", "date": "2026-10-03T14:12:00-03:00", "excerpt": "<trecho curto>", "cited_issues": ["PROJ-123"] }
+  ],
+  "without_issue": []
+}
+```
+
+- Item cujo `cited_issues` traz a chave de uma issue a triar entra em `evidence` dessa issue, **no formato de fonte que a Láquesis já lê** (`{ "ref", "excerpt", "verified_at" }`). O `ref` começa pelo nome da fonte (ex.: `<fonte>:<id>`) ou é o link; assim a Láquesis trata a evidência como trata as demais, e o contrato dela não muda.
+- Item sem chave de issue vai para `<fonte>.without_issue`, como contexto geral (o Slack faz o mesmo com `slack.without_issue`).
+- A chave de issue segue o padrão `[A-Z][A-Z0-9]+-\d+`, como nas outras fontes. Uma fonte que transforma cada relato em task nova (ex.: fila de atendimento) não cabe nesta seção: precisa de desenho próprio, aprovado antes, porque hoje a Cloto só puxa issues que já existem.
+
+**Passo 6. Memória e testes.** Registre cada item em `record clotho` como os de Jira e Slack: chave `<fonte>:<id>`, `source` com o nome da fonte, `with_whom`, `updated_at` e `content` (que vira hash). O nome da fonte não pode começar com `interact`, porque essa forma de chave é reservada às interações (`interaction:<id>`). Os testes vão em `scripts/config.test.ts`: o bloco novo é aceito, o segredo nele é recusado com o caminho, e cada regra própria tem caso de sucesso e de falha. Se a memória ganhar campo novo, o teste vai em `scripts/memory.test.ts`. Use valores sintéticos, no universo fictício (Acme, `PROJ-123`, Fulano, `#proj-squad`), e rode `node --test plugins/moiras/scripts/*.test.ts` com Node 22.18 ou mais novo e `tsc -p tsconfig.json`.
+
+**Passo 7. Documentação.** Só depois dos passos acima: descreva a fonte nesta seção no lugar dos exemplos, inclua um bloco fictício em `config/sources.example.json`, atualize "Fontes" e a lista de fontes em `skills/moiras-triage/SKILL.md` e os READMEs (`README.md` e `plugins/moiras/README.md`).
+
+Fonte não configurada é ignorada sem aviso. Enquanto uma nova fonte não estiver descrita nesta etapa, não a use.
 
 ## Interações (opcional)
 
