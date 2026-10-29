@@ -46,7 +46,7 @@ describe('which sources count', () => {
     ] }, { owner: 'acme', repository: repo });
     assert.deepEqual(refs(selection), [`${slug}#7`]);
     assert.equal(selection.candidates[0]!.outcome, 'rejected');
-    assert.equal(selection.candidates[0]!.reason_kind, 'comment');
+    assert.deepEqual(selection.candidates[0]!.reason_candidates, [{ kind: 'comment', at: '2026-10-19T12:00:00Z' }]);
     assert.equal(selection.candidates[0]!.issue, `${slug}#20`);
     assert.equal(reasons(selection)[`${slug}#8`], 'no-reason');
   });

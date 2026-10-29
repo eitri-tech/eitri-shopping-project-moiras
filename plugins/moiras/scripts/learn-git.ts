@@ -9,7 +9,8 @@
  * is a rejected approach (`outcome: rejected`) only with an explicit reason in the PR itself: a comment or a review written
  * in the week before its closing, or another PR that says it replaces it at the start of a line ("Replaces #n"). Bots and
  * commands to a bot do not count as a reason. Without one it stays out (`no-reason`). The selector never reads text to show
- * it: it prints references, reasons and dates; the skill reads the text of the reason and discards `no-reason` when it has none.
+ * it: it prints references, reasons and dates. It keeps every reason it found (`reason_candidates`, in order), not only the latest:
+ * the skill reads each text, picks the one that explains the closing, and discards `no-reason` when none does.
  *
  * It never calls a provider and never writes a learning: the only files it writes are the watermark and the pending list
  * under `--state` (run state, outside any knowledge).
@@ -46,15 +47,17 @@ export interface Candidate {
   closes?: string[];
   /** Rejected PRs that close an issue: the first of `closes`, the `issue` of the rejected record (`<owner>/<repository>#<n>`). */
   issue?: string;
-  /** Rejected PRs only: where the reason is. `comment` or `review` (the PR itself), or `superseded` (another PR replaces it). */
-  reason_kind?: 'comment' | 'review' | 'superseded';
-  /** Rejected PRs with a comment or a review: when it was written (the text is read by the skill, never printed). */
-  reason_at?: string;
+  /** Rejected PRs only: every explicit reason found, in order: the comments and reviews of the window, oldest first, then the PR
+   * that replaces it. Several are kept on purpose (a thanks can follow the real reason); the skill reads each text (never printed). */
+  reason_candidates?: ReasonCandidate[];
   /** Rejected PRs superseded by another PR: the reference of the replacing PR. */
   superseded_by?: string;
   /** Suggested file name (and id) of the record, free of the ids in use. */
   suggested_id: string;
 }
+
+/** One explicit reason of a rejected PR: a comment or a review of the window (`at`), or the PR that replaces it (`superseded_by`). */
+export interface ReasonCandidate { kind: 'comment' | 'review' | 'superseded'; at?: string; superseded_by?: string }
 
 export interface Skipped { ref: string; kind: Kind; reason: Reason }
 
@@ -171,23 +174,30 @@ const commandOnly = (body: string): boolean => {
   return lines.length > 0 && lines.every(line => /^(?:@codex\b|\/)/i.test(line));
 };
 
-/** The explicit reason of a PR closed without merge: another PR that replaces it, or a comment or review of the week before the closing. */
-function motiveOf(pr: Pull, replaced: Map<number, number>): { kind: 'comment' | 'review' | 'superseded'; at?: string; by?: number } | undefined {
-  const by = replaced.get(pr.number);
-  if (by !== undefined) return { kind: 'superseded', by };
+/**
+ * Every explicit reason of a PR closed without merge, in order: its human comments and reviews of the week before the closing,
+ * oldest first, then the PR that replaces it. Nothing is dropped for being later than another reason: a thanks written after
+ * the real reason stays in the list, and the skill tells them apart by reading the text.
+ */
+function motivesOf(pr: Pull, replaced: Map<number, number>, owner: string, repository: string): ReasonCandidate[] {
+  const found: { kind: Discussion['kind']; at: string; time: number }[] = [];
   const closed = moment(pr.closedAt);
-  if (!closed) return undefined;
-  const end = Date.parse(closed), start = end - closingWindowDays * 86_400_000;
-  let found: { item: Discussion; at: string } | undefined;
-  for (const item of pr.discussion) {
-    const at = moment(item.at);
-    // A bot's text and a command to a bot ("@codex review") say nothing about why the PR was closed.
-    if (!at || !item.text.trim() || item.bot || isBotLogin(item.author) || commandOnly(item.text)) continue;
-    const time = Date.parse(at);
-    if (time < start || time > end + 60_000) continue;
-    if (!found || time > Date.parse(found.at)) found = { item, at };
+  if (closed) {
+    const end = Date.parse(closed), start = end - closingWindowDays * 86_400_000;
+    for (const item of pr.discussion) {
+      const at = moment(item.at);
+      // A bot's text and a command to a bot ("@codex review") say nothing about why the PR was closed.
+      if (!at || !item.text.trim() || item.bot || isBotLogin(item.author) || commandOnly(item.text)) continue;
+      const time = Date.parse(at);
+      if (time < start || time > end + 60_000) continue;
+      found.push({ kind: item.kind, at, time });
+    }
   }
-  return found ? { kind: found.item.kind, at: found.at } : undefined;
+  found.sort((a, b) => a.time - b.time);
+  const motives: ReasonCandidate[] = found.map(({ kind, at }) => ({ kind, at }));
+  const by = replaced.get(pr.number);
+  if (by !== undefined) motives.push({ kind: 'superseded', superseded_by: `${owner}/${repository}#${by}` });
+  return motives;
 }
 
 /** `<name>#<n>` of a ref, with or without the `<owner>/` in front (the format of the first version had no owner). */
@@ -242,15 +252,12 @@ export function selectItems(input: Input, options: Options): Selection {
     }
     if (pr.state === 'open') return { skip: 'not-merged', outcome: 'rejected' };
     if (isRevert(pr)) return { skip: 'is-revert', outcome: 'rejected' };
-    const motive = motiveOf(pr, replaced);
-    if (!motive) return { skip: 'no-reason', outcome: 'rejected' };
+    const motives = motivesOf(pr, replaced, owner, repository);
+    if (!motives.length) return { skip: 'no-reason', outcome: 'rejected' };
+    const by = motives.find(motive => motive.superseded_by)?.superseded_by;
     return {
       outcome: 'rejected',
-      extra: {
-        reason_kind: motive.kind,
-        ...(motive.at ? { reason_at: motive.at } : {}),
-        ...(motive.by !== undefined ? { superseded_by: `${owner}/${repository}#${motive.by}` } : {}),
-      },
+      extra: { reason_candidates: motives, ...(by ? { superseded_by: by } : {}) },
     };
   };
 

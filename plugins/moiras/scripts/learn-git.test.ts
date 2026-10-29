@@ -98,7 +98,7 @@ describe('merged PRs and rejected approaches', () => {
     const human = closed(8, { comments: [{ createdAt: '2026-10-08T12:00:00Z', body: '@codex review\nNão seguimos: quebra a troca de seller.', author: { login: 'maintainer-01' } }] });
     assert.deepEqual(human.discussion, [{ kind: 'comment', at: '2026-10-08T12:00:00Z', author: 'maintainer-01', bot: false, text: '@codex review\nNão seguimos: quebra a troca de seller.' }]);
     const [candidate] = selectItems({ pulls: [human] }, options).candidates;
-    assert.equal(candidate!.reason_kind, 'comment');
+    assert.deepEqual(candidate!.reason_candidates, [{ kind: 'comment', at: '2026-10-08T12:00:00Z' }]);
   });
 
   it('only a merged revert invalidates a solution: an open or closed revert leaves the original', () => {
@@ -119,15 +119,27 @@ describe('merged PRs and rejected approaches', () => {
     const [candidate] = selection.candidates;
     assert.equal(candidate!.outcome, 'rejected');
     assert.equal(candidate!.kind, 'pr');
-    assert.equal(candidate!.reason_kind, 'comment');
-    assert.equal(candidate!.reason_at, '2026-10-08T12:00:00Z');
+    assert.deepEqual(candidate!.reason_candidates, [{ kind: 'comment', at: '2026-10-08T12:00:00Z' }]);
     assert.equal(candidate!.closed_at, '2026-10-10T12:00:00Z');
+    assert.ok(!JSON.stringify(selection).includes('quebra'), 'the reason text is never printed');
+  });
+
+  it('keeps every explicit reason in order, so a thanks written after the real reason does not hide it', () => {
+    const selection = selectItems({ pulls: [closed(5, { comments: [
+      { createdAt: '2026-10-09T12:00:00Z', body: 'Obrigado!', author: { login: 'maintainer-01' } },
+      { createdAt: '2026-10-08T12:00:00Z', body: 'Não vamos seguir: quebra a troca de seller.', author: { login: 'maintainer-01' } },
+      { createdAt: '2026-10-09T13:00:00Z', body: 'Thanks!', author: { login: 'github-actions[bot]' } },
+    ] })] }, options);
+    const [candidate] = selection.candidates;
+    assert.equal(candidate!.outcome, 'rejected');
+    // Oldest first, and the bot's thanks is not a reason at all.
+    assert.deepEqual(candidate!.reason_candidates, [{ kind: 'comment', at: '2026-10-08T12:00:00Z' }, { kind: 'comment', at: '2026-10-09T12:00:00Z' }]);
     assert.ok(!JSON.stringify(selection).includes('quebra'), 'the reason text is never printed');
   });
 
   it('a review counts as the reason too', () => {
     const selection = selectItems({ pulls: [closed(5, { reviews: [{ submittedAt: '2026-10-09T12:00:00Z', body: 'Abordagem errada: o problema está no seller.' }] })] }, options);
-    assert.equal(selection.candidates[0]!.reason_kind, 'review');
+    assert.deepEqual(selection.candidates[0]!.reason_candidates, [{ kind: 'review', at: '2026-10-09T12:00:00Z' }]);
   });
 
   it('a comment older than the window, or with no date, gives no reason', () => {
@@ -139,7 +151,7 @@ describe('merged PRs and rejected approaches', () => {
   it('a PR that another PR replaces says so at the start of a line, and that is its reason', () => {
     const selection = selectItems({ pulls: [closed(5), pull(6, { state: 'OPEN', mergedAt: null, body: 'Replaces #5\n\nVai pelo outro caminho.' })] }, options);
     assert.equal(selection.candidates.length, 1);
-    assert.equal(selection.candidates[0]!.reason_kind, 'superseded');
+    assert.deepEqual(selection.candidates[0]!.reason_candidates, [{ kind: 'superseded', superseded_by: `${slug}#6` }]);
     assert.equal(selection.candidates[0]!.superseded_by, `${slug}#6`);
   });
 
@@ -154,7 +166,7 @@ describe('merged PRs and rejected approaches', () => {
     const bare = selectItems({ pulls: [bitbucket(plain)] }, { provider: 'bitbucket', ...options });
     assert.deepEqual(reasons(bare), { [`${slug}#9`]: 'no-reason' });
     const explained = selectItems({ pulls: [bitbucket({ ...plain, comments: [{ created_on: '2026-10-09T12:00:00Z', content: { raw: 'Substituído pelo outro.' } }] })] }, { provider: 'bitbucket', ...options });
-    assert.equal(explained.candidates[0]!.reason_kind, 'comment');
+    assert.deepEqual(explained.candidates[0]!.reason_candidates, [{ kind: 'comment', at: '2026-10-09T12:00:00Z' }]);
   });
 
   it('a rejected PR still goes through the revert and secret rules', () => {
@@ -313,6 +325,6 @@ describe('selection holds the watermark and the shape of solutions', () => {
   it('moves the PR watermark with the newest merged or rejected PR, and keeps the rest of the shape', () => {
     const selection = selectItems({ pulls: [closed(5, { closedAt: '2026-10-12T12:00:00Z', comments: [{ createdAt: '2026-10-11T12:00:00Z', body: 'Não.' }] })] }, options);
     assert.equal(selection.watermark.pr, '2026-10-12T12:00:00Z');
-    assert.deepEqual(Object.keys(selection.candidates[0]!).sort(), ['closed_at', 'key', 'kind', 'outcome', 'provider', 'ref', 'reason_at', 'reason_kind', 'suggested_id', 'url'].sort());
+    assert.deepEqual(Object.keys(selection.candidates[0]!).sort(), ['closed_at', 'key', 'kind', 'outcome', 'provider', 'ref', 'reason_candidates', 'suggested_id', 'url'].sort());
   });
 });
