@@ -208,3 +208,14 @@ Só vale para issue com `agency` diferente de `null`. Sem agência, esta seção
 - **O que não vai:** a agência é um destinatário externo. Não inclua trechos de conversas internas do Slack nem seus permalinks, nomes ou quaisquer dados de outros clientes, segredos nem dados pessoais. Monte o rascunho só com o que a agência consegue ver (a issue do Jira, o código e a solução): não parafraseie fatos que só vieram de conversas internas do Slack. Se o problema, a causa ou a solução dependem de informação assim, deixe essa parte de fora, marque-a como "a confirmar" e avise o usuário para ele decidir o que pode ser compartilhado. Cite como evidência só o que a agência consegue abrir (ex.: a chave da issue). Trechos de código seguem o limite de 20 linhas, com referência.
 - **Para onde:** se a agência estiver em `agencies` na configuração e tiver `channel`, sugira esse canal como destino. Agência que não está na lista funciona do mesmo jeito, só sem sugestão de destino.
 - **Depois:** o `agency` fica no registro do aprendizado (seção 7). O repasse em si não é gravado.
+
+## 10. Skill do aprendizado (opcional)
+
+Depois de gravar ou atualizar um aprendizado (seção 7), ou de o usuário informar o desfecho dele, a Átropos verifica se há skill a gerar, seguindo `skills/moiras-export/SKILL.md`.
+
+- **Quando há o que gerar:** só aprendizado `result: resolved` (solução, padrão ou decisão). Um registro `pending` não gera skill ainda: diga isso e não ofereça nada.
+- **Oferta:** no modo interativo, uma linha só: "Quer gerar ou atualizar a skill de `<id>`? A lista exata vem antes de qualquer gravação." Com o "sim" à oferta, siga o `moiras-export` (plano, lista exata, "sim" à lista, gravação). O "sim" à lista é o que grava; a oferta sozinha não grava.
+- **Sem sintoma concreto:** o aprendizado fica de fora, com o motivo no relatório do `moiras-export`. Não invente um sintoma para a skill.
+- **Modo automático:** nunca gera nem grava skill.
+- **Manual:** o usuário pode pedir a qualquer momento (`/moiras:moiras-export`), para um ou todos os aprendizados.
+- A Átropos **não** envia nada para harness nem para outro knowledge: a skill fica no knowledge local, e o `moiras-publish` a leva junto com o aprendizado, por PR.

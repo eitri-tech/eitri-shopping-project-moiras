@@ -51,6 +51,20 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
 
    Liste-os no relatório como "já no compartilhado". A cópia local **não é apagada** por esta skill (aprendizado não se apaga); na leitura, o `local` já tem precedência sobre o compartilhado.
 
+9. **Skills desatualizadas.** Só quando o fingerprint do knowledge mudou com o que chegou (o mesmo cálculo de `moiras-triage/SKILL.md`, seção "Fingerprint do knowledge", sobre todos os knowledges declarados, já com os clones avançados). Rode, sem gravar nada:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/skills.ts" stale --skills <dir> --local <local-dir> --shared <dir> [--shared <outro-dir>]... --fingerprint <sha256:...>
+   ```
+
+   Ele lê `skills/` do clone que chegou e diz, por skill, `current`, `stale`, `divergent`, `orphan` ou `invalid`, com os `conflicts` de cada uma:
+   - `result-changed`: o aprendizado mudou de `result` (ex.: `pending` para `resolved`, ou `resolved` para `not-resolved`);
+   - `criterion-replaced`: um critério que a skill usava foi substituído (`replaces`) ou removido;
+   - `source-missing`: o aprendizado não gera mais skill;
+   - `skill-divergent`: com o mesmo fingerprint, a skill não bate com o que o gerador escreve (editada à mão, ou gerada por outra versão).
+
+   No relatório, separe duas listas: **Desatualizadas** (`stale` sem conflito) e **Conflitos** (`stale` com `conflicts`), cada conflito com o detalhe, em caminho separado. Depois ofereça regenerar as afetadas com o `moiras-export`, no knowledge local e com o "sim" à lista exata; a oferta mostra os conflitos antes da lista. O `moiras-sync` nunca regenera nem grava skill por conta própria. Se o usuário disser "não", deixe a skill marcada como desatualizada no relatório e não faça mais nada. No `--auto`, só relate: não ofereça nem regenere.
+
 ## Coleta do GitHub (opcional, `--github`)
 
 Com `--github <dono/repo>...`, depois de sincronizar, a skill procura o que fechou no GitHub desde a última rodada para o `moiras-learn --from-github`. É **só uma lista pendente**: nenhum registro é criado, nem no `local` (o `<local-dir>` continua intocado). Quem grava é o `moiras-learn --from-github --pending`, com o "sim" do usuário à lista exata.
