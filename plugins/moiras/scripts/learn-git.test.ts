@@ -284,9 +284,10 @@ describe('the rejected approach record in the knowledge check', () => {
     assert.deepEqual(findingsOf(t, good), []);
   });
 
-  it('accepts the optional issue of a rejected approach only as owner/repository#number', t => {
+  it('accepts the optional issue of a rejected approach as owner/repository#number or a Jira key', t => {
     assert.deepEqual(findingsOf(t, `${good}issue: acme/acme-shop-checkout#3\n`), []);
-    assert.deepEqual(findingsOf(t, `${good}issue: PROJ-3\n`), ['issue-invalid']);
+    assert.deepEqual(findingsOf(t, `${good}issue: PROJ-3\n`), []);
+    assert.deepEqual(findingsOf(t, `${good}issue: proj-3\n`), ['issue-invalid']);
     assert.deepEqual(findingsOf(t, `${good}issue: [acme/acme-shop-checkout#3]\n`), ['issue-invalid']);
     assert.deepEqual(findingsOf(t, `${good}issue: bitbucket:acme/acme-shop-checkout#3\n`), ['issue-invalid']);
   });

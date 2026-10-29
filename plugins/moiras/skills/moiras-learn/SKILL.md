@@ -130,7 +130,7 @@ Atalho de `--from-git --provider github`. Mesmo fluxo dos passos 3 a 9 acima (de
 
    `{"secret":true}` (código de saída 1) **bloqueia o item inteiro**: nada dele é proposto nem sintetizado, o usuário o vê só pela referência (`dono/repo#número`, motivo `secret`) e ele sai da lista pendente (`pending remove`), porque seria barrado de novo. `{"secret":false}` libera a leitura; o texto lido continua sendo só insumo da síntese.
 4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:
-   - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `dono/repo#número` (o `knowledge.ts check` aceita as duas; registros da primeira versão, com `repositório#número` sem dono, continuam válidos e contam como conhecidos).
+   - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `dono/repo#número` (o `knowledge.ts check` aceita as duas; registros da primeira versão, com `repositório#número` sem dono, e com `bitbucket:dono/repo#número`, continuam válidos e contam como conhecidos).
    - `reference_url`: a `url` do PR ou da issue. **Obrigatória** neste modo (`reference-url-missing` no `check`): é como se audita e se remove o registro depois.
    - `imported_from: github` e, na `Observação`, "Importado do GitHub; confira antes de publicar."
    - `result: resolved` só para PR mergeado (a evidência é o merge); issue fechada sem PR ligado precisa do comentário de fechamento dizendo o que foi feito, senão não vira solução (`no-evidence`).
@@ -253,7 +253,7 @@ imported_from: git
 **Por quê:** a PR foi fechada sem merge; o cache mantinha um seller antigo depois da troca.
 ```
 
-Campo opcional `issue` (só na abordagem rejeitada de GitHub, quando o PR fecha uma issue do mesmo dono e repositório): `issue: acme/acme-shop-checkout#3`, no formato `dono/repo#número`. Sem issue fechada pelo PR, o campo é omitido. O `knowledge.ts check` confere o formato.
+Campo opcional `issue` (só na abordagem rejeitada de GitHub, quando o PR fecha uma issue do mesmo dono e repositório): `issue: acme/acme-shop-checkout#3`, no formato `dono/repo#número`, ou a chave do Jira (`ABC-123`). Sem issue fechada pelo PR, o campo é omitido. O `knowledge.ts check` confere o formato.
 
 ## O que vai em cada registro
 

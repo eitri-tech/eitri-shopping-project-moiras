@@ -88,7 +88,8 @@ const historyOrigins = ['github', 'git'];
 /** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
+/** Jira-style issue key, `ABC-123` (the project key has at least two characters). */
+const jiraKey = /^[A-Z][A-Z0-9]+-\d+$/;
 /** Origin of a learning taken from GitHub with no Jira key: `<owner>/<repository>#<number>` (a merged PR or an issue closed as completed); the first version wrote `<repository>#<number>`, still accepted. */
 const githubRef = /^(?:[A-Za-z0-9][A-Za-z0-9-]*\/)?[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
 /** Origin of a learning taken from Bitbucket: `bitbucket:<workspace>/<repository>#<number>` (see gitSource). */
@@ -459,8 +460,8 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         if (!asText(fields.reason)) add('reason-missing', 'error');
         else if (asScalar(fields.reason).length > maxReasonLength) add('reason-too-long', 'error');
         if (asScalar(fields.imported_from) !== 'git') add('rejected-import-invalid', 'error');
-        // Optional: the issue the rejected PR closes, `<owner>/<repository>#<n>` (same owner and repository as the PR).
-        if (fields.issue !== undefined && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !closedIssueRef.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
+        // Optional: the issue the rejected PR closes, `<owner>/<repository>#<n>` (same owner and repository as the PR) or its Jira key.
+        if (fields.issue !== undefined && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !closedIssueRef.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
       }
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');

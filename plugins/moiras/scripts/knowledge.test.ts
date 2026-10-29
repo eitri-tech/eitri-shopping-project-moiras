@@ -250,6 +250,28 @@ describe('check', () => {
     assert.equal(check(local).findings.filter(f => f.path.endsWith('PROJ-9-1.md')).length, 5);
   });
 
+  it('accepts the issue of a solution or a rejected approach as owner/repository#number or a Jira key', t => {
+    const { local, write } = workspace(t);
+    const decision = (issue: string) => `---\nid: acme-shop-checkout-pr-5\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/5\nimported_from: git\nissue: ${issue}\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n`;
+    // Solutions also keep the legacy `repo#n` and `bitbucket:ws/repo#n` forms; a rejected approach takes only owner/repository#n or the key.
+    for (const value of ['acme/acme-shop-checkout#3', 'acme-shop-checkout#3', 'bitbucket:acme/acme-shop-checkout#3', 'PROJ-123', 'AB-1']) {
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [], value);
+    }
+    for (const value of ['acme/acme-shop-checkout#3', 'PROJ-123']) {
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision(value));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [], value);
+    }
+    for (const value of ['proj-123', 'PROJ123', 'P-1-2', 'acme/acme-shop-checkout', 'acme/acme-shop-checkout#x']) {
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision('PROJ-123'));
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), ['issue-invalid'], value);
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved'));
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision(value));
+      assert.deepEqual(check(local).findings.map(f => f.rule), ['issue-invalid'], value);
+    }
+  });
+
   it('validates malformed placeholders and exempts complete placeholders from contract errors', t => {
     const { local, write } = workspace(t);
     for (const [value, expected] of [['bad<', ['issue-invalid']], ['[PROJ-1]', ['issue-invalid']], ['<PROJ-123>', ['placeholder']]] as const) {
