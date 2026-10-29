@@ -21,7 +21,7 @@ Os contratos e as regras estão nos [stages da triagem](skills/moiras-triage/sta
 Quando usar cada skill:
 
 - [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
-- [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico (e, com `--from-github`, os PRs mergeados e issues fechadas do GitHub), propõe soluções, padrões e decisões e grava só o que você aprovar.
+- [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico (e, com `--from-github` ou `--from-git`, os PRs mergeados e issues fechadas do GitHub, e os PRs de outros provedores git, como o Bitbucket), propõe soluções, padrões e decisões e grava só o que você aprovar.
 - [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
 - [moiras-teach](skills/moiras-teach/SKILL.md): incrementar o knowledge com uma regra que você dita ("sempre que mexer com o checkout, confira a flag de homologação"); vira um critério local, com gatilho e passos de conferência, só após o "sim".
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
@@ -34,7 +34,7 @@ Quem escreve onde:
 - `moiras-init` é a única que cria o `.moiras/sources.json` (e o `.moiras/.gitignore`), pelo `scripts/config.ts`, só após o "sim" ao arquivo inteiro e sem sobrescrever.
 - `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
   grava só após o "sim" à lista exata e não apaga registros.
-- `moiras-learn` grava em `learnings/` do knowledge local, só no modo interativo e após o "sim" à lista exata; marca os registros com `imported_from: history` (ou `github`, com `--from-github`, que só aprende com PR mergeado e não revertido e issue fechada como resolvida, e guarda o link de origem em `reference_url`), só afirma `result: resolved` com evidência (PR ou comentário de fechamento) e nunca copia texto de issue.
+- `moiras-learn` grava em `learnings/` do knowledge local, só no modo interativo e após o "sim" à lista exata; marca os registros com `imported_from: history` (ou `github`, com `--from-github`, ou `git`, com `--from-git`: só PR mergeado e não revertido e issue fechada como resolvida viram solução; PR fechado sem merge só vira abordagem rejeitada, em `learnings/decisions/` com `outcome: rejected`, se tiver motivo explícito no próprio PR; o link de origem fica em `reference_url`), só afirma `result: resolved` com evidência (PR ou comentário de fechamento) e nunca copia texto de issue.
 - A coleta automática do GitHub (`moiras-sync --github`) guarda uma marca d'água por `dono/repo` e só monta a lista pendente em `.moiras/learn-github/` (tira dela o que passou a ser elegível de menos, como um PR revertido; coleta cortada pelo `--limit` não avança a marca) (local, sem texto de PR ou issue); nunca grava aprendizado sem o "sim".
 - `moiras-teach` grava só em `criteria/` do knowledge local, no modo interativo e após o "sim" à lista exata; regra que conflita com outra vira critério regenerado (`replaces`), e a skill nunca copia texto de issue nem inventa dado que a regra mande conferir.
 - `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`

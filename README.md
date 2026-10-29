@@ -54,7 +54,7 @@ npx skills add eitri-tech/eitri-shopping-project-moiras --list                  
 npx skills add eitri-tech/eitri-shopping-project-moiras -a codex -s moiras-triage   # instala uma skill num agente
 ```
 
-O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts`, `scripts/github.ts` e `scripts/learn-github.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
+O `npx skills` copia só a pasta de cada skill: `scripts/memory.ts`, `scripts/knowledge.ts`, `scripts/config.ts`, `scripts/github.ts`, `scripts/learn-github.ts`, `scripts/learn-git.ts` e `scripts/providers.ts` ficam em `plugins/moiras/scripts` e não vão junto. As skills chamam esses scripts por `${CLAUDE_PLUGIN_ROOT}`, variável que só o Claude Code define. Por isso, mantenha um clone do repositório e diga ao agente que `${CLAUDE_PLUGIN_ROOT}` é `<clone>/plugins/moiras`. Jira e Slack precisam de conectores no agente escolhido.
 
 Precisa do Jira e do Slack conectados ao Claude (conectores do claude.ai ou servidores MCP próprios): o plugin não traz servidor MCP. Os scripts rodam em Node 22.18 ou mais novo (o LTS atual serve), sem dependências: eles usam `import.meta.main` e executam `.ts` direto, e o Node 20 e o 22.17 falham.
 
@@ -88,7 +88,8 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 | `/moiras:moiras-init` | Cria o `.moiras/sources.json` conversando; nunca sobrescreve |
 | `/moiras:moiras-triage PROJ-100 [PROJ-101]` | Tria as issues sem responsável dos épicos (ou do escopo da configuração: categorias). `--auto` roda sem perguntas (cron); `--full` reprocessa tudo |
 | `/moiras:moiras-learn [PROJ-100] [--since AAAA-MM-DD]` | Aprende com as issues já concluídas do escopo: propõe soluções, padrões e decisões e grava no knowledge local só o que você aprovar |
-| `/moiras:moiras-learn --from-github <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]` | Mesmo fluxo, a partir dos PRs mergeados e das issues fechadas como resolvidas do GitHub (PR fechado sem merge, revertido ou issue não planejada ficam de fora); cada registro leva o link do PR ou da issue de origem. PR ou issue que fala do próprio detector de segredos pode ser barrado como `secret`: é intencional. `--pending` revisa a lista montada pelo `moiras-sync --github` |
+| `/moiras:moiras-learn --from-github <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label NOME]` | Mesmo fluxo, a partir dos PRs mergeados e das issues fechadas como resolvidas do GitHub (PR fechado sem merge só entra com motivo explícito, como abordagem rejeitada; PR revertido ou issue não planejada ficam de fora); cada registro leva o link do PR ou da issue de origem. PR ou issue que fala do próprio detector de segredos pode ser barrado como `secret`: é intencional. `--pending` revisa a lista montada pelo `moiras-sync --github` |
+| `/moiras:moiras-learn --from-git --provider bitbucket <workspace/repo>` | Aprende com os PRs de qualquer provedor git: PR mergeado vira solução e PR fechado sem merge, com motivo explícito no próprio PR, vira abordagem rejeitada. No Bitbucket, você entrega o JSON da lista de PRs (o plugin não chama a API) |
 | `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: mexeu no checkout, confira a flag de homologação): grava um critério no knowledge local só depois do seu "sim" |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios (pastas ou um padrão do GitHub, como `acme/acme-shop-*`); grava no knowledge local depois do seu "sim" e só clona o que faltar com o seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
@@ -159,6 +160,7 @@ Onde mexer:
 | Memória das etapas | `plugins/moiras/scripts/memory.ts` |
 | Regras dos registros do knowledge (`hash`, `check`, `issues`, `plan`) | `plugins/moiras/scripts/knowledge.ts` |
 | Seleção do aprendizado do GitHub, marca d'água e lista pendente | `plugins/moiras/scripts/learn-github.ts` |
+| Camada de provedor git (GitHub e Bitbucket) e seleção do `--from-git` (solução e abordagem rejeitada) | `plugins/moiras/scripts/providers.ts`, `plugins/moiras/scripts/learn-git.ts` |
 | Criação e validação da configuração | `plugins/moiras/scripts/config.ts` |
 | Repositórios do GitHub por padrão (`match`, `plan-clone`, `clone`) | `plugins/moiras/scripts/github.ts` |
 | Modelo de configuração | `plugins/moiras/config/sources.example.json` |

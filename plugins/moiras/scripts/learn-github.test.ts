@@ -34,7 +34,21 @@ describe('which sources count', () => {
       issues: [ticket(10), ticket(11, { stateReason: 'NOT_PLANNED' }), ticket(12, { stateReason: 'DUPLICATE' }), ticket(13, { state: 'OPEN', stateReason: null })],
     }, { owner: 'acme', repository: repo });
     assert.deepEqual(refs(selection), [`${slug}#1`, `${slug}#10`]);
-    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'not-merged', [`${slug}#3`]: 'not-merged', [`${slug}#11`]: 'not-completed', [`${slug}#12`]: 'not-completed', [`${slug}#13`]: 'not-completed' });
+    assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'no-reason', [`${slug}#3`]: 'not-merged',[`${slug}#11`]: 'not-completed', [`${slug}#12`]: 'not-completed', [`${slug}#13`]: 'not-completed' });
+  });
+
+  it('takes a PR closed without merge as a rejected approach when a comment gives the reason, with the records of `gh pr list --state all`', () => {
+    // The shape of `gh pr list --state all ... --json closingIssuesReferences,files` plus `gh pr view --json comments,reviews`.
+    const selection = select({ prs: [
+      pull(7, { state: 'CLOSED', mergedAt: null, closedAt: '2026-10-20T12:00:00Z', closingIssuesReferences: [closing(20)], files: [{ path: 'src/cache.ts' }],
+        comments: [{ author: { login: 'fulano' }, body: 'Vamos por outro caminho: o cache sai.', createdAt: '2026-10-19T12:00:00Z' }], reviews: [] }),
+      pull(8, { state: 'CLOSED', mergedAt: null, closedAt: '2026-10-20T12:00:00Z', comments: [], reviews: [] }),
+    ] }, { owner: 'acme', repository: repo });
+    assert.deepEqual(refs(selection), [`${slug}#7`]);
+    assert.equal(selection.candidates[0]!.outcome, 'rejected');
+    assert.deepEqual(selection.candidates[0]!.reason_candidates, [{ kind: 'comment', at: '2026-10-19T12:00:00Z' }]);
+    assert.equal(selection.candidates[0]!.issue, `${slug}#20`);
+    assert.equal(reasons(selection)[`${slug}#8`], 'no-reason');
   });
 
   it('skips reverted PRs and the revert PRs themselves, even when the revert is outside the period', () => {
