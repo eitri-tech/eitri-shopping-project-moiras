@@ -45,7 +45,7 @@ export interface Candidate {
   jira_key?: string;
   /** Issues of the same owner and repository that the PR closes (`Closes #n`); a reference to another repository is dropped. */
   closes?: string[];
-  /** Rejected PRs that close an issue: the first of `closes`, the `issue` of the rejected record (`<owner>/<repository>#<n>`). */
+  /** PRs that close an issue: the first of `closes`, the `issue` of the record (`<owner>/<repository>#<n>`); a Jira key of the PR wins for a solution. */
   issue?: string;
   /** Rejected PRs only: every explicit reason found, in order: the comments and reviews of the window, oldest first, then the PR
    * that replaces it. Several are kept on purpose (a thanks can follow the real reason); the skill reads each text (never printed). */
@@ -290,7 +290,7 @@ export function selectItems(input: Input, options: Options): Selection {
       provider, kind, outcome: verdict.outcome, ref, key, url, closed_at: when,
       ...(record.jira ? { jira_key: record.jira } : {}),
       ...(record.closes?.length ? { closes: record.closes } : {}),
-      ...(verdict.outcome === 'rejected' && record.closes?.length ? { issue: record.closes[0] } : {}),
+      ...(record.closes?.length ? { issue: record.closes[0] } : {}),
       ...verdict.extra,
       suggested_id: suggested,
     });

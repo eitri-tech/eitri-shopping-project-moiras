@@ -292,14 +292,16 @@ describe('the rejected approach record in the knowledge check', () => {
     assert.deepEqual(findingsOf(t, `${good}issue: bitbucket:acme/acme-shop-checkout#3\n`), ['issue-invalid']);
   });
 
-  it('takes the issue a rejected PR closes from the same owner and repository, and omits it when there is none', () => {
+  it('takes the issue a PR closes from the same owner and repository, rejected or merged, and omits it when there is none', () => {
     const closes = (repository: string) => ({ number: 3, url: `https://github.com/acme/${repository}/issues/3`, repository: { name: repository, owner: { login: 'acme' } } });
     const linked = selectItems({ pulls: [closed(5, { closingIssuesReferences: [closes(repo)], comments: [{ createdAt: '2026-10-08T12:00:00Z', body: 'Não.' }] })] }, options).candidates[0]!;
     assert.equal(linked.issue, `${slug}#3`);
     const other = selectItems({ pulls: [closed(6, { closingIssuesReferences: [closes('outro')], comments: [{ createdAt: '2026-10-08T12:00:00Z', body: 'Não.' }] })] }, options).candidates[0]!;
     assert.equal('issue' in other, false);
     const merged = selectItems({ pulls: [pull(7, { closingIssuesReferences: [closes(repo)] })] }, options).candidates[0]!;
-    assert.equal('issue' in merged, false);
+    assert.equal(merged.issue, `${slug}#3`);
+    const unlinked = selectItems({ pulls: [pull(8)] }, options).candidates[0]!;
+    assert.equal('issue' in unlinked, false);
   });
 
   it('requires the reason, a valid source URL, imported_from git and a short reason', t => {
