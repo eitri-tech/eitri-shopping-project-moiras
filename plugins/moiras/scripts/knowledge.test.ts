@@ -111,6 +111,17 @@ describe('issues', () => {
     assert.deepEqual(issues(local), { issues: {}, ids: ['binary', 'large', 'link', 'no-frontmatter', 'unclosed'] });
   });
 
+  it('indexes the issue of a rejected approach, as owner/repository#number or a Jira key', t => {
+    const { local, write } = workspace(t);
+    const rejected = (id: string, issue: string) => `---\nid: ${id}\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/5\nimported_from: git\nissue: ${issue}\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n`;
+    write('local', 'learnings/decisions/pr-5.md', rejected('pr-5', 'acme/acme-shop-checkout#3'));
+    write('local', 'learnings/decisions/pr-6.md', rejected('pr-6', 'PROJ-4'));
+    const index = issues(local);
+    assert.deepEqual(index.issues['acme/acme-shop-checkout#3'], { solutions: [], patterns: [], decisions: ['pr-5'] });
+    assert.deepEqual(index.issues['PROJ-4'], { solutions: [], patterns: [], decisions: ['pr-6'] });
+    assert.deepEqual(index.issues['acme/acme-shop-checkout#5'], { solutions: [], patterns: [], decisions: ['pr-5', 'pr-6'] });
+  });
+
   it('ignores records that fail check, reserves their names, accepts a scalar issues and merges knowledges', t => {
     const { local, shared, write } = workspace(t);
     write('local', 'learnings/solutions/PROJ-2-1.md', solution('resolved').replace('id: PROJ-1-1', 'id: PROJ-9-1').replace('issue: PROJ-1', 'issue: PROJ-2'));

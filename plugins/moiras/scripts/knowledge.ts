@@ -321,7 +321,7 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       // Empty and TODO records are not evidence (see moiras-triage), so they do not cover an issue.
       if (invalid.has(entry.path) || !entry.doc!.body.trim() || /\bTODO\b/.test(entry.doc!.body)) continue;
       const id = stem;
-      const raw = entry.kind.type === 'solution' ? fields.issue : entry.kind.type === 'pattern' ? fields.issues : undefined;
+      const raw = entry.kind.type === 'pattern' ? fields.issues : entry.kind.type === 'solution' || entry.kind.type === 'decision' ? fields.issue : undefined;
       const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
       // The source URL of a solution (a GitHub PR or issue) is a second, canonical key: `<owner>/<repository>#<n>`. A learning from
       // GitHub stays known even when its `issue` is a Jira key that later goes missing from the title or branch of the PR.
