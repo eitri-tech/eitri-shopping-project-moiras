@@ -78,6 +78,11 @@ const required: Record<string, string[]> = {
   pattern: ['repositories', 'issues'],
   decision: ['source'],
 };
+/** A rejected approach (`outcome: rejected`, a decision): no `source`; its reason and its PR are the record. */
+const rejectedOutcome = 'rejected';
+const maxReasonLength = 300;
+/** Origins of a learning taken from a git provider's history: they carry the PR or issue URL (`reference_url`). */
+const historyOrigins = ['github', 'git'];
 /** Where the indexed repository was when it was read (see moiras-index): all optional and outside `sources_hash`. */
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -93,9 +98,15 @@ export function validReferenceUrl(value: string): boolean {
     return url.protocol === 'https:' && url.hostname !== '' && url.username === '' && url.password === '';
   } catch { return false; }
 }
-/** `<owner>/<repository>#<n>` of a GitHub PR or issue URL (`https://github.com/<owner>/<repository>/pull|issues/<n>`); undefined for anything else. */
-export function githubSource(url: string): string | undefined {
-  const match = validReferenceUrl(url) ? /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(?:pull|issues)\/(\d+)\/?$/.exec(url) : null;
+/**
+ * `<owner>/<repository>#<n>` of a PR or issue URL of a git provider: GitHub (`https://github.com/<owner>/<repository>/pull|issues/<n>`)
+ * or Bitbucket (`https://bitbucket.org/<workspace>/<repository>/pull-requests/<n>`); undefined for anything else.
+ * Add a provider here when its URL shape is added to providers.ts.
+ */
+export function gitSource(url: string): string | undefined {
+  if (!validReferenceUrl(url)) return undefined;
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(?:pull|issues)\/(\d+)\/?$/.exec(url)
+    ?? /^https:\/\/bitbucket\.org\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/pull-requests\/(\d+)\/?$/.exec(url);
   return match ? `${match[1]}/${match[2]}#${Number(match[3])}` : undefined;
 }
 const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
@@ -282,9 +293,9 @@ export function records(dir: string, only?: Scope): Entry[] {
  * Issue keys that `learnings/` already cite (only from records that pass `check`) and every id or file
  * name in use, over one or more knowledges. A caller uses it to skip known issues and avoid collisions.
  */
-export function issues(dirs: string | string[]): { issues: Record<string, { solutions: string[]; patterns: string[] }>; ids: string[] } {
+export function issues(dirs: string | string[]): { issues: Record<string, { solutions: string[]; patterns: string[]; decisions?: string[] }>; ids: string[] } {
   const ids = new Set<string>();
-  const mentions = new Map<string, { solutions: Set<string>; patterns: Set<string> }>();
+  const mentions = new Map<string, { solutions: Set<string>; patterns: Set<string>; decisions: Set<string> }>();
   for (const dir of [dirs].flat()) {
     const invalid = new Set(check(dir, 'learnings').findings.filter(finding => finding.severity === 'error').map(finding => finding.path));
     for (const entry of records(dir, 'learnings')) {
@@ -304,19 +315,20 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
       // The source URL of a solution (a GitHub PR or issue) is a second, canonical key: `<owner>/<repository>#<n>`. A learning from
       // GitHub stays known even when its `issue` is a Jira key that later goes missing from the title or branch of the PR.
-      const source = entry.kind.type === 'solution' && typeof fields.reference_url === 'string' ? githubSource(fields.reference_url) : undefined;
+      const source = entry.kind.type !== 'pattern' && typeof fields.reference_url === 'string' ? gitSource(fields.reference_url) : undefined;
       if (source) keys.push(source);
       for (const key of keys) {
-        const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
-        group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
+        const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>(), decisions: new Set<string>() };
+        group[entry.kind.type === 'solution' ? 'solutions' : entry.kind.type === 'pattern' ? 'patterns' : 'decisions'].add(id);
         mentions.set(key, group);
       }
     }
   }
+  // `decisions` (rejected approaches taken from a PR) appears only when there is one, so the index of older knowledges is unchanged.
   return {
     issues: Object.fromEntries([...mentions.keys()].sort().map(key => {
       const group = mentions.get(key)!;
-      return [key, { solutions: [...group.solutions].sort(), patterns: [...group.patterns].sort() }];
+      return [key, { solutions: [...group.solutions].sort(), patterns: [...group.patterns].sort(), ...(group.decisions.size ? { decisions: [...group.decisions].sort() } : {}) }];
     })),
     ids: [...ids].sort(),
   };
@@ -431,16 +443,23 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         const value = asScalar(raw);
         if ((Array.isArray(raw) && asText(raw) !== '') || (value && !value.includes('<') && !pseudonymPattern.test(value))) add('pseudonym-required', 'error');
       }
-      for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
+      const rejected = kind.type === 'decision' && asScalar(fields.outcome) === rejectedOutcome;
+      for (const name of required[kind.type] ?? []) if (!(rejected && name === 'source') && !asText(fields[name])) add('field-missing', 'error');
+      if (fields.outcome !== undefined && !rejected) add('outcome-invalid', 'error');
+      if (rejected) {
+        if (!asText(fields.reason)) add('reason-missing', 'error');
+        else if (asScalar(fields.reason).length > maxReasonLength) add('reason-too-long', 'error');
+        if (asScalar(fields.imported_from) !== 'git') add('rejected-import-invalid', 'error');
+      }
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.category) && Array.isArray(fields.category)) add('category-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.confidence) && !(/^\d{1,3}$/.test(asScalar(fields.confidence)) && Number(asScalar(fields.confidence)) <= 100)) add('confidence-invalid', 'error');
       if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
-      if (kind.type === 'solution' && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (!fieldPlaceholder.test(asScalar(fields.reference_url)) && !validReferenceUrl(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
+      if ((kind.type === 'solution' || kind.type === 'decision') && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (!fieldPlaceholder.test(asScalar(fields.reference_url)) && !validReferenceUrl(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !issueKey(asScalar(fields.issue))))) add('issue-invalid', 'error');
       // A learning imported from GitHub points at its source PR or issue, so it can be audited and removed later.
-      if (kind.type === 'solution' && asScalar(fields.imported_from) === 'github' && !validReferenceUrl(asScalar(fields.reference_url))) add('reference-url-missing', 'error');
+      if ((kind.type === 'solution' || kind.type === 'decision') && historyOrigins.includes(asScalar(fields.imported_from)) && !validReferenceUrl(asScalar(fields.reference_url))) add('reference-url-missing', 'error');
       if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
         if (!Array.isArray(fields.repositories) || fields.repositories.some(item => !fieldPlaceholder.test(item) && !safeName.test(item))) add('repositories-invalid', 'error');
       }
