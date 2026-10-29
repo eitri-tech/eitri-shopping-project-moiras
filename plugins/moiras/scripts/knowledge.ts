@@ -82,8 +82,8 @@ const required: Record<string, string[]> = {
 const provenanceFields = ['indexed_commit_date', 'indexed_dirty'];
 const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
-/** Origin of a learning taken from GitHub with no Jira key: `<repository>#<number>` (a merged PR or an issue closed as completed). */
-const githubRef = /^[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
+/** Origin of a learning taken from GitHub with no Jira key: `<owner>/<repository>#<number>` (a merged PR or an issue closed as completed); the first version wrote `<repository>#<number>`, still accepted. */
+const githubRef = /^(?:[A-Za-z0-9][A-Za-z0-9-]*\/)?[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
 const issueKey = (value: string): boolean => jiraKey.test(value) || githubRef.test(value);
 // Optional pointer of a solution (usually a GitHub PR): a real https URL, no credentials, no whitespace.
 export function validReferenceUrl(value: string): boolean {

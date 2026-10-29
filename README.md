@@ -92,7 +92,7 @@ Rode `/moiras:moiras-init` no projeto onde vai rodar: ela pergunta o que falta (
 | `/moiras:moiras-teach [regra]` | Ensina uma regra ao knowledge (ex.: mexeu no checkout, confira a flag de homologação): grava um critério no knowledge local só depois do seu "sim" |
 | `/moiras:moiras-index` | Gera o glossário a partir do código. Só lê os repositórios (pastas ou um padrão do GitHub, como `acme/acme-shop-*`); grava no knowledge local depois do seu "sim" e só clona o que faltar com o seu "sim" |
 | `/moiras:moiras-audit [glossary\|criteria\|learnings]` | Revisa o knowledge e aplica só os ajustes aprovados |
-| `/moiras:moiras-sync <nome> [--github <dono/repo>]` | Traz o que foi mergeado nos knowledges compartilhados. Com `--github`, também monta a **lista pendente** do que fechou no GitHub desde a última rodada (marca d'água); não grava aprendizado |
+| `/moiras:moiras-sync <nome> [--github <dono/repo>]` | Traz o que foi mergeado nos knowledges compartilhados. Com `--github`, também monta a **lista pendente** do que fechou no GitHub desde a última rodada (marca d'água por dono/repo; coleta cortada pelo --limit não a avança); não grava aprendizado |
 | `/moiras:moiras-publish <nome>` | Abre um PR com o que é novo no knowledge local |
 
 **Primeira vez**, nesta ordem:

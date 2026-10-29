@@ -63,7 +63,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovação, gravação, conferência e relatório), trocando só a fonte: em vez das issues do Jira, os **PRs mergeados** e as **issues fechadas como resolvidas** de repositórios do GitHub. O PR costuma ter o que a issue não tem: os arquivos alterados e a conversa da revisão.
 
-**Fontes válidas.** Só PR **mergeado** e issue fechada como `COMPLETED`. Ficam de fora, com o motivo: PR fechado sem merge (`not-merged`), PR revertido (`reverted`) e o próprio PR de revert (`is-revert`), issue fechada como não planejada ou duplicada (`not-completed`) e issue que um PR já cobre (`covered-by-pr`, o aprendizado é o do PR). Só leitura: `gh pr list`, `gh issue list` e `gh pr view`/`gh issue view`; nada é comentado, rotulado nem fechado.
+**Fontes válidas.** Só PR **mergeado** e issue fechada como `COMPLETED`. Ficam de fora, com o motivo: PR fechado sem merge (`not-merged`), PR revertido (`reverted`) e o próprio PR de revert (`is-revert`: título que começa com Revert, Reverte, Reverter, Revertendo, Desfaz ou Desfazer, ou texto, no título ou no corpo, que diga "This reverts #n", "Reverte o #n" ou "Desfaz o #n"), issue fechada como não planejada ou duplicada (`not-completed`) e issue que um PR já cobre (`covered-by-pr`, o aprendizado é o do PR; só vale a referência `closingIssuesReferences` do **mesmo dono e repositório**, a de outro repositório ou sem dono e repositório é ignorada). Só leitura: `gh pr list`, `gh issue list` e `gh pr view`/`gh issue view`; nada é comentado, rotulado nem fechado.
 
 **Repositórios.** Os do argumento (`<dono/repo>`) ou, sem argumento, os clones que o `github.ts local` encontra para o padrão de `index.github` (o dono vem do padrão). Só entra PR ou issue cuja URL é do **dono e** do repositório informados (um fork ou outro repositório de mesmo nome é `invalid`). A referência gravada continua `repositório#número`.
 
@@ -85,12 +85,22 @@ Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovaçã
    node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" eligible --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
    ```
 
-   A saída tem `candidates` (referência `repositório#número`, `url`, `closed_at`, `jira_key` quando o título ou a branch do PR tem a chave, `closes` e `suggested_id`) e `skipped` (referência e motivo: os acima, mais `outside-period`, `label-mismatch`, `already-known`, `already-pending`, `secret` e `invalid`). Ela nunca imprime texto de PR ou de issue. **Segredo**: item com segredo em qualquer texto (título, descrição, branch, labels, arquivos, comentários) sai com `secret` e nunca vira registro; mostre-o ao usuário só pela referência.
+   A saída tem `candidates` (referência `dono/repo#número`, `url`, `closed_at`, `jira_key` quando o título ou a branch do PR tem a chave, `closes` e `suggested_id`) e `skipped` (referência e motivo: os acima, mais `outside-period`, `label-mismatch`, `already-known`, `already-pending`, `secret` e `invalid`). Ela nunca imprime texto de PR ou de issue. **Segredo**: item com segredo em qualquer texto (título, descrição, branch, labels, arquivos, comentários) sai com `secret` e nunca vira registro; mostre-o ao usuário só pela referência.
+
+   > **Falsos positivos do revert.** A detecção é por texto e **erra para o lado de não aprender**. "Não desfaz o #n", "não reverte o #n" e "does not reverts #n" são lidos como negação; mas um PR que cita "reverte", "desfaz" ou "reverts" seguido de um `#n` por outro motivo (por exemplo, "o que desfaz o #5 é outro PR") vira `is-revert` e o #n citado vira `reverted`, e um `#n` sem dono e repositório não se distingue de um PR do mesmo repositório. Referência qualificada (`outro/repo#5`) é ignorada. Quem precisar do item pode escrever a síntese à mão depois de conferir no GitHub.
 
    > **Nota.** PR ou issue que **fala do próprio detector de segredos** (por exemplo, um PR que altera o `hasSecret` ou que cita um token de exemplo no texto) pode ser barrado como `secret`. Isso é **intencional**: o detector não distingue um segredo de um exemplo dele, e é preferível perder esse aprendizado a gravar algo que pareça um segredo. Se o usuário quiser aprender com esse item, escreva a síntese à mão, sem o trecho que parece segredo, e rode o `check`; a skill não contorna o bloqueio.
 3. **Pular, classificar e propor** como nos passos 3 a 5: o `issues` do `knowledge.ts` já foi aplicado pelo `--knowledge` (cobre a referência e também a chave do Jira); a Láquesis usa o glossário e os arquivos do PR para repositório e componente; a síntese (problema, causa, solução e arquivos) é sua, em português, lida do PR (`gh pr view`, só o necessário) e nunca copiada.
+
+   **Contexto adicional e segredos.** O que você ler além do JSON do passo 1 (comentários, revisões e conversa do PR ou da issue, com `gh pr view <número> --repo <dono/repo> --json comments,reviews,files` ou `gh issue view ... --json comments`) passa **antes de propor** pelo detector, com a saída do `gh` na entrada:
+
+   ```bash
+   gh pr view <número> --repo <dono/repo> --json comments,reviews,files | node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan
+   ```
+
+   `{"secret":true}` (código de saída 1) **bloqueia o item inteiro**: nada dele é proposto nem sintetizado, o usuário o vê só pela referência (`dono/repo#número`, motivo `secret`) e ele sai da lista pendente (`pending remove`), porque seria barrado de novo. `{"secret":false}` libera a leitura; o texto lido continua sendo só insumo da síntese.
 4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:
-   - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `repositório#número` (o `knowledge.ts check` aceita as duas).
+   - `issue`: a chave do Jira quando o PR a traz (`jira_key`); senão a referência `dono/repo#número` (o `knowledge.ts check` aceita as duas; registros da primeira versão, com `repositório#número` sem dono, continuam válidos e contam como conhecidos).
    - `reference_url`: a `url` do PR ou da issue. **Obrigatória** neste modo (`reference-url-missing` no `check`): é como se audita e se remove o registro depois.
    - `imported_from: github` e, na `Observação`, "Importado do GitHub; confira antes de publicar."
    - `result: resolved` só para PR mergeado (a evidência é o merge); issue fechada sem PR ligado precisa do comentário de fechamento dizendo o que foi feito, senão não vira solução (`no-evidence`).
@@ -102,9 +112,14 @@ Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovaçã
 
 ### Lista pendente da coleta automática
 
-O `moiras-sync` (`--auto`, ou o interativo, depois da sincronização) roda `learn-github.ts auto`: pega só o que fechou **desde a rodada anterior** (marca d'água por repositório, uma para PRs e outra para issues), aplica as mesmas regras e filtros e **só acrescenta à lista pendente**. Não grava nenhum registro: a regra de que o `moiras-learn` só escreve com o "sim" do usuário à lista exata continua valendo.
+O `moiras-sync` (`--auto`, ou o interativo, depois da sincronização) roda `learn-github.ts auto`: primeiro **tira da lista pendente** o que deixou de ser elegível (PR que um PR novo reverteu, mesmo que o original nem venha na coleta, issue que não está mais fechada como resolvida, item que o knowledge já cita ou que passou a ter segredo) e depois pega só o que fechou **desde a rodada anterior** (marca d'água por `dono/repo`, uma para PRs e outra para issues), aplica as mesmas regras e filtros e **só acrescenta à lista pendente**. A marca d'água é por `dono/repo`: marcas da versão anterior (só o nome do repositório) não são lidas, e a primeira rodada de cada repositório pede `--since` de novo. Não grava nenhum registro: a regra de que o `moiras-learn` só escreve com o "sim" do usuário à lista exata continua valendo.
 
-Com `--from-github --pending`, esta skill lê `learn-github.ts pending list`, relê no GitHub cada item (síntese, arquivos) e segue pelos passos de 3 a 5 acima, com a aprovação do usuário à lista exata. A lista pendente nunca tem texto de PR ou de issue: só referência, URL, data e chave do Jira.
+Com `--from-github --pending`, esta skill **revalida a elegibilidade antes de propor**: um item entrou na lista no passado e o PR pode ter sido revertido depois.
+
+1. `learn-github.ts pending list --state .moiras/learn-github` e, por repositório, a data (`closed_at`) do item mais antigo.
+2. Colete de novo com os comandos do passo 1 de "Passos" (`--search 'merged:>=<essa data>'` e `'closed:>=<essa data>'`), para ver também os reverts que vieram depois.
+3. Rode `learn-github.ts revalidate --repo <dono/repo> --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>`. A saída tem `valid` (pode propor), `removed` (já saiu da lista, com o motivo: `reverted`, `is-revert`, `not-completed`, `already-known`, `secret`...) e `unverified` (a coleta não mostrou o item: **não proponha**; refaça com data mais antiga ou `--limit` maior). Mostre ao usuário o que saiu da lista e por quê, só pela referência.
+4. Só o que está em `valid` segue: releia no GitHub cada item (síntese, arquivos), passe o contexto pelo `scan` (ver "Contexto adicional e segredos") e siga pelos passos de 3 a 5 acima, com a aprovação do usuário à lista exata. A lista pendente nunca tem texto de PR ou de issue: só referência, URL, data e chave do Jira.
 
 > **Ponto de decisão.** A escolha de a coleta automática só montar a lista é única e está marcada em `autoDisposition`, em `scripts/learn-github.ts`. Gravar direto, sem o "sim", seria outra decisão: exigiria mudar essa constante, o ramo correspondente do `auto`, esta seção e a regra do `AGENTS.md`. Não está implementado.
 
@@ -190,7 +205,7 @@ imported_from: history
 ## O que vai em cada registro
 
 - Siga o modelo do tipo em `_templates/` ou, sem ele, nos "Modelos de reserva". O corpo é uma **síntese curta em português**, escrita por você; nunca cole título, descrição, comentário ou mensagem da issue.
-- `Fontes` leva a chave da issue e o PR (`repositório#número`; no modo `--from-github`, a referência do PR ou da issue de origem) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
+- `Fontes` leva a chave da issue e o PR (`repositório#número`; no modo `--from-github`, a referência `dono/repo#número` do PR ou da issue de origem) e, se ajudar, `caminho@commit`; nunca URL interna nem cópia de código (no máximo um trecho de 20 linhas, com referência).
 - `agency` do registro segue a seção 3 de `stages/lachesis.md`: o campo configurado (`jira.agency_field`) e, sem ele, o `agency` do glossário quando todos os repositórios concordam; ambíguo ou vazio fica `null`. De issue de agência ficam a síntese técnica e a chave; nada da conversa com a agência nem de outros clientes.
 - `confidence` reflete a evidência: PR mergeado e ligado, mais alta; só o comentário de fechamento, mais baixa. Sem critérios aplicáveis, vale o limite do fallback e o aviso `criteria-missing`.
 - Datas dos registros em `AAAA-MM-DD`.

@@ -35,7 +35,7 @@ Quem escreve onde:
 - `moiras-index` é a única autora de registros em `glossary/` no knowledge local;
   grava só após o "sim" à lista exata e não apaga registros.
 - `moiras-learn` grava em `learnings/` do knowledge local, só no modo interativo e após o "sim" à lista exata; marca os registros com `imported_from: history` (ou `github`, com `--from-github`, que só aprende com PR mergeado e não revertido e issue fechada como resolvida, e guarda o link de origem em `reference_url`), só afirma `result: resolved` com evidência (PR ou comentário de fechamento) e nunca copia texto de issue.
-- A coleta automática do GitHub (`moiras-sync --github`) guarda uma marca d'água e só monta a lista pendente em `.moiras/learn-github/` (local, sem texto de PR ou issue); nunca grava aprendizado sem o "sim".
+- A coleta automática do GitHub (`moiras-sync --github`) guarda uma marca d'água por `dono/repo` e só monta a lista pendente em `.moiras/learn-github/` (tira dela o que passou a ser elegível de menos, como um PR revertido; coleta cortada pelo `--limit` não avança a marca) (local, sem texto de PR ou issue); nunca grava aprendizado sem o "sim".
 - `moiras-teach` grava só em `criteria/` do knowledge local, no modo interativo e após o "sim" à lista exata; regra que conflita com outra vira critério regenerado (`replaces`), e a skill nunca copia texto de issue nem inventa dado que a regra mande conferir.
 - `moiras-triage` grava em `learnings/` após escolha ou aprovação e em `criteria/`
   após o "sim", sempre no knowledge local e no modo interativo.
