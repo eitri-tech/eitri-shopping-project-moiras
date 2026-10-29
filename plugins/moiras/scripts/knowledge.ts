@@ -109,6 +109,8 @@ export function gitSource(url: string): string | undefined {
     ?? /^https:\/\/bitbucket\.org\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/pull-requests\/(\d+)\/?$/.exec(url);
   return match ? `${match[1]}/${match[2]}#${Number(match[3])}` : undefined;
 }
+/** Former name of `gitSource`, kept so callers written for GitHub only keep working. */
+export const githubSource = gitSource;
 const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
