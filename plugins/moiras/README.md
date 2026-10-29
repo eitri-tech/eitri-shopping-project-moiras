@@ -9,7 +9,7 @@ O nome vem das Moiras: *moira* significa "quinhão", a parte atribuída a cada u
 Fluxo da triagem: Cloto → Láquesis → Átropos, com contratos de entrada e saída.
 Uma saída inválida interrompe aquela issue; os avisos seguem para a próxima etapa.
 
-- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas das fontes configuradas, coletadas em paralelo, com fontes e avisos. Hoje Jira e Slack são as fontes esperadas; outras podem ser acrescentadas seguindo [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md).
+- Cloto (fia): configuração + escopo (épicos e/ou categorias) → issues pendentes sem responsável, outras issues do escopo e conversas das fontes configuradas, coletadas em paralelo, com fontes e avisos. Hoje estão implementadas duas fontes, Jira e Slack; outras fontes configuradas seguem o padrão de [`stages/clotho.md`](skills/moiras-triage/stages/clotho.md#outras-fontes).
 - Láquesis (mede): issue + evidências + outras issues do escopo, consultando o knowledge → repositórios, componente, categoria, origem, confiança, agência e possíveis duplicatas.
 - Átropos (corta): issue + classificação + precedentes → justificativa, ação e normalmente 3 a 5 soluções com % de confiança; a escolha interativa alimenta o aprendizado.
 
@@ -22,7 +22,7 @@ Quando usar cada skill:
 
 - [moiras-init](skills/moiras-init/SKILL.md): criar o `.moiras/sources.json` conversando, sem montar o arquivo à mão; nunca sobrescreve uma configuração existente.
 - [moiras-learn](skills/moiras-learn/SKILL.md): dar partida num knowledge vazio com o que o time já resolveu: lê as issues concluídas do épico (e, com `--from-github`, os PRs mergeados e issues fechadas do GitHub), propõe soluções, padrões e decisões e grava só o que você aprovar.
-- [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo Jira, Slack e knowledge.
+- [moiras-triage](skills/moiras-triage/SKILL.md): triar ou priorizar o backlog sem responsável de um épico, reunindo as fontes configuradas (hoje Jira e Slack) e o knowledge.
 - [moiras-teach](skills/moiras-teach/SKILL.md): incrementar o knowledge com uma regra que você dita ("sempre que mexer com o checkout, confira a flag de homologação"); vira um critério local, com gatilho e passos de conferência, só após o "sim".
 - [moiras-audit](skills/moiras-audit/SKILL.md): revisar registros antigos, pendentes, conflitantes ou fora das regras e aprovar ajustes locais.
 - [moiras-index](skills/moiras-index/SKILL.md): gerar ou atualizar o glossário quando estiver vazio, velho ou faltar um repositório; só lê o código.

@@ -7,7 +7,7 @@
 
 # Moiras
 
-Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
+Plugin para Claude que faz triagem de issues do Jira com as fontes configuradas (hoje Jira e Slack) e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
 
 ## Como funciona
 
@@ -24,7 +24,7 @@ flowchart LR
     voce -. "a escolha vira aprendizado" .-> kb
 ```
 
-- **Cloto (fia):** junta o material cru das fontes configuradas, em paralelo: as issues sem responsável do escopo e as conversas relevantes. Ainda não opina; só puxa os fios.
+- **Cloto (fia):** junta o material cru das fontes configuradas, em paralelo: as issues sem responsável do escopo e as conversas relevantes. Ainda não opina; só puxa os fios. Hoje são implementadas duas fontes, Jira e Slack; qualquer outra fonte configurada entra pelo mesmo padrão, descrito em [`stages/clotho.md`](plugins/moiras/skills/moiras-triage/stages/clotho.md#outras-fontes).
 - **Láquesis (mede):** descobre onde a issue mora (repositório e componente), classifica (categoria, origem, confiança) e confere se alguém já abriu a mesma coisa.
 - **Átropos (corta):** dá o veredito (`duplicate`, `blocked`, `ready-for-dev`, `needs-info` ou `close`), justifica e propõe de 3 a 5 soluções com % de confiança. Quem corta o fio, no fim, é você: a solução escolhida volta para o knowledge.
 
