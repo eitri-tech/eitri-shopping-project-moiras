@@ -12,7 +12,7 @@ Resolva `<local-dir>` pelo `dir` da entrada com `scope: local` em `knowledge` no
 
 ## O que sai
 
-- **Uma skill por aprendizado**, em `<local-dir>/skills/<id>/SKILL.md`, ao lado de `learnings/`. Entram soluções com `result: resolved`, padrões e decisões. Não entram soluções `pending`, `not-resolved` (que aparecem em "O que não resolveu" da skill do mesmo problema) nem decisões `outcome: rejected` (idem).
+- **Uma skill por aprendizado**, em `<local-dir>/skills/<id>/SKILL.md`, ao lado de `learnings/`. Entram soluções com `result: resolved`, padrões e decisões. Não entram soluções `pending`, `not-resolved` (que aparecem em "O que não resolveu" da skill do mesmo problema) nem decisões `outcome: rejected` (idem). Uma decisão rejeitada entra em "O que não resolveu" dos aprendizados da mesma `issue` (chave do Jira ou `dono/repo#n`) e, sem issue em comum, dos que citam a PR dela (`reference_url`, ou a URL no texto). Ela não precisa de `source`.
 - **`name`** = `<repositório>-<componente>-<id>` em minúsculas, a partir do próprio aprendizado. Não muda entre gerações: gerar de novo substitui a mesma pasta, não duplica.
 - **`description`** cita o sintoma concreto e o componente, com "Use quando aparecer esse sintoma". Aprendizado sem sintoma concreto, sem componente ou sem repositório **fica de fora** e aparece no relatório com o motivo.
 - **`metadata`** traz `source_hash` (o fingerprint do knowledge usado) e `indexed_at` (a data da geração). O harness pode ignorá-lo.

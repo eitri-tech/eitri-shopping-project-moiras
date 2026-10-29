@@ -145,7 +145,7 @@ Todos têm a mesma estrutura: `glossary/`, `criteria/` e `learnings/{solutions,p
 
 ### Skills para outros harnesses
 
-O `skills/<id>/SKILL.md` do knowledge local é o aprendizado em formato de skill, para um harness que lê `SKILL.md` usar sem conhecer o Moiras. Uma skill por solução resolvida, padrão ou decisão, com `name` (`<repositório>-<componente>-<id>`) e `description` (sintoma concreto e componente), e seções de sintoma, causa, como confirmar, correção (com o link do PR), o que não resolveu, regras e termos. Ela não cita o plugin, scripts, comandos nem caminhos `.moiras/`.
+O `skills/<id>/SKILL.md` do knowledge local é o aprendizado em formato de skill, para um harness que lê `SKILL.md` usar sem conhecer o Moiras. Uma skill por solução resolvida, padrão ou decisão, com `name` (`<repositório>-<componente>-<id>`) e `description` (sintoma concreto e componente), e seções de sintoma, causa, como confirmar, correção (com o link do PR), o que não resolveu (tentativas não resolvidas e decisões rejeitadas da mesma `issue`, ou que citam a PR rejeitada), regras e termos. Ela não cita o plugin, scripts, comandos nem caminhos `.moiras/`.
 
 - **Gerar:** `/moiras:moiras-export` mostra a lista exata (criar, atualizar, deixar de fora, órfãs) e grava só com o seu "sim". Rodar de novo não duplica: o `name` é o mesmo.
 - **Usar:** copie a pasta `skills/<id>/` para a pasta de skills do harness (por exemplo `.claude/skills/` do projeto), ou aponte o harness para a pasta `skills/` do knowledge. Não precisa do Moiras instalado.
