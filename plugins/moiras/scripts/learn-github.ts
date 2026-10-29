@@ -52,8 +52,9 @@ function githubInput(input: unknown, owner: string, repository: string): Input {
 }
 
 /**
- * Decides, for each merged PR and each closed issue, whether it may become a learning. Only merged PRs that were not
- * reverted and issues closed as completed pass; the period, label, watermark, knowledge and pending list narrow the rest.
+ * Decides, for each PR and each closed issue, whether it may become a learning. Merged PRs that were not reverted and issues
+ * closed as completed pass, and so do PRs closed without merge that give an explicit reason (rejected approaches, see learn-git.ts);
+ * the period, label, watermark, knowledge and pending list narrow the rest.
  * Nothing in the result is text from the PR or the issue.
  */
 export function select(input: unknown, options: Options): Selection {
