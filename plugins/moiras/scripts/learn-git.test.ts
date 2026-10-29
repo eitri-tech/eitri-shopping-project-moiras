@@ -79,6 +79,18 @@ describe('merged PRs and rejected approaches', () => {
     assert.deepEqual(reasons(selection), { [`${slug}#2`]: 'not-merged' });
   });
 
+  it('only a merged revert invalidates a solution: an open or closed revert leaves the original', () => {
+    const original = pull(20);
+    const openRevert = pull(21, { state: 'OPEN', mergedAt: null, title: 'Revert "Keep the orderFormId (20)"', body: 'This reverts #20.' });
+    const closedRevert = closed(22, { title: 'Reverte o #20', body: 'Reverte o #20.' });
+    const kept = selectItems({ pulls: [original, openRevert, closedRevert] }, options);
+    assert.deepEqual(refs(kept).sort(), [`${slug}#20`]);
+    assert.equal(kept.candidates[0]!.outcome, 'resolved');
+    const mergedRevert = pull(23, { title: 'Revert "Keep the orderFormId (20)"', body: 'This reverts #20.' });
+    const reverted = selectItems({ pulls: [original, mergedRevert] }, options);
+    assert.deepEqual(reasons(reverted), { [`${slug}#20`]: 'reverted', [`${slug}#23`]: 'is-revert' });
+  });
+
   it('a comment of the week before the closing is the explicit reason: a rejected approach, never a solution', () => {
     const selection = selectItems({ pulls: [closed(5, { comments: [{ createdAt: '2026-10-08T12:00:00Z', body: 'Não vamos seguir: quebra a troca de seller.' }] })] }, options);
     assert.equal(selection.candidates.length, 1);

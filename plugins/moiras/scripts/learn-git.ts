@@ -136,10 +136,11 @@ function revertsOf(pr: Pull): number[] {
 /** A revert PR: a title that starts like one, or a text that says it reverts a PR ("This reverts #n", "Reverte o #n"). */
 const isRevert = (pr: Pull): boolean => startsWithRevert(pr) || revertsOf(pr).length > 0;
 
-/** PRs that revert PRs: by quoted title (`Revert "<title>"`) and by number. */
+/** PRs that revert PRs: by quoted title (`Revert "<title>"`) and by number. Only a merged revert counts: an open or closed one reverted nothing. */
 export function revertedBy(pulls: Pull[]): { titles: Set<string>; numbers: Set<number> } {
   const titles = new Set<string>(), numbers = new Set<number>();
   for (const pr of pulls) {
+    if (pr.state !== 'merged' || !moment(pr.mergedAt)) continue;
     const byTitle = revertQuoted.exec(pr.title.trim());
     if (byTitle) titles.add(byTitle[1]!.trim().toLowerCase());
     for (const number of revertsOf(pr)) numbers.add(number);
