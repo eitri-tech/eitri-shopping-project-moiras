@@ -89,7 +89,9 @@ const commitSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const jiraKey = /^[A-Z][A-Z0-9]*-\d+$/;
 /** Origin of a learning taken from GitHub with no Jira key: `<owner>/<repository>#<number>` (a merged PR or an issue closed as completed); the first version wrote `<repository>#<number>`, still accepted. */
 const githubRef = /^(?:[A-Za-z0-9][A-Za-z0-9-]*\/)?[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
-const issueKey = (value: string): boolean => jiraKey.test(value) || githubRef.test(value);
+/** Origin of a learning taken from Bitbucket: `bitbucket:<workspace>/<repository>#<number>` (see gitSource). */
+const bitbucketRef = /^bitbucket:[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
+const issueKey = (value: string): boolean => jiraKey.test(value) || githubRef.test(value) || bitbucketRef.test(value);
 // Optional pointer of a solution (usually a GitHub PR): a real https URL, no credentials, no whitespace.
 export function validReferenceUrl(value: string): boolean {
   if (!value || /\s/.test(value)) return false;
@@ -101,13 +103,16 @@ export function validReferenceUrl(value: string): boolean {
 /**
  * `<owner>/<repository>#<n>` of a PR or issue URL of a git provider: GitHub (`https://github.com/<owner>/<repository>/pull|issues/<n>`)
  * or Bitbucket (`https://bitbucket.org/<workspace>/<repository>/pull-requests/<n>`); undefined for anything else.
- * Add a provider here when its URL shape is added to providers.ts.
+ * The identity of a GitHub reference is the bare `<owner>/<repository>#<n>` (the form learnings already have, and the provider
+ * without a prefix). Any other provider puts its name in front (`bitbucket:<workspace>/<repository>#<n>`), so the same
+ * owner, repository and number on two providers never collide. Add a provider here when its URL shape is added to providers.ts.
  */
 export function gitSource(url: string): string | undefined {
   if (!validReferenceUrl(url)) return undefined;
-  const match = /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(?:pull|issues)\/(\d+)\/?$/.exec(url)
-    ?? /^https:\/\/bitbucket\.org\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/pull-requests\/(\d+)\/?$/.exec(url);
-  return match ? `${match[1]}/${match[2]}#${Number(match[3])}` : undefined;
+  const github = /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(?:pull|issues)\/(\d+)\/?$/.exec(url);
+  if (github) return `${github[1]}/${github[2]}#${Number(github[3])}`;
+  const bitbucket = /^https:\/\/bitbucket\.org\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/pull-requests\/(\d+)\/?$/.exec(url);
+  return bitbucket ? `bitbucket:${bitbucket[1]}/${bitbucket[2]}#${Number(bitbucket[3])}` : undefined;
 }
 /** Former name of `gitSource`, kept so callers written for GitHub only keep working. */
 export const githubSource = gitSource;

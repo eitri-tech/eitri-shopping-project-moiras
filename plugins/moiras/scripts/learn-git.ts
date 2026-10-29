@@ -32,8 +32,10 @@ export interface Candidate {
   provider: Provider;
   kind: Kind;
   outcome: Outcome;
-  /** `<owner>/<repository>#<number>`: the `issue` of a solution when there is no Jira key. */
+  /** `<owner>/<repository>#<number>`, as the provider names the repository. */
   ref: string;
+  /** Identity for the dedup and the pending list (`providerKey`): the `issue` of a solution when there is no Jira key. */
+  key: string;
   url: string;
   /** `mergedAt` of a merged PR, `closedAt` of a rejected PR or of an issue. */
   closed_at: string;
@@ -180,12 +182,16 @@ function motiveOf(pr: Pull, replaced: Map<number, number>): { kind: 'comment' | 
 
 /** `<name>#<n>` of a ref, with or without the `<owner>/` in front (the format of the first version had no owner). */
 const tail = (ref: string): string => ref.slice(ref.indexOf('/') + 1);
-const hasRef = (refs: Set<string>, ref: string): boolean => {
+/** Identity of a PR or issue for dedup and the pending list: a GitHub ref as it is, any other provider prefixed (see `gitSource`). */
+export const providerKey = (provider: Provider | undefined, ref: string): string => (provider === undefined || provider === 'github' ? ref : `${provider}:${ref}`);
+const hasRef = (refs: Set<string>, key: string): boolean => {
   // Owner and repository names are case-insensitive on GitHub, so the comparison is too (Jira keys are upper case on both sides).
   const lower = new Set([...refs].map(item => item.toLowerCase()));
-  return lower.has(ref.toLowerCase()) || lower.has(tail(ref).toLowerCase());
+  // A prefixed key (another provider) matches only itself: the bare `<name>#<n>` of the first version is GitHub's.
+  return lower.has(key.toLowerCase()) || (!key.includes(':') && lower.has(tail(key).toLowerCase()));
 };
 const sameRef = (a: string, b: string): boolean => a === b || (a.includes('/') !== b.includes('/') && tail(a) === tail(b));
+const sameKey = (a: string, b: string): boolean => (a.includes(':') || b.includes(':') ? a === b : sameRef(a, b));
 
 type Verdict = { skip?: Reason; late?: boolean; outcome: Outcome; extra?: Partial<Candidate> };
 
@@ -256,14 +262,15 @@ export function selectItems(input: Input, options: Options): Selection {
     if (wanted.length && !record.labels.some(label => wanted.includes(label.toLowerCase()))) return skip('label-mismatch');
     if (hasSecretIn(record.raw)) return skip('secret');
     if (verdict.late) return skip('covered-by-pr');
-    const keys = [ref, ...(record.jira ? [record.jira] : [])];
-    if (keys.some(key => hasRef(known, key))) return skip('already-known');
-    if (hasRef(pending, ref)) return skip('already-pending');
+    const key = providerKey(provider, ref);
+    const keys = [key, ...(record.jira ? [record.jira] : [])];
+    if (keys.some(item => hasRef(known, item))) return skip('already-known');
+    if (hasRef(pending, key)) return skip('already-pending');
     let suggested = `${repository.toLowerCase()}-${kind}-${number}`;
     for (let n = 2; used.has(suggested); n++) suggested = `${repository.toLowerCase()}-${kind}-${number}-${n}`;
     used.add(suggested);
     result.candidates.push({
-      provider, kind, outcome: verdict.outcome, ref, url, closed_at: when,
+      provider, kind, outcome: verdict.outcome, ref, key, url, closed_at: when,
       ...(record.jira ? { jira_key: record.jira } : {}),
       ...(record.closes?.length ? { closes: record.closes } : {}),
       ...verdict.extra,
@@ -364,8 +371,14 @@ export function addPending(dir: string, candidates: Candidate[], now = new Date(
   return items;
 }
 
-export function removePending(dir: string, refs: string[]): PendingItem[] {
-  const items = readPending(dir).filter(item => !refs.some(ref => sameRef(ref, item.ref)));
+/** Identities (`providerKey`) of the pending items: what the selection skips as already pending. */
+export function pendingKeys(dir: string): Set<string> {
+  return new Set(readPending(dir).map(item => providerKey(item.provider, item.ref)));
+}
+
+/** Takes off the pending list the items with these identities (`providerKey`; a bare GitHub ref also matches the first version's). */
+export function removePending(dir: string, keys: string[]): PendingItem[] {
+  const items = readPending(dir).filter(item => !keys.some(key => sameKey(key, providerKey(item.provider, item.ref))));
   writeState(dir, pendingFile, { version: 1, items });
   return items;
 }
@@ -399,7 +412,7 @@ export function main(argv: string[], input?: string): { output: string; code: nu
   if (v.after !== undefined && !moment(v.after)) throw new Error(usage);
   if (v.limit !== undefined && !/^[1-9][0-9]*$/.test(v.limit)) throw new Error(usage);
   const index = knowledgeIndex(v.knowledge ?? []);
-  const pending = v.state ? new Set(readPending(v.state).map(item => item.ref)) : undefined;
+  const pending = v.state ? pendingKeys(v.state) : undefined;
   const data = readJson(input);
   const lists: Json = isObject(data) ? data : {};
   const rawPulls = Array.isArray(data) ? data : [lists.pulls, lists.prs, lists.values].find((list): list is unknown[] => Array.isArray(list));

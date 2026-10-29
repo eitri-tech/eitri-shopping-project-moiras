@@ -16,7 +16,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { addPending, hasSecretIn, knowledgeIndex, readPending, readWatermark, removePending, revertedBy, selectItems, writeWatermark, type Input, type Kind, type Options as GitOptions, type Reason, type Selection, type Skipped } from './learn-git.ts';
+import { addPending, hasSecretIn, knowledgeIndex, pendingKeys, readPending, readWatermark, removePending, revertedBy, selectItems, writeWatermark, type Input, type Kind, type Options as GitOptions, type Reason, type Selection, type Skipped } from './learn-git.ts';
 import { adapters, isObject, type Issue, type Pull } from './providers.ts';
 
 export { addPending, readPending, readWatermark, removePending, writeWatermark } from './learn-git.ts';
@@ -85,6 +85,8 @@ export function revalidate(input: unknown, options: { owner: string; repository:
   const eligible = new Set(selection.candidates.map(candidate => candidate.ref));
   const result: Revalidation = { valid: [], removed: [], unverified: [] };
   for (const item of readPending(options.state)) {
+    // The GitHub read says nothing about another provider's items (their refs look the same): they are left alone.
+    if ((item.provider ?? 'github') !== 'github') continue;
     const match = /^(?:([A-Za-z0-9][A-Za-z0-9-]*)\/)?([A-Za-z0-9_][A-Za-z0-9._-]*)#(\d+)$/.exec(item.ref);
     if (!match || match[2]!.toLowerCase() !== repository.toLowerCase() || (match[1] && match[1].toLowerCase() !== owner.toLowerCase())) continue;
     const ref = `${owner}/${repository}#${match[3]}`;
@@ -117,7 +119,7 @@ export function auto(input: unknown, options: Omit<Options, 'afterPr' | 'afterIs
   // Without a watermark the run would take the whole history: it needs an explicit starting date.
   if (first && options.since === undefined) throw new Error('First automatic run needs --since.');
   const { removed } = revalidate(input, { owner: options.owner, repository: options.repository, state: options.state, known: options.known, ids: options.ids });
-  const selection = select(input, { ...options, afterPr: mark.pr, afterIssue: mark.issue, pending: new Set(readPending(options.state).map(item => item.ref)) });
+  const selection = select(input, { ...options, afterPr: mark.pr, afterIssue: mark.issue, pending: pendingKeys(options.state) });
   const items = addPending(options.state, selection.candidates);
   const cut: Kind[] = [];
   const lists = isObject(input) ? input : {};
@@ -168,7 +170,7 @@ export function main(argv: string[], input?: string): { output: string; code: nu
       const [owner, repository] = splitRepo(v.repo);
       return out(auto(readJson(input), { owner, repository, since: v.since, labels: v.label, known: index.known, ids: index.ids, state: v.state, limit: Number(v.limit) }));
     }
-    const pending = v.state ? new Set(readPending(v.state).map(item => item.ref)) : undefined;
+    const pending = v.state ? pendingKeys(v.state) : undefined;
     if (v.limit !== undefined && !/^[1-9][0-9]*$/.test(v.limit)) throw new Error(usage);
     const data = readJson(input);
     const [owner, repository] = splitRepo(v.repo);

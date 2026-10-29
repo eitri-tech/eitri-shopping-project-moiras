@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { addPending, knowledgeIndex, main, readPending, selectItems, type Selection } from './learn-git.ts';
+import { addPending, knowledgeIndex, main, pendingKeys, readPending, selectItems, type Selection } from './learn-git.ts';
 import { check, gitSource, issues } from './knowledge.ts';
 import { adapterFor, adapters, type Pull } from './providers.ts';
 
@@ -188,9 +188,36 @@ describe('Bitbucket in the same format', () => {
   });
 
   it('accepts the provider name in the GitHub source URL check', () => {
-    assert.equal(gitSource(`https://bitbucket.org/acme/${repo}/pull-requests/7`), `${slug}#7`);
+    assert.equal(gitSource(`https://bitbucket.org/acme/${repo}/pull-requests/7`), `bitbucket:${slug}#7`);
     assert.equal(gitSource(`https://github.com/acme/${repo}/pull/7`), `${slug}#7`);
     assert.equal(gitSource('https://bitbucket.org/acme/x/pull-requests/7/extra'), undefined);
+  });
+});
+
+describe('identity across providers', () => {
+  const bbPull = (number: number) => bitbucket({ id: number, title: 'Keep the orderFormId', state: 'MERGED', updated_on: '2026-10-10T12:00:00Z', links: { html: { href: `https://bitbucket.org/acme/${repo}/pull-requests/${number}` } } });
+
+  it('the same owner, repository and number on two providers are two different learnings', () => {
+    assert.equal(gitSource(`https://github.com/acme/${repo}/pull/5`), `${slug}#5`);
+    assert.equal(gitSource(`https://bitbucket.org/acme/${repo}/pull-requests/5`), `bitbucket:${slug}#5`);
+    const fromBitbucket = selectItems({ pulls: [pull(5)] }, { ...options, known: new Set([`bitbucket:${slug}#5`]) });
+    assert.deepEqual(refs(fromBitbucket), [`${slug}#5`]);
+    const fromGithub = selectItems({ pulls: [bbPull(5)] }, { provider: 'bitbucket', ...options, known: new Set([`${slug}#5`]) });
+    assert.deepEqual(refs(fromGithub), [`${slug}#5`]);
+    assert.equal(fromGithub.candidates[0]!.key, `bitbucket:${slug}#5`);
+  });
+
+  it('a GitHub reference without a provider is GitHub: the first version of the form still counts as known', () => {
+    const legacy = selectItems({ pulls: [pull(5)] }, { ...options, known: new Set([`${repo}#5`]) });
+    assert.deepEqual(reasons(legacy), { [`${slug}#5`]: 'already-known' });
+  });
+
+  it('a pending Bitbucket item does not hide the GitHub PR with the same number', t => {
+    const dir = tmp(t);
+    addPending(dir, selectItems({ pulls: [bbPull(5)] }, { provider: 'bitbucket', ...options }).candidates, '2026-10-20T00:00:00Z');
+    const pending = pendingKeys(dir);
+    assert.deepEqual(refs(selectItems({ pulls: [pull(5)] }, { ...options, pending })), [`${slug}#5`]);
+    assert.deepEqual(reasons(selectItems({ pulls: [bbPull(5)] }, { provider: 'bitbucket', ...options, pending })), { [`${slug}#5`]: 'already-pending' });
   });
 });
 
@@ -247,6 +274,6 @@ describe('selection holds the watermark and the shape of solutions', () => {
   it('moves the PR watermark with the newest merged or rejected PR, and keeps the rest of the shape', () => {
     const selection = selectItems({ pulls: [closed(5, { closedAt: '2026-10-12T12:00:00Z', comments: [{ createdAt: '2026-10-11T12:00:00Z', body: 'Não.' }] })] }, options);
     assert.equal(selection.watermark.pr, '2026-10-12T12:00:00Z');
-    assert.deepEqual(Object.keys(selection.candidates[0]!).sort(), ['closed_at', 'kind', 'outcome', 'provider', 'ref', 'reason_at', 'reason_kind', 'suggested_id', 'url'].sort());
+    assert.deepEqual(Object.keys(selection.candidates[0]!).sort(), ['closed_at', 'key', 'kind', 'outcome', 'provider', 'ref', 'reason_at', 'reason_kind', 'suggested_id', 'url'].sort());
   });
 });
