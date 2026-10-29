@@ -63,17 +63,17 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 
 O `--from-git` lê PRs pela **camada de provedor** (`scripts/providers.ts`): GitHub (com `gh`) e Bitbucket, no mesmo formato normalizado. `--from-github <dono/repo>` é o atalho de `--from-git --provider github`, com o mesmo fluxo (dedup, revert, segredo, marca d'água e lista pendente). A seleção genérica está em `scripts/learn-git.ts`.
 
-**Formato normalizado de cada PR** (sem texto bruto na saída): `provider`, `url` (tem de ser do dono e do repositório informados), `state` (`merged`; `closed`, fechado sem merge; `superseded`, substituído por outro PR; `open`, ainda aberto), `revert`, `closes` (issues do mesmo dono e repositório que a PR fecha; vazio no Bitbucket), `mergedAt` ou `closedAt`, e os comentários e revisões que a coleta trouxe. O motivo do fechamento é decidido pelo seletor, a partir desses dados.
+**Formato normalizado de cada PR** (sem texto bruto na saída): `provider`, `url` (tem de ser do dono e do repositório informados), `state` (`merged`; `closed`, fechado sem merge; `superseded`, substituído por outro PR; `open`, ainda aberto), `revert`, `closes` (issues do mesmo dono e repositório que a PR fecha; vazio no Bitbucket), `mergedAt` ou `closedAt`, e os comentários e revisões que a coleta trouxe (cada um com `author`, o login ou nickname, e `bot`). O motivo do fechamento é decidido pelo seletor, a partir desses dados.
 
 **Regras.**
 - PR **mergeado e não revertido** é **solução** (`outcome: resolved`).
 - PR **fechado sem merge** ou **substituído** só vira **abordagem rejeitada** (`outcome: rejected`, nunca solução) com motivo explícito no próprio PR, que é um destes: (a) comentário ou revisão escrito até 7 dias antes do fechamento (`reason_kind` `comment` ou `review`); (b) outro PR que diz, no início de uma linha do título ou do corpo, "Replaces #n", "Supersedes #n" ou "Substitui o #n" (`reason_kind: superseded`, com `superseded_by`).
-- PR fechado sem merge **sem motivo** fica de fora (`not-merged`). Substituído, duplicado ou abandonado **sem motivo** fica de fora (`no-reason`). Os dois entram só como referência no relatório.
+- PR fechado sem merge ou substituído **sem motivo** fica de fora com `no-reason` (PR aberto fica de fora como `not-merged`). Comentário ou revisão de **bot** (login terminando em `[bot]`, tipo `Bot`, ou os logins conhecidos `copilot`, `codex`, `chatgpt-codex-connector` e `github-actions`) **não conta** como motivo, e nem um comentário que só dá comandos a um bot (cada linha começa com `@codex` ou `/`, como `@codex review` ou `/retest`). O seletor já desconsidera esses comentários; ainda assim, **leia o texto** do motivo que ele mostrou (o comentário ou a revisão de `reason_kind`/`reason_at`, ou o PR que substitui) e **descarte com `no-reason`** quando não houver porquê nele (um "ok", um aviso automático, só um pedido de revisão, uma menção sem razão). O seletor só dá a data e o autor; o conteúdo é a sua leitura. Os itens descartados entram só como referência no relatório.
 - Reversão, segredo, dedup e período valem como no `--from-github`: PR de revert e item com segredo ficam de fora.
 
 **Coleta (só leitura).**
 - **GitHub**: `gh pr list --repo <dono/repo> --state all --limit <N> --search 'updated:>=AAAA-MM-DD' --json number,title,url,state,mergedAt,closedAt,headRefName,labels,body,closingIssuesReferences` e `gh issue list` como no passo 1 de "Aprender com o GitHub". Para cada PR **fechado sem merge** (`state` `CLOSED`), leia `gh pr view <número> --repo <dono/repo> --json comments,reviews` e junte o resultado ao item. Passe esse texto pelo `scan` antes de usar (ver "Contexto adicional e segredos").
-- **Bitbucket**: o plugin **não chama** a API do Bitbucket (não há comando nem permissão para ela). O usuário entrega um arquivo JSON com a lista de PRs da API (`GET /2.0/repositories/<workspace>/<repo>/pullrequests` com `state=MERGED`, `state=DECLINED` e `state=SUPERSEDED`, todas as páginas em `values`), e, em cada PR, os `comments` que tiver (`content.raw`, `created_on`). Mapeamento: `MERGED` -> `merged`, `DECLINED` -> `closed`, `SUPERSEDED` -> `superseded`. A data de fechamento é `updated_on`. Nesta versão não há issues nem labels no Bitbucket. O formato está documentado, mas **não foi verificado contra uma conta real**.
+- **Bitbucket**: o plugin **não chama** a API do Bitbucket (não há comando nem permissão para ela). O usuário entrega um arquivo JSON com a lista de PRs da API (`GET /2.0/repositories/<workspace>/<repo>/pullrequests` com `state=MERGED`, `state=DECLINED` e `state=SUPERSEDED`, todas as páginas em `values`), e, em cada PR, os `comments` que tiver (`content.raw`, `created_on`, e o `user` com `nickname` e `type`; `type` `Bot` marca bot). Datas com deslocamento (`+00:00`) são convertidas para UTC. Mapeamento: `MERGED` -> `merged`, `DECLINED` -> `closed`, `SUPERSEDED` -> `superseded`. A data de fechamento é `updated_on`. Nesta versão não há issues nem labels no Bitbucket. O formato está documentado, mas **não foi verificado contra uma conta real**.
 
 **Seleção.** Rode, com o `dir` de **todos** os knowledges em disco:
 
@@ -81,7 +81,7 @@ O `--from-git` lê PRs pela **camada de provedor** (`scripts/providers.ts`): Git
 node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-git.ts" eligible --provider <github|bitbucket> --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
 ```
 
-A saída tem `candidates` (com `outcome`, `reason_kind`, `reason_at` ou `superseded_by` quando houver) e `skipped` (referência e motivo). Ela nunca imprime texto de PR, de comentário ou de revisão. Para o aprendizado **resolvido** de um PR, o passo de síntese e de aprovação é o dos passos 3 a 6 acima. Para a **abordagem rejeitada**, o registro é o da seção "Modelos de reserva" (`learnings/decisions/`), com `outcome: rejected`, `reason` (uma frase, sem texto bruto, até 300 caracteres), `reference_url` do PR e `imported_from: git`. Solução de Bitbucket leva `imported_from: git`, e a de GitHub, `imported_from: github`.
+A saída tem `candidates` (com `outcome`, `reason_kind`, `reason_at` ou `superseded_by` quando houver) e `skipped` (referência e motivo). Ela nunca imprime texto de PR, de comentário ou de revisão. Para o aprendizado **resolvido** de um PR, o passo de síntese e de aprovação é o dos passos 3 a 6 acima. Para a **abordagem rejeitada**, o registro é o da seção "Modelos de reserva" (`learnings/decisions/`), com `outcome: rejected`, `reason` (uma frase, sem texto bruto, até 300 caracteres), `reference_url` do PR e `imported_from: git`. Solução de Bitbucket leva `imported_from: git`, e a de GitHub, `imported_from: github`. O candidato traz `key` (a identidade de dedup: a referência do GitHub, e `bitbucket:dono/repo#número` no Bitbucket) e, quando é rejeitado e o PR fecha uma issue do mesmo dono e repositório, `issue` (`dono/repo#número`). Nos registros, `issue` do registro rejeitado é esse campo, opcional: sem `issue` no candidato, o campo é omitido. Na solução sem chave do Jira, `issue` é o `key` do candidato.
 
 **Lista pendente.** Nesta versão só o GitHub tem lista pendente (`--from-github --pending`). O Bitbucket é aprendido direto, com o "sim" à lista exata.
 
@@ -251,6 +251,8 @@ imported_from: git
 
 **Por quê:** a PR foi fechada sem merge; o cache mantinha um seller antigo depois da troca.
 ```
+
+Campo opcional `issue` (só na abordagem rejeitada de GitHub, quando o PR fecha uma issue do mesmo dono e repositório): `issue: acme/acme-shop-checkout#3`, no formato `dono/repo#número`. Sem issue fechada pelo PR, o campo é omitido. O `knowledge.ts check` confere o formato.
 
 ## O que vai em cada registro
 
