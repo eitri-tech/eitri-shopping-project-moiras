@@ -162,7 +162,11 @@ function closingNumbers(pr: Json, owner: string, repository: string): number[] {
 
 /** `<name>#<n>` of a ref, with or without the `<owner>/` in front (the format of the first version had no owner). */
 const tail = (ref: string): string => ref.slice(ref.indexOf('/') + 1);
-const hasRef = (refs: Set<string>, ref: string): boolean => refs.has(ref) || refs.has(tail(ref));
+const hasRef = (refs: Set<string>, ref: string): boolean => {
+  // Owner and repository names are case-insensitive on GitHub, so the comparison is too (Jira keys are upper case on both sides).
+  const lower = new Set([...refs].map(item => item.toLowerCase()));
+  return lower.has(ref.toLowerCase()) || lower.has(tail(ref).toLowerCase());
+};
 const sameRef = (a: string, b: string): boolean => a === b || (a.includes('/') !== b.includes('/') && tail(a) === tail(b));
 
 /**

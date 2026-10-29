@@ -394,7 +394,49 @@ describe('review fixes', () => {
     writeFileSync(join(dir, `learnings/solutions/${repo}-pr-2.md`), solution(`${repo}-pr-2`, `${repo}#2`, `https://github.com/acme/${repo}/pull/2`));
     writeFileSync(join(dir, `learnings/solutions/${repo}-pr-3.md`), solution(`${repo}-pr-3`, `a/b/c#3`, `https://github.com/acme/${repo}/pull/3`));
     assert.deepEqual(check(dir, 'learnings').findings.map(item => `${item.path.split('/').pop()}:${item.rule}`), [`${repo}-pr-3.md:issue-invalid`]);
-    assert.deepEqual(Object.keys(issues(dir).issues).sort(), [`${repo}#2`, `acme/${repo}#1`]);
+    // The source URL adds the canonical `owner/repository#n` of each record to the issue it names.
+    assert.deepEqual(Object.keys(issues(dir).issues).sort(), [`${repo}#2`, `acme/${repo}#1`, `acme/${repo}#2`]);
+  });
+});
+
+describe('dedup by the source URL', () => {
+  it('keeps a PR known when the Jira key of its record is gone from the title and the branch', t => {
+    const dir = tmp(t);
+    const local = join(dir, 'local');
+    mkdirSync(join(local, 'learnings/solutions'), { recursive: true });
+    // First run: the PR carries the Jira key, so the record's `issue` is the key and the PR is only in `reference_url`.
+    const first = select({ prs: [pull(7, { title: 'PROJ-5 keep the orderFormId', headRefName: 'fix/PROJ-5-cart' })] }, { owner: 'acme', repository: repo });
+    assert.equal(first.candidates[0]!.jira_key, 'PROJ-5');
+    writeFileSync(join(local, `learnings/solutions/${first.candidates[0]!.suggested_id}.md`), solution(first.candidates[0]!.suggested_id, 'PROJ-5', first.candidates[0]!.url));
+    assert.deepEqual(check(local, 'learnings').findings, []);
+    assert.deepEqual(issues(local).issues[`acme/${repo}#7`], { solutions: [first.candidates[0]!.suggested_id], patterns: [] });
+    // Second run: the title and branch no longer have the key (renamed PR), but the PR is still the one the record cites.
+    const renamed = { prs: [pull(7, { title: 'Keep the orderFormId', headRefName: 'fix/cart' })] };
+    const second = JSON.parse(main(['eligible', '--repo', slug, '--knowledge', local], JSON.stringify(renamed)).output);
+    assert.deepEqual(second.candidates, []);
+    assert.deepEqual(second.skipped, [{ ref: `${slug}#7`, kind: 'pr', reason: 'already-known' }]);
+    // Another PR of the same repository is still new, and so is the same number in another owner's repository.
+    const other = JSON.parse(main(['eligible', '--repo', slug, '--knowledge', local], JSON.stringify({ prs: [pull(8)] })).output);
+    assert.deepEqual(other.candidates.map((item: { ref: string }) => item.ref), [`${slug}#8`]);
+    const fork = select({ prs: [pull(7, { url: `https://github.com/fork-owner/${repo}/pull/7` })] }, { owner: 'fork-owner', repository: repo, known: new Set(Object.keys(issues(local).issues)) });
+    assert.equal(fork.candidates.length, 1);
+  });
+
+  it('indexes only GitHub PR and issue URLs, case-insensitively for the owner and repository', t => {
+    const dir = tmp(t);
+    mkdirSync(join(dir, 'learnings/solutions'), { recursive: true });
+    writeFileSync(join(dir, 'learnings/solutions/a.md'), solution('a', 'PROJ-1', `https://github.com/Acme/${repo}/issues/3`));
+    writeFileSync(join(dir, 'learnings/solutions/b.md'), solution('b', 'PROJ-2', 'https://example.com/acme/x/pull/4'));
+    assert.deepEqual(Object.keys(issues(dir).issues).sort(), [`Acme/${repo}#3`, 'PROJ-1', 'PROJ-2']);
+    const selection = select({ issues: [ticket(3)] }, { owner: 'acme', repository: repo, known: new Set(Object.keys(issues(dir).issues)) });
+    assert.deepEqual(selection.skipped.map(item => item.reason), ['already-known']);
+  });
+
+  it('does not index the URL of a record that fails the check', t => {
+    const dir = tmp(t);
+    mkdirSync(join(dir, 'learnings/solutions'), { recursive: true });
+    writeFileSync(join(dir, 'learnings/solutions/bad.md'), solution('bad', 'PROJ-1', `https://github.com/acme/${repo}/pull/9`).replace('confidence: 60', 'confidence: 600'));
+    assert.deepEqual(issues(dir).issues, {});
   });
 });
 

@@ -90,13 +90,16 @@ Mesmo fluxo dos passos 3 a 9 acima (dedup, classificação, proposta, aprovaçã
    > **Falsos positivos do revert.** A detecção é por texto e **erra para o lado de não aprender**. "Não desfaz o #n", "não reverte o #n" e "does not reverts #n" são lidos como negação; mas um PR que cita "reverte", "desfaz" ou "reverts" seguido de um `#n` por outro motivo (por exemplo, "o que desfaz o #5 é outro PR") vira `is-revert` e o #n citado vira `reverted`, e um `#n` sem dono e repositório não se distingue de um PR do mesmo repositório. Referência qualificada (`outro/repo#5`) é ignorada. Quem precisar do item pode escrever a síntese à mão depois de conferir no GitHub.
 
    > **Nota.** PR ou issue que **fala do próprio detector de segredos** (por exemplo, um PR que altera o `hasSecret` ou que cita um token de exemplo no texto) pode ser barrado como `secret`. Isso é **intencional**: o detector não distingue um segredo de um exemplo dele, e é preferível perder esse aprendizado a gravar algo que pareça um segredo. Se o usuário quiser aprender com esse item, escreva a síntese à mão, sem o trecho que parece segredo, e rode o `check`; a skill não contorna o bloqueio.
-3. **Pular, classificar e propor** como nos passos 3 a 5: o `issues` do `knowledge.ts` já foi aplicado pelo `--knowledge` (cobre a referência e também a chave do Jira); a Láquesis usa o glossário e os arquivos do PR para repositório e componente; a síntese (problema, causa, solução e arquivos) é sua, em português, lida do PR (`gh pr view`, só o necessário) e nunca copiada.
+3. **Pular, classificar e propor** como nos passos 3 a 5: o `issues` do `knowledge.ts` já foi aplicado pelo `--knowledge` (cobre a referência `dono/repo#número`, a chave do Jira e a referência derivada do `reference_url` dos registros, então um PR continua conhecido mesmo que a chave do Jira suma do título e da branch); a Láquesis usa o glossário e os arquivos do PR para repositório e componente; a síntese (problema, causa, solução e arquivos) é sua, em português, lida do PR (`gh pr view`, só o necessário) e nunca copiada.
 
    **Contexto adicional e segredos.** O que você ler além do JSON do passo 1 (comentários, revisões e conversa do PR ou da issue, com `gh pr view <número> --repo <dono/repo> --json comments,reviews,files` ou `gh issue view ... --json comments`) passa **antes de propor** pelo detector, com a saída do `gh` na entrada:
 
    ```bash
    gh pr view <número> --repo <dono/repo> --json comments,reviews,files | node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan
+   gh issue view <número> --repo <dono/repo> --json comments | node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan
    ```
+
+   (o primeiro para um PR, o segundo para uma issue)
 
    `{"secret":true}` (código de saída 1) **bloqueia o item inteiro**: nada dele é proposto nem sintetizado, o usuário o vê só pela referência (`dono/repo#número`, motivo `secret`) e ele sai da lista pendente (`pending remove`), porque seria barrado de novo. `{"secret":false}` libera a leitura; o texto lido continua sendo só insumo da síntese.
 4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:

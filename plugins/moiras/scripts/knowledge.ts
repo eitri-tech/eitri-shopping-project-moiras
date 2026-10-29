@@ -93,6 +93,11 @@ export function validReferenceUrl(value: string): boolean {
     return url.protocol === 'https:' && url.hostname !== '' && url.username === '' && url.password === '';
   } catch { return false; }
 }
+/** `<owner>/<repository>#<n>` of a GitHub PR or issue URL (`https://github.com/<owner>/<repository>/pull|issues/<n>`); undefined for anything else. */
+export function githubSource(url: string): string | undefined {
+  const match = validReferenceUrl(url) ? /^https:\/\/github\.com\/([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\/(?:pull|issues)\/(\d+)\/?$/.exec(url) : null;
+  return match ? `${match[1]}/${match[2]}#${Number(match[3])}` : undefined;
+}
 const platforms = new Set(['vtex', 'wake', 'shopify', 'other']);
 const appliesTo = new Set(['category', 'origin', 'action', 'solutions']);
 const results = new Set(['pending', 'resolved', 'not-resolved']);
@@ -297,6 +302,10 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       const id = stem;
       const raw = entry.kind.type === 'solution' ? fields.issue : entry.kind.type === 'pattern' ? fields.issues : undefined;
       const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
+      // The source URL of a solution (a GitHub PR or issue) is a second, canonical key: `<owner>/<repository>#<n>`. A learning from
+      // GitHub stays known even when its `issue` is a Jira key that later goes missing from the title or branch of the PR.
+      const source = entry.kind.type === 'solution' && typeof fields.reference_url === 'string' ? githubSource(fields.reference_url) : undefined;
+      if (source) keys.push(source);
       for (const key of keys) {
         const group = mentions.get(key) ?? { solutions: new Set<string>(), patterns: new Set<string>() };
         group[entry.kind.type === 'solution' ? 'solutions' : 'patterns'].add(id);
