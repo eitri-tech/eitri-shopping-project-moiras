@@ -1,6 +1,6 @@
 /* Usage:
  * node knowledge.ts hash --base ~/work/acme-shop-checkout README.md package.json src/views
- * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings]
+ * node knowledge.ts check .moiras/knowledge [--only glossary|criteria|learnings|skills]
  * node knowledge.ts issues .moiras/knowledge ../acme-knowledge
  * node knowledge.ts provenance ../acme-shop-checkout
  * node knowledge.ts plan --local .moiras/knowledge --shared ../acme-knowledge --shared-name acme
@@ -21,11 +21,11 @@ import { isIgnoredParts, layerOf } from './gitignore.ts';
 import type { IgnoreLayer } from './gitignore.ts';
 import { hash } from './memory.ts';
 
-export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>] | provenance <repository>';
+export const usage = 'Usage: node knowledge.ts hash --base <dir> [--meta <json-string>] <path...> | check <dir> [--only glossary|criteria|learnings|skills] | issues <dir>... | plan --local <dir> --shared <dir> [--shared-name <name>] | provenance <repository>';
 
 type Value = string | string[];
 type Severity = 'error' | 'warning';
-type Scope = 'glossary' | 'criteria' | 'learnings';
+type Scope = 'glossary' | 'criteria' | 'learnings' | 'skills';
 
 export interface Doc {
   fields: Record<string, Value>;
@@ -115,7 +115,7 @@ const email = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,190}\.[A-Z]{2,24}\b/i;
 
 // Inspect every path component below the base before resolving; even links within the base are skipped.
 // Ancestors of the base are trusted (platform links such as /tmp and /var), but the base itself must not be a link.
-function pathIssue(base: string, path: string): string | undefined {
+export function pathIssue(base: string, path: string): string | undefined {
   const supplied = resolve(base);
   let root: string;
   try {
@@ -405,8 +405,130 @@ function codeBlocks(rawLines: string[], from: number): { blocks: CodeBlock[]; un
   return { blocks };
 }
 
+/** Every rule a line breaks (secrets, personal paths, credentials in URLs, personal data, raw Slack links). Matches are never echoed. */
+export function scanLine(line: string): string[] {
+  const rules: string[] = [];
+  if (hasSecret(line)) rules.push('secret');
+  for (const { rule, test } of patterns) {
+    const safeLine = rule === 'url-credentials' ? line.replace(/\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi, (url, info: string) => info.split(':').every(placeholder) ? '' : url) : line;
+    const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s/@]{1,512}@/gi, '').replace(/\bgit@(?=[\w.-]+:)/g, '') : safeLine;
+    if (test.test(candidate) && !(rule === 'secret' && hasSecret(line))) rules.push(rule);
+  }
+  return rules;
+}
+
+/** One skill file per exported learning: `skills/<id>/SKILL.md` (written by skills.ts). `issue` is set when it cannot be read. */
+export interface SkillFile {
+  path: string;
+  text: string;
+  issue?: string;
+}
+
+/** The skill files of a knowledge, in a stable order. A folder without a SKILL.md is not a skill; a link is reported. */
+export function skillFiles(dir: string): SkillFile[] {
+  const folderIssue = pathIssue(dir, 'skills');
+  if (folderIssue === 'missing') return [];
+  if (folderIssue) return [{ path: 'skills', text: '', issue: folderIssue }];
+  const folder = join(dir, 'skills');
+  if (!lstatSync(folder).isDirectory()) return [{ path: 'skills', text: '', issue: 'not-directory' }];
+  let names: string[];
+  try {
+    names = readdirSync(folder).sort();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM') return [{ path: 'skills', text: '', issue: 'unreadable' }];
+    throw error;
+  }
+  return names.flatMap((name): SkillFile[] => {
+    const entry = lstatSync(join(folder, name));
+    if (entry.isSymbolicLink()) return [{ path: `skills/${name}`, text: '', issue: 'symlink' }];
+    if (!entry.isDirectory()) return [];
+    const path = `skills/${name}/SKILL.md`;
+    const issue = pathIssue(dir, path);
+    if (issue === 'missing') return [];
+    if (issue) return [{ path, text: '', issue }];
+    const read = readSafe(join(dir, path));
+    return [{ path, text: read.text ?? '', issue: read.issue }];
+  });
+}
+
+export const skillSections = ['## Sintoma', '## Causa', '## Como confirmar', '## Correção que resolveu', '## O que não resolveu', '## Regras e termos usados', '## Origem'];
+const skillKeys = new Set(['name', 'description', 'metadata']);
+/** The only metadata a skill carries: the fingerprint it was generated from and the date of generation. */
+export const skillMetaLine = /^metadata: \{ source_hash: "(sha256:[0-9a-f]{64})", indexed_at: "(\d{4}-\d{2}-\d{2})" \}$/;
+// A skill stands alone: it names neither the plugin, its scripts, its folders nor the knowledge it came from.
+const skillSelfReference = /\bmoiras\b|knowledge\.ts|\.moiras\b|CLAUDE_PLUGIN_ROOT|\bmoiras-[a-z]|\b(?:learnings|criteria|glossary|skills)\/|\bknowledge:/i;
+
+function frontOf(text: string): { front: string[]; end: number } | null {
+  const lines = text.replaceAll('\r\n', '\n').split('\n');
+  if (lines[0] !== '---') return null;
+  const end = lines.indexOf('---', 1);
+  return end === -1 ? null : { front: lines.slice(1, end), end };
+}
+
+export function skillName(text: string): string | undefined {
+  const line = frontOf(text)?.front.find(item => item.startsWith('name: '));
+  return line?.slice('name: '.length).trim();
+}
+
+export function skillMetadata(text: string): { source_hash: string; indexed_at: string } | undefined {
+  const line = frontOf(text)?.front.find(item => item.startsWith('metadata: '));
+  const match = line === undefined ? null : skillMetaLine.exec(line);
+  return match ? { source_hash: match[1]!, indexed_at: match[2]! } : undefined;
+}
+
+function skillDescription(front: string[]): string {
+  const line = front.find(item => item.startsWith('description: '));
+  try {
+    const value: unknown = JSON.parse(line?.slice('description: '.length) ?? 'null');
+    return typeof value === 'string' ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Rules of a skill: standalone frontmatter, the sections, no code block and the same line rules as the records. */
+export function checkSkill(path: string, text: string): Finding[] {
+  const findings: Finding[] = [];
+  const add = (rule: string, line?: number) => {
+    findings.push(line === undefined ? { path, rule, severity: 'error' } : { path, rule, severity: 'error', line });
+  };
+  const lines = text.replaceAll('\r\n', '\n').split('\n');
+  const folder = path.split('/')[1] ?? '';
+  if (!safeName.test(folder)) add('skill-folder-invalid');
+  const parts = frontOf(text);
+  const first = parts ? parts.end + 1 : 0;
+  if (!parts) {
+    add('frontmatter-missing');
+  } else {
+    const { front } = parts;
+    if (front.some(item => !skillKeys.has(item.split(':')[0] ?? ''))) add('skill-frontmatter-invalid');
+    const name = skillName(text) ?? '';
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(name) || name.length > 64 || !name.endsWith(`-${folder.toLowerCase()}`)) add('skill-name-invalid');
+    const description = skillDescription(front);
+    if (!description.trim() || description.length > 1024 || !/Use quando/.test(description)) add('skill-description-invalid');
+    if (!front.some(item => item.startsWith('metadata: ') && skillMetaLine.test(item))) add('skill-metadata-invalid');
+    const headings = new Set(lines.slice(first).map(line => line.trimEnd()));
+    if (skillSections.some(section => !headings.has(section))) add('skill-section-missing');
+  }
+  lines.forEach((line, index) => {
+    const at = index + 1;
+    if (line.length > maxLineLength) {
+      add('line-too-long', at);
+      return;
+    }
+    for (const rule of scanLine(line)) add(rule, at);
+    if (skillSelfReference.test(line)) add('skill-plugin-reference', at);
+    if (/^\s*(?:`{3}|~{3})/.test(line)) add('skill-code-block', at);
+    if (index >= first && bodyPlaceholder.test(line.replace(/`[^`]*`/g, ''))) add('placeholder', at);
+    if (/\bTODO\b/.test(line)) add('todo-content', at);
+  });
+  return findings;
+}
+
 export function check(dir: string, only?: Scope): { checked: number; findings: Finding[] } {
   const all = records(dir, only);
+  const skills = only === undefined || only === 'skills' ? skillFiles(dir) : [];
   const findings: Finding[] = [];
   for (const { path, kind, text, doc, issue } of all) {
     const add = (rule: string, severity: Severity, line?: number) =>
@@ -476,12 +598,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
 
     lines.forEach((line, index) => {
       if (line.length > maxLineLength) { add('line-too-long', 'error', index + 1); return; }
-      if (hasSecret(line)) add('secret', 'error', index + 1);
-      for (const { rule, test } of patterns) {
-        const safeLine = rule === 'url-credentials' ? line.replace(/\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi, (url, info: string) => info.split(':').every(placeholder) ? '' : url) : line;
-        const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s/@]{1,512}@/gi, '').replace(/\bgit@(?=[\w.-]+:)/g, '') : safeLine;
-        if (test.test(candidate) && !(rule === 'secret' && hasSecret(line))) add(rule, 'error', index + 1);
-      }
+      for (const rule of scanLine(line)) add(rule, 'error', index + 1);
     });
 
     // A path-like frontmatter value (local_path: /workspace/acme), unless the line scan already caught it.
@@ -512,7 +629,11 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (!/(?:^|[\s`(])[A-Za-z0-9_.-]{1,128}\/(?:[A-Za-z0-9_.-]{1,128}\/)*[A-Za-z0-9_.-]{1,128}@[0-9a-f]{7,64}(?=$|[\s`)])/m.test(around)) add('code-without-reference', 'error', open + 1);
     }
   }
-  return { checked: all.length, findings };
+  for (const file of skills) {
+    if (file.issue) findings.push({ path: file.path, rule: file.issue, severity: 'error' });
+    else findings.push(...checkSkill(file.path, file.text));
+  }
+  return { checked: all.length + skills.length, findings };
 }
 
 const observationPattern = /\*\*Observação(?::\*\*|\*\*:)/;
@@ -595,6 +716,28 @@ export function plan(localDir: string, sharedDir: string, sharedName?: string): 
       }
     }
   }
+  // Skills (one folder per learning, written by moiras-export) are whole files: a shared one is only replaced by a local one that
+  // was generated later, never by an equal-date copy with other content, and nothing is removed from the shared side.
+  const localSkills = skillFiles(localDir);
+  const sharedSkills = new Map(skillFiles(sharedDir).map(file => [file.path, file]));
+  for (const local of localSkills) {
+    const item = (action: Item['action'], reason: string) => items.push({ path: local.path, action, reason });
+    if (local.issue) { item('conflict', local.issue); continue; }
+    const other = sharedSkills.get(local.path);
+    if (other?.issue) { item('conflict', `shared:${other.issue}`); continue; }
+    if (!other) { item('add', 'new'); continue; }
+    if (other.text === local.text) { item('skip', 'unchanged'); continue; }
+    const [mine, theirs] = [skillMetadata(local.text), skillMetadata(other.text)];
+    if (!mine || !theirs) item('conflict', 'skill-metadata-missing');
+    else if (mine.source_hash === theirs.source_hash) item('conflict', 'same-sources-different-skill');
+    else if (mine.indexed_at > theirs.indexed_at) item('update', 'regenerated');
+    else if (mine.indexed_at === theirs.indexed_at) item('conflict', 'same-date-different-skill');
+    else item('skip', 'shared-is-newer');
+  }
+  for (const file of sharedSkills.values()) {
+    if (file.issue && !localSkills.some(local => local.path === file.path)) items.push({ path: file.path, action: 'conflict', reason: `shared:${file.issue}` });
+  }
+
   // A broken record only shared stays in the plan too: nothing can be published for it,
   // but the reviewer needs to know the shared file is unreadable.
   for (const entry of shared.values()) {
@@ -715,7 +858,7 @@ export function sourcesHash(base: string, paths: string[], meta?: unknown): stri
 
 const scopeOf = (value: string | undefined): Scope | undefined => {
   if (value === undefined) return undefined;
-  if (value === 'glossary' || value === 'criteria' || value === 'learnings') return value;
+  if (value === 'glossary' || value === 'criteria' || value === 'learnings' || value === 'skills') return value;
   throw new Error(`Invalid --only. ${usage}`);
 };
 
