@@ -553,7 +553,9 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         const value = asScalar(raw);
         if ((Array.isArray(raw) && asText(raw) !== '') || (value && !value.includes('<') && !pseudonymPattern.test(value))) add('pseudonym-required', 'error');
       }
-      for (const name of required[kind.type] ?? []) if (!asText(fields[name])) add('field-missing', 'error');
+      // A rejected approach (`outcome: rejected`) has no `source`: it is linked to its learnings by `issue` and `reference_url`.
+      const rejectedDecision = kind.type === 'decision' && asScalar(fields.outcome) === 'rejected';
+      for (const name of required[kind.type] ?? []) if (!(rejectedDecision && name === 'source') && !asText(fields[name])) add('field-missing', 'error');
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.category) && Array.isArray(fields.category)) add('category-invalid', 'error');

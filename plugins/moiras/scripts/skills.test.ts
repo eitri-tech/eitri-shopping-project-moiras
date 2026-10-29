@@ -128,7 +128,7 @@ const rejected = `---
 id: rejected-cart-redirect
 type: decision
 created_at: 2026-02-10
-source: [PROJ-1-1]
+issue: PROJ-1
 outcome: rejected
 reason: redirecionar para a home perde o carrinho de outro seller
 reference_url: https://github.com/acme/acme-shop-checkout/pull/15
@@ -206,6 +206,72 @@ describe('skills: which records become skills', () => {
     const text = texts.get('skills/PROJ-1-1/SKILL.md')!;
     assert.match(text, /^- Manter o id do carrinho na troca de seller \(PROJ-1-2\): não resolveu$/m);
     assert.match(text, /^- Redirecionar o carrinho para a home: redirecionar para a home perde o carrinho de outro seller \(acme\/acme-shop-checkout#15\)$/m);
+  });
+
+  describe('rejected approaches in "O que não resolveu"', () => {
+    /** A rejected decision in the format of moiras-learn --from-git: `outcome`, `reason`, `reference_url` and `issue`, no `source`. */
+    const rejectedOf = (id: string, title: string, options: { issue?: string; url?: string }) => `---
+id: ${id}
+type: decision
+created_at: 2026-02-12
+outcome: rejected
+reason: não atende o carrinho de outro seller
+${options.issue ? `issue: ${options.issue}\n` : ''}${options.url ? `reference_url: ${options.url}\n` : ''}imported_from: git
+---
+
+# ${title}
+
+**Decisão:** seguir por outro caminho.
+
+**Por quê:** foi testado e descartado.
+`;
+    const solvedWith = (url: string, body?: string) => ({
+      'learnings/solutions/PROJ-9-1.md': solution('PROJ-9-1', { issue: 'PROJ-9', extra: `reference_url: ${url}\n`, body }),
+    });
+
+    it('shows a rejection of the same issue with no substitute PR cited by the learning', t => {
+      const local = fixture(t, {
+        ...base(),
+        ...solvedWith('https://github.com/acme/acme-shop-checkout/pull/30'),
+        'learnings/decisions/rejected-nine.md': rejectedOf('rejected-nine', 'Pular a validação do seller', { issue: 'PROJ-9', url: 'https://github.com/acme/acme-shop-checkout/pull/31' }),
+      });
+      const { texts } = buildPlan({ local, shared: [], fingerprint, date });
+      assert.match(texts.get('skills/PROJ-9-1/SKILL.md')!, /^- Pular a validação do seller: não atende o carrinho de outro seller \(acme\/acme-shop-checkout#31\)$/m);
+    });
+
+    it('matches the dono/repo#n form of the issue as well as the Jira key', t => {
+      const local = fixture(t, {
+        ...base(),
+        'learnings/solutions/PROJ-9-1.md': solution('PROJ-9-1', { issue: 'acme/acme-shop-checkout#9' }),
+        'learnings/decisions/rejected-nine.md': rejectedOf('rejected-nine', 'Trocar o seller no servidor', { issue: 'acme/acme-shop-checkout#9' }),
+      });
+      const { texts } = buildPlan({ local, shared: [], fingerprint, date });
+      assert.match(texts.get('skills/PROJ-9-1/SKILL.md')!, /^- Trocar o seller no servidor: /m);
+    });
+
+    it('falls back to the reference_url when the learning cites the rejected PR, with no issue in common', t => {
+      const local = fixture(t, {
+        ...base(),
+        ...solvedWith('https://github.com/acme/acme-shop-checkout/pull/30', solutionBody('o carrinho some ao trocar de seller no checkout', 'manter o id, no lugar de https://github.com/acme/acme-shop-checkout/pull/31.')),
+        'learnings/decisions/rejected-nine.md': rejectedOf('rejected-nine', 'Recriar o carrinho', { url: 'https://github.com/acme/acme-shop-checkout/pull/31' }),
+      });
+      const { texts } = buildPlan({ local, shared: [], fingerprint, date });
+      assert.match(texts.get('skills/PROJ-9-1/SKILL.md')!, /^- Recriar o carrinho: .* \(acme\/acme-shop-checkout#31\)$/m);
+    });
+
+    it('does not show a rejection of another issue, nor one whose PR is only a prefix of the cited number', t => {
+      const local = fixture(t, {
+        ...base(),
+        ...solvedWith('https://github.com/acme/acme-shop-checkout/pull/30', solutionBody('o carrinho some ao trocar de seller no checkout', 'manter o id, como em https://github.com/acme/acme-shop-checkout/pull/310.')),
+        'learnings/decisions/other-issue.md': rejectedOf('other-issue', 'Mudar a home', { issue: 'PROJ-42', url: 'https://github.com/acme/acme-shop-checkout/pull/44' }),
+        'learnings/decisions/prefix.md': rejectedOf('prefix', 'Fechar a PR antiga', { url: 'https://github.com/acme/acme-shop-checkout/pull/31' }),
+      });
+      const { texts } = buildPlan({ local, shared: [], fingerprint, date });
+      const text = texts.get('skills/PROJ-9-1/SKILL.md')!;
+      assert.doesNotMatch(text, /Mudar a home/);
+      assert.doesNotMatch(text, /Fechar a PR antiga/);
+      assert.doesNotMatch(texts.get('skills/PROJ-1-1/SKILL.md')!, /Mudar a home/);
+    });
   });
 
   it('embeds the applicable criteria and the glossary entries, without local paths', t => {

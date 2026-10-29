@@ -159,6 +159,11 @@ const validRef = (value: Fields[string] | undefined): string | undefined => {
 };
 const referenceLine = (url: string | undefined): string => (url ? `Referência (PR): ${url}` : 'Referência não registrada.');
 
+/** The issue keys of a record (`issue`, or `issues` of a pattern): a Jira key or `dono/repo#n`, as written. */
+const issueKeysOf = (fields: Fields): string[] => uniq([...list(fields.issue), ...list(fields.issues)]);
+/** Whether `text` cites `url` as a whole link (`pull/15` does not cite `pull/150`). */
+const citesUrl = (text: string, url: string): boolean => new RegExp(`${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w/-])`).test(text);
+
 /** `dono/repo#n` of a GitHub source, the issue keys of the record: how a skill cites where it came from. */
 function refsOf(fields: Fields): string[] {
   const url = validRef(fields.reference_url);
@@ -253,29 +258,30 @@ export function buildCandidates(sources: Sources): { candidates: Candidate[]; ex
   const exclude = (id: string, kind: string, reason: string) => {
     excluded.push({ id, kind, reason });
   };
-  const push = (map: Map<string, string[]>, key: string, line: string) => map.set(key, [...(map.get(key) ?? []), line]);
-
-  // "O que não resolveu": rejected decisions cite the learnings they were taken from; not-resolved solutions of the same issue too.
-  const rejected = new Map<string, string[]>();
+  // "O que não resolveu": a rejected decision goes with the learnings of its issue (`issue`); a learning that cites the rejected
+  // PR (`reference_url`, or its URL in the text) is the fallback. Not-resolved solutions of the same issue go there too.
+  const rejections: { issues: string[]; url?: string; line: string }[] = [];
   for (const [id, source] of byKey(sources.decisions)) {
     if (!source.valid || scalar(fieldsOf(source).outcome) !== 'rejected') continue;
     const fields = fieldsOf(source);
-    const cited = githubSource(validRef(fields.reference_url) ?? '');
-    const line = `- ${titleOf(bodyOf(source)) || id}: ${scalar(fields.reason) || 'motivo não registrado'}${cited ? ` (${cited})` : ''}`;
-    for (const sourceId of list(fields.source).map(stem)) push(rejected, sourceId, line);
+    const url = validRef(fields.reference_url);
+    const cited = url ? githubSource(url) : undefined;
+    rejections.push({ issues: issueKeysOf(fields), url, line: `- ${titleOf(bodyOf(source)) || id}: ${scalar(fields.reason) || 'motivo não registrado'}${cited ? ` (${cited})` : ''}` });
   }
-  const notResolved = new Map<string, { id: string; line: string }[]>();
+  const notResolved: { id: string; issues: string[]; line: string }[] = [];
   for (const [id, source] of byKey(sources.solutions)) {
-    const key = scalar(fieldsOf(source).issue);
-    if (!source.valid || scalar(fieldsOf(source).result) !== 'not-resolved' || !key) continue;
-    notResolved.set(key, [...(notResolved.get(key) ?? []), { id, line: `- ${titleOf(bodyOf(source)) || id} (${id}): não resolveu` }]);
+    if (!source.valid || scalar(fieldsOf(source).result) !== 'not-resolved') continue;
+    notResolved.push({ id, issues: issueKeysOf(fieldsOf(source)), line: `- ${titleOf(bodyOf(source)) || id} (${id}): não resolveu` });
   }
 
   const drafts: Draft[] = [];
-  const unresolvedOf = (id: string, key: string): string[] => uniq([
-    ...(rejected.get(id) ?? []),
-    ...(notResolved.get(key) ?? []).filter(entry => entry.id !== id).map(entry => entry.line),
-  ]);
+  const rejectedFor = (keys: string[], refs: { urls: (string | undefined)[]; texts: string[] }): string[] => rejections
+    .filter(entry => entry.issues.some(key => keys.includes(key))
+      || (entry.url !== undefined && (refs.urls.includes(entry.url) || refs.texts.some(text => citesUrl(text, entry.url!)))))
+    .map(entry => entry.line);
+  const notResolvedFor = (id: string, keys: string[]): string[] => notResolved
+    .filter(entry => entry.id !== id && entry.issues.some(key => keys.includes(key)))
+    .map(entry => entry.line);
 
   for (const [id, source] of byKey(sources.solutions)) {
     const fields = fieldsOf(source);
@@ -290,7 +296,8 @@ export function buildCandidates(sources: Sources): { candidates: Candidate[]; ex
     if (!concrete(symptom)) { exclude(id, 'solution', 'no-symptom'); continue; }
     const correction = labelled(bodyOf(source), 'Solução');
     if (!correction) { exclude(id, 'solution', 'no-correction'); continue; }
-    const key = scalar(fields.issue);
+    const keys = issueKeysOf(fields);
+    const url = validRef(fields.reference_url);
     drafts.push({
       id,
       kind: 'solution',
@@ -304,7 +311,7 @@ export function buildCandidates(sources: Sources): { candidates: Candidate[]; ex
       confirm: labelled(bodyOf(source), 'Como confirmar') || noConfirm,
       correction: [correction, '', referenceLine(validRef(fields.reference_url))].join('\n'),
       result,
-      unresolved: unresolvedOf(id, key),
+      unresolved: uniq([...rejectedFor(keys, { urls: [url], texts: [bodyOf(source)] }), ...notResolvedFor(id, keys)]),
       sources: [],
       references: refsOf(fields),
     });
@@ -343,7 +350,10 @@ export function buildCandidates(sources: Sources): { candidates: Candidate[]; ex
         '',
         referenceLine(validRef(fieldsOf(solution).reference_url)),
       ].join('\n')).join('\n\n'),
-      unresolved: uniq(parts.flatMap(({ sid }) => rejected.get(sid) ?? []).concat(rejected.get(id) ?? [])),
+      unresolved: rejectedFor(uniq([...issueKeysOf(fields), ...parts.flatMap(({ solution }) => issueKeysOf(fieldsOf(solution)))]), {
+        urls: parts.map(({ solution }) => validRef(fieldsOf(solution).reference_url)),
+        texts: [bodyOf(source), ...parts.map(({ solution }) => bodyOf(solution))],
+      }),
       sources: parts.map(({ sid }) => sid),
       references: uniq(parts.flatMap(({ solution }) => refsOf(fieldsOf(solution)))),
     });
@@ -383,7 +393,10 @@ export function buildCandidates(sources: Sources): { candidates: Candidate[]; ex
       cause: labelled(baseBody, 'Causa provável') || 'indeterminada no registro',
       confirm: labelled(bodyOf(source), 'Como confirmar') || labelled(bodyOf(source), 'Onde olhar') || labelled(baseBody, 'Como confirmar') || noConfirm,
       correction: [decision, ...(why ? ['', `Por quê: ${why}`] : []), '', referenceLine(reference)].join('\n'),
-      unresolved: uniq(sourceIds.flatMap(sid => rejected.get(sid) ?? []).concat(rejected.get(id) ?? [])),
+      unresolved: rejectedFor(uniq([...issueKeysOf(fields), ...issueKeysOf(baseFields)]), {
+        urls: [validRef(fields.reference_url), validRef(baseFields.reference_url)],
+        texts: [bodyOf(source), baseBody],
+      }),
       sources: sourceIds,
       references: uniq([...refsOf(baseFields), ...refsOf(fields)]),
     });
