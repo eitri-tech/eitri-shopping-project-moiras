@@ -23,10 +23,10 @@ Ela copia do knowledge `local` (`<local-dir>`) para um clone do destino, num bra
 4. **Planejar.** Compare o local com o destino:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" plan --local <local-dir> --shared <dir> --shared-name <name>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge plan --local <local-dir> --shared <dir> --shared-name <name>
    ```
 
-5. **Validar a seleção.** Depois de escolher os itens e antes de pedir o "sim", monte uma pasta temporária só com os arquivos exatos a copiar, preservando os caminhos relativos, e rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <seleção>`. Erros (`error`) interrompem a publicação; avisos (`warning`) não bloqueiam, mas entram na lista marcados e o usuário os vê antes do "sim". Falha ou resultado inconclusivo também interrompe. Registro com erro (segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência — em bloco com ``` ou ~~~, indentado, ou dentro de citação ou lista —, campo obrigatório do tipo faltando, data que não existe no calendário, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte só caminho e regra, sem repetir conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados. `chosen_by` e `approved_by` devem ser pseudônimos não identificáveis: recuse e-mail (também sinalizado pelo `check`), nome real aparente ou identificador de conta, mesmo que o script não detecte. Dúvida exige correção antes de publicar.
+5. **Validar a seleção.** Depois de escolher os itens e antes de pedir o "sim", monte uma pasta temporária só com os arquivos exatos a copiar, preservando os caminhos relativos, e rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check <seleção>`. Erros (`error`) interrompem a publicação; avisos (`warning`) não bloqueiam, mas entram na lista marcados e o usuário os vê antes do "sim". Falha ou resultado inconclusivo também interrompe. Registro com erro (segredo, credencial em URL, caminho absoluto, código acima de 20 linhas ou sem referência — em bloco com ``` ou ~~~, indentado, ou dentro de citação ou lista —, campo obrigatório do tipo faltando, data que não existe no calendário, modelo não preenchido no cabeçalho ou no texto) **não entra** na lista: aponte só caminho e regra, sem repetir conteúdo, e deixe a correção com o usuário ou com o `moiras-audit`. Avisos (`warning`) entram na lista, marcados. `chosen_by` e `approved_by` devem ser pseudônimos não identificáveis: recuse e-mail (também sinalizado pelo `check`), nome real aparente ou identificador de conta, mesmo que o script não detecte. Dúvida exige correção antes de publicar.
 
 ## O que o plano significa
 
@@ -59,7 +59,7 @@ A skill nunca reescreve um aprendizado do destino além de `result` e da observa
 7. **Enviar.** Imediatamente antes do push, repita, nesta ordem, a comparação de `origin` com `repository` e a consulta de visibilidade dos passos 2 e 3, agora no worktree temporário. Qualquer falha, diferença ou resultado inconclusivo interrompe o envio. Só então rode `git push -u origin <branch>`. Nunca use `--force`.
 8. **Abrir o PR** na branch padrão, com o `gh pr create --base <padrão> --head <branch>` se o `gh` estiver instalado e autenticado. Se o `gh` ficar indisponível, pare e explique. Siga o modelo de PR do repositório, se houver. Título curto; descrição em português, curta:
    - o que muda, em bullets por pasta (`criteria/`, `learnings/`, `glossary/`) e por ação (novo, atualizado, removido), citando só os `id`;
-   - como revisar (rodar `knowledge.ts check` no branch).
+   - como revisar (rodar `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check` no branch).
 
    A descrição **não leva** texto de issue, de conversa, nome de cliente nem o conteúdo dos registros.
 9. **Limpar.** Remova o worktree temporário (`git -C <dir> worktree remove "$PWD/.moiras/tmp/publish-<publish_id>"`). O branch fica no clone e no remoto até o PR ser mergeado ou fechado.

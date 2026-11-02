@@ -16,7 +16,7 @@ Esta skill é a única que escreve em `glossary/`. O glossário é derivado do c
 ## O que ela lê e o que ela escreve
 
 - **Lê** os repositórios declarados em `index` no `.moiras/sources.json`, só para leitura: nunca escreve neles, nunca instala dependências nem roda scripts, builds ou testes deles. Com `index.github`, também **lista** (só leitura, `gh repo list`) os repositórios do GitHub que casam com o padrão.
-- **Clona**, só se `index.github` pedir, só depois do "sim" à lista exata e só pelo `github.ts clone`: um repositório que ainda não existe em `clone_dir`, nunca por cima de uma pasta existente e nunca com `pull`, `fetch` ou `checkout` num clone que já está lá.
+- **Clona**, só se `index.github` pedir, só depois do "sim" à lista exata e só pelo `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github clone`: um repositório que ainda não existe em `clone_dir`, nunca por cima de uma pasta existente e nunca com `pull`, `fetch` ou `checkout` num clone que já está lá.
 - **Escreve** só `glossary/<id>.md` no knowledge de escopo `local`, depois do "sim". Nenhum outro arquivo do knowledge, nenhum Jira, Slack ou repositório.
 - Registros de glossário de repositórios que não aparecem mais na configuração **não são apagados**: a skill só os lista como `missing` no relatório.
 
@@ -47,21 +47,21 @@ Os argumentos limitam a execução: um ou mais nomes de repositório, ou `--all`
 Para cada entrada de `github`, na ordem:
 
 ```bash
-gh repo list <dono> --limit 4000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" match --pattern "<dono>/<glob>" [--include-archived] [--limit 4000]
+gh repo list <dono> --limit 4000 --json name,url,isArchived,description | node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github match --pattern "<dono>/<glob>" [--include-archived] [--limit 4000]
 ```
 
-A saída é `{ owner, repositories: [{ name, url, archived }], truncated, other_owner }`; o `plan-clone` precisa dela inteira (ele recusa uma entrada sem `owner`). `other_owner` conta os repositórios cuja URL é de outro dono (um repositório transferido para outra organização, por exemplo): se for maior que zero, avise que o padrão pode estar com o dono antigo. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit` (no `gh repo list` e no mesmo valor em `match --limit`, senão o aviso de lista cortada compara com 4000). Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: liste os clones que já estão em `clone_dir` com `node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" local --dir <clone_dir> --base <pasta-do-moiras> --pattern "<dono>/<glob>"` (mesma saída do `plan-clone`, mais o `owner`, só com o que está em disco; recusa uma `clone_dir` que seja link simbólico) e indexe só os `exists`; os `conflict` seguem a regra abaixo (avise e pule), mas nada é dado como ausente. Faça o mesmo quando a lista vier truncada.
+A saída é `{ owner, repositories: [{ name, url, archived }], truncated, other_owner }`; o `plan-clone` precisa dela inteira (ele recusa uma entrada sem `owner`). `other_owner` conta os repositórios cuja URL é de outro dono (um repositório transferido para outra organização, por exemplo): se for maior que zero, avise que o padrão pode estar com o dono antigo. Com `truncated: true` (a lista bateu no limite de 4000), avise que podem faltar repositórios: o padrão mais estreito não ajuda, porque o corte vem antes do filtro; clone à mão o repositório que faltar em `clone_dir` (ele entra como `exists`) ou aumente o `--limit` (no `gh repo list` e no mesmo valor em `match --limit`, senão o aviso de lista cortada compara com 4000). Sem `gh` instalado ou logado, ou se o comando falhar (rede, permissão), diga que o padrão ficou **não verificado**: liste os clones que já estão em `clone_dir` com `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github local --dir <clone_dir> --base <pasta-do-moiras> --pattern "<dono>/<glob>"` (mesma saída do `plan-clone`, mais o `owner`, só com o que está em disco; recusa uma `clone_dir` que seja link simbólico) e indexe só os `exists`; os `conflict` seguem a regra abaixo (avise e pule), mas nada é dado como ausente. Faça o mesmo quando a lista vier truncada.
 
 Os caminhos relativos de `clone_dir` valem a partir da pasta onde está o `.moiras/`, mas os scripts resolvem pelo diretório atual: **passe `--base <pasta onde está o .moiras>`** junto de `--dir <clone_dir>` em `plan-clone`, `local` e `clone`: o script resolve o `--dir` a partir dela (caminho absoluto só no argumento, nunca gravado em registro). Depois veja o que já existe em disco:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" plan-clone --dir <clone_dir> --base <pasta-do-moiras> < matches.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github plan-clone --dir <clone_dir> --base <pasta-do-moiras> < matches.json
 ```
 
 Cada repositório volta como `exists` (já clonado, com o `origin` esperado: entra na indexação), `clone` (livre) ou `conflict` (avise e pule; o `reason` diz por quê: `symlink`, `not-a-checkout` para uma pasta que não é um clone comum (sem `.git` como pasta: um worktree ou submódulo, cujo `.git` é um arquivo, precisa ser declarado em `repositories`), `origin-mismatch` quando o `origin` do clone (qualquer um dos URLs do `.git/config` do próprio clone, sem seguir `include` nem ler a configuração global ou `GIT_CONFIG_*`) não é o repositório esperado (como um clone de outro dono com o mesmo nome, ou um fork), `origin-unreadable` quando o `origin` não pôde ser lido (inclusive sem `origin` ou com o Git demorando mais de 5 s). Se um `conflict` for o que você quer indexar, declare-o em `repositories` com o `path`). Se houver `clone`, **ofereça** clonar, mostrando a lista exata (nome, URL e pasta de destino) e perguntando se quer clone completo (padrão, deixa o histórico disponível para busca local) ou raso (`--depth 1`). Só com o "sim":
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/github.ts" clone --dir <clone_dir> --base <pasta-do-moiras> --repo <nome> --owner <dono> --url <url> [--depth 1]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github clone --dir <clone_dir> --base <pasta-do-moiras> --repo <nome> --owner <dono> --url <url> [--depth 1]
 ```
 
 O clone grava numa pasta temporária ao lado do destino (`.<nome>-XXXXXX`) e só a renomeia para `<nome>` quando termina, depois de conferir de novo que o destino continua livre e sem link simbólico. Se o `clone` devolver `timed_out: true`, ficou uma pasta parcial (a temporária) em `partial_path`: o plugin nunca apaga, então peça ao usuário que a remova antes de tentar de novo. Sem o "sim" ao clone, o repositório não clonado vira `missing` no relatório, e a indexação segue com o que existe. A URL não leva usuário, senha nem token; a autenticação é a do Git do próprio usuário. O `--owner` é o dono do `match`, e o script recusa uma URL de outro dono. O clone roda só por `https` (um `insteadOf` do usuário não troca por `ssh`), sem hooks (nem os do modelo do Git do usuário), sem `fsmonitor`, sem submódulos e com limite de 10 minutos; filtros que a configuração do próprio usuário define (como o Git LFS) continuam valendo.
@@ -74,7 +74,7 @@ O clone grava numa pasta temporária ao lado do destino (`.<nome>-XXXXXX`) e só
 4. **Registrar até onde o repositório foi lido (proveniência).** Rode, para cada repositório (só comandos de leitura do Git, por dentro do script), **antes** de ler as evidências do passo 2 e **de novo depois** de calcular o `sources_hash` (passo 5):
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" provenance <repositório>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge provenance <repositório>
    ```
 
    Se as duas saídas forem diferentes (alguém fez commit, trocou de branch ou mexeu na árvore no meio da indexação), o registro misturaria árvores: refaça a leitura desse repositório desde o passo 2; se continuar mudando, **omita** os três campos e avise `provenance-unstable` no relatório. Só grave a proveniência quando as duas leituras forem iguais. Com `indexed_dirty: true` nas duas, a comparação não vê uma edição a mais numa árvore que já estava suja; isso não invalida o registro, porque `true` já diz que o commit não descreve o que foi lido.
@@ -84,7 +84,7 @@ O clone grava numa pasta temporária ao lado do destino (`.<nome>-XXXXXX`) e só
 
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge hash --base <repositório> --meta '{"owner":"Squad Checkout"}' README.md package.json src/views
    ```
 
 6. **Comparar** com o arquivo existente: mesmo `sources_hash` é `unchanged` e o arquivo não é tocado (nem o `indexed_at` nem a proveniência); hash diferente é `changed`; sem arquivo é `new`. A proveniência não decide nada: só a leitura gravada leva os campos. Num `unchanged`, se o commit do passo 4 for outro que o registrado, diga no relatório (commit registrado e atual, com as datas) sem gravar.
@@ -93,7 +93,7 @@ O clone grava numa pasta temporária ao lado do destino (`.<nome>-XXXXXX`) e só
 9. **Conferir** o que foi gravado e corrigir o que falhar:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only glossary
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check <local-dir> --only glossary
    ```
 
 10. **Relatar**, sem trechos de código: quantos arquivos novos, atualizados e inalterados (nos inalterados, o commit atual quando for outro que o registrado), o que ficou `missing` e os avisos. Se o knowledge tem `repository`, sugira o `moiras-publish`.
