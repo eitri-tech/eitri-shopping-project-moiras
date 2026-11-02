@@ -135,6 +135,21 @@ describe('secrets', () => {
     assert.ok(!JSON.stringify(selection).includes(token));
   });
 
+  it('scan blocks JWTs, Google keys, OpenAI project keys and URL credentials in the context, without echoing them', () => {
+    const cases = [
+      ['eyJ' + 'hbGciOiJIUzI1NiJ9', 'eyJ' + 'zdWIiOiJmdWxhbm8ifQ', 'c2ln' + 'bmF0dXJlMTIzNDU2'].join('.'),
+      'AIza' + 'Sy' + '0'.repeat(33),
+      'sk-' + 'proj-' + 'Ab3dE5fG7hJ9kL1mN3pQ5rS7',
+      'sk-' + 'svcacct-' + 'Zx9Qw3Er7Ty1Ui5Op',
+      'https://' + 'alice' + ':' + 'hunter22' + '@' + 'example.com/org/repo.git',
+    ];
+    cases.forEach((body, index) => {
+      const result = main(['scan'], JSON.stringify({ comments: [{ body: `see ${body}` }] }));
+      assert.deepEqual([index, result.code, result.output], [index, 1, '{"secret":true}']);
+    });
+    assert.deepEqual(scan('eyJ sk-abc123 https://<user>:<pass>@example.com/org/repo.git'), { secret: false });
+  });
+
   it('prints no text from the PR or the issue', () => {
     const selection = select({ prs: [pull(1, { title: 'Distinctive title', body: 'Distinctive body' })], issues: [ticket(2, { body: 'Another distinctive body' })] }, { owner: 'acme', repository: repo });
     assert.ok(!/istinctive/.test(JSON.stringify(selection)));

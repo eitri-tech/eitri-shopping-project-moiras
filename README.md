@@ -112,7 +112,7 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 ## Segurança
 
 - Só lê e sugere no Jira e no Slack; nada é escrito sem o "sim" à lista exata. A exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira), desligadas por padrão (`interactions.enabled`). Com elas ligadas, só a reação autorizada em `interactions.auto_types` roda no `--auto` sem o "sim"; comentário sempre pede aprovação.
-- O knowledge fica fora deste repositório: local (`.moiras/knowledge/`, fora do git) ou em repositórios privados criados a partir de um template público. Nunca guarda cópia de código nem segredos.
+- O knowledge fica fora deste repositório: local (`.moiras/knowledge/`, fora do git) ou em repositórios privados criados a partir de um template público. Nunca guarda cópia de código nem segredos. O detector de segredos reconhece tokens do GitHub, Slack, AWS, OpenAI (`sk-`, `sk-proj-`, `sk-svcacct-`), Google (`AIza...`), JWT, chaves privadas PEM, `Bearer`, atribuições como `PASSWORD=` e credenciais em URL (`usuário:senha@`, sem contar `<placeholder>`); a lista não é exaustiva, e a revisão humana continua necessária.
 - A memória das etapas é local, só de acréscimo, e guarda hash e metadados, nunca o texto bruto.
 - `moiras-publish` sempre abre PR num branch novo: nunca faz push na principal, `force push` nem merge.
 
