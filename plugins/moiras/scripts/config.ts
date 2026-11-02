@@ -13,7 +13,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { cloneEnv } from './github.ts';
-import { hasSecret, isCalendarDate, patterns, placeholder, pseudonymPattern, validPattern } from './knowledge.ts';
+import { hasSecret, hasUrlCredentials, isCalendarDate, patterns, placeholder, pseudonymPattern, validPattern } from './knowledge.ts';
 
 export const usage = 'Usage: node config.ts init [--dir <path>] [--dry-run] < config.json | check [<file>]';
 
@@ -33,7 +33,6 @@ const jiraField = /^(?:cf\[\d+\]|[\p{L}\p{N}_][\p{L}\p{M}\p{N} _.-]{0,63})$/u;
 const jiraValue = /^[^"\\\u0000-\u001f]{1,128}$/;
 const slackUser = /^[UW][A-Z0-9]{8,}$/;
 const slackChannel = /^[CG][A-Z0-9]{8,}$/;
-const userInfo = patterns.find(entry => entry.rule === 'url-credentials')!.test;
 const secret = patterns.find(entry => entry.rule === 'secret')!.test;
 const absolutePath = patterns.find(entry => entry.rule === 'absolute-path')!.test;
 const absolutePathValue = /^(?:[\\/]|~|[A-Za-z]:[\\/])/;
@@ -54,9 +53,8 @@ export function validate(config: unknown): Finding[] {
   // kept as given. Every string, in every block: no secrets, no credentials in URLs, no machine-specific paths.
   const scan = (value: unknown, path: string) => {
     if (typeof value === 'string') {
-      const scrubbed = value.replace(/\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi, (url, info: string) => info.split(':').every(placeholder) ? '' : url);
       if (hasSecret(value) || secret.test(value)) add(path, 'secret');
-      else if (userInfo.test(scrubbed)) add(path, 'url-credentials');
+      else if (hasUrlCredentials(value)) add(path, 'url-credentials');
       if (absolutePath.test(value)) add(path, 'absolute-path', 'warning');
     } else if (Array.isArray(value)) value.forEach((item, index) => scan(item, `${path}[${index}]`));
     else if (isObject(value)) for (const [key, item] of Object.entries(value)) scan(item, path ? `${path}.${key}` : key);

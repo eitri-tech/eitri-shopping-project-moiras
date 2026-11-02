@@ -198,16 +198,26 @@ export function validPattern(pattern: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._*?-]+$/.test(pattern) && !pattern.includes('..') && /[A-Za-z0-9]/.test(pattern.split('/')[1]!);
 }
 
+// User info in a URL: user:password@ on any scheme, or a bare token@ on http(s). Shared by the records, the config and the scan.
+const urlCredentials = /\b(?:[a-z][\w+.-]*:\/\/[^\s/@:]{1,256}:[^\s/@]{1,256}@|https?:\/\/[^\s/@]{1,256}@)/i;
+const urlUserInfo = /\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi;
+
+/** True when a line carries a URL with real user info. Placeholder user info (`https://<user>:<pass>@host`) is documentation, not a credential. */
+export function hasUrlCredentials(line: string): boolean {
+  return urlCredentials.test(line.replace(urlUserInfo, (url, info: string) => (info.split(':').every(placeholder) ? '' : url)));
+}
+
 export const patterns: { rule: string; test: RegExp }[] = [
   // Machine-specific paths in prose: personal homes and the usual system roots (a route like /home/products is not one).
   { rule: 'absolute-path', test: /(?:(?<![\w.~-])\/(?:home|Users)\/[\w.-]+\/|(?<![\w.~-])\/(?:root|srv|opt|workspaces?|tmp|var|mnt|usr|etc)\/[\w.-]+|(?<![\w.-])~\/[\w.-]+|[A-Za-z]:\\Users\\[\w.-]+)/ },
-  // User info in a URL: user:password@ on any scheme, or a bare token@ on http(s).
-  { rule: 'url-credentials', test: /\b(?:[a-z][\w+.-]*:\/\/[^\s/@:]{1,256}:[^\s/@]{1,256}@|https?:\/\/[^\s/@]{1,256}@)/i },
+  // Tested with hasUrlCredentials, which exempts placeholders.
+  { rule: 'url-credentials', test: urlCredentials },
   { rule: 'personal-data', test: email },
   { rule: 'raw-conversation-reference', test: /\b[\w.-]{1,200}\.slack\.com\/archives\//i },
   {
+    // Known formats only, not an exhaustive list: GitHub, Slack, AWS, OpenAI (sk-, sk-proj-, sk-svcacct-...), Google (AIza...), JWT, private keys, Bearer.
     rule: 'secret',
-    test: /(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abprs]-[\w-]{10,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer\s+[\w.~+/-]{20,})/i,
+    test: /(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abprs]-[\w-]{10,}|AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|(?<![\w-])eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer\s+[\w.~+/-]{20,})/i,
   },
 ];
 
@@ -478,8 +488,8 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (line.length > maxLineLength) { add('line-too-long', 'error', index + 1); return; }
       if (hasSecret(line)) add('secret', 'error', index + 1);
       for (const { rule, test } of patterns) {
-        const safeLine = rule === 'url-credentials' ? line.replace(/\b[a-z][\w+.-]*:\/\/([^\s/@]{1,512})@/gi, (url, info: string) => info.split(':').every(placeholder) ? '' : url) : line;
-        const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s/@]{1,512}@/gi, '').replace(/\bgit@(?=[\w.-]+:)/g, '') : safeLine;
+        if (rule === 'url-credentials') { if (hasUrlCredentials(line)) add(rule, 'error', index + 1); continue; }
+        const candidate = rule === 'personal-data' ? line.replace(/\b[a-z][\w+.-]*:\/\/[^\s/@]{1,512}@/gi, '').replace(/\bgit@(?=[\w.-]+:)/g, '') : line;
         if (test.test(candidate) && !(rule === 'secret' && hasSecret(line))) add(rule, 'error', index + 1);
       }
     });

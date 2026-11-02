@@ -856,6 +856,37 @@ describe('security regressions', () => {
     ]) assert.equal(hasSecret(line), false, line);
   });
 
+  it('detects JWTs, Google keys, OpenAI project keys and URL credentials in records, without leaking them', t => {
+    const { local, write } = workspace(t);
+    const cases = [
+      ['eyJ' + 'hbGciOiJIUzI1NiJ9', 'eyJ' + 'zdWIiOiJmdWxhbm8ifQ', 'c2ln' + 'bmF0dXJlMTIzNDU2'].join('.'),
+      'AIza' + 'Sy' + '0'.repeat(33),
+      'sk-' + 'proj-' + 'Ab3dE5fG7hJ9kL1mN3pQ5rS7',
+      'sk-' + 'svcacct-' + 'Zx9Qw3Er7Ty1Ui5Op',
+      'https://' + 'alice' + ':' + 'hunter22' + '@' + 'example.com/org/repo.git',
+    ];
+    cases.forEach((value, index) => write('local', `learnings/patterns/f${index}.md`, patternDoc(`f${index}`, `Use ${value} aqui.`)));
+    const result = check(local);
+    for (let index = 0; index < cases.length; index++) {
+      const rule = index === cases.length - 1 ? 'url-credentials' : 'secret';
+      assert.ok(result.findings.some(f => f.path.endsWith(`/f${index}.md`) && f.rule === rule), `case ${index} (${rule})`);
+    }
+    assert.ok(!JSON.stringify(result).includes('hunter22'));
+    assert.ok(!JSON.stringify(result).includes('Ab3dE5fG7hJ9'));
+  });
+
+  it('does not flag a bare eyJ, a short sk- key, a placeholder URL or a URL without a password', t => {
+    const { local, write } = workspace(t);
+    const cases = [
+      'Token eyJ isolado no texto.',
+      'Use sk-abc123 como exemplo.',
+      'Clone https://<user>:<pass>@example.com/org/repo.git agora.',
+      'Clone https://example.com/org/repo.git agora.',
+    ];
+    cases.forEach((body, index) => write('local', `learnings/patterns/n${index}.md`, patternDoc(`n${index}`, body)));
+    assert.deepEqual(rules(local).filter(rule => /:(?:secret|url-credentials)$/.test(rule)), []);
+  });
+
   it('accepts an optional https reference_url on a solution and refuses anything else', t => {
     const { local, write } = workspace(t);
     const withUrl = (url: string) => solution('pending').replace('result: pending', `reference_url: ${url}\nresult: pending`);

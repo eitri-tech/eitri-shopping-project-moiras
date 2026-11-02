@@ -16,7 +16,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { hasSecret, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
+import { hasSecret, hasUrlCredentials, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
 
 export const usage = 'Usage: node learn-github.ts eligible --repo <owner/name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... | auto --repo <owner/name> --state <dir> --limit <n> [--since <date>] [--label <name>]... [--knowledge <dir>]... | revalidate --repo <owner/name> --state <dir> [--knowledge <dir>]... | scan | watermark get|set --state <dir> --repo <owner/name> [--pr <ts>] [--issue <ts>] | pending list|remove --state <dir> [--ref <owner/name#n>]...';
 
@@ -86,9 +86,9 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 const moment = (value: unknown): string | undefined => (typeof value === 'string' && timestamp.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
 const later = (a: string | undefined, b: string): string => (a === undefined || Date.parse(b) > Date.parse(a) ? b : a);
 
-/** True when any string of the item (title, body, branch, labels, file paths, comments) carries a secret. */
+/** True when any string of the item (title, body, branch, labels, file paths, comments) carries a secret or a credential in a URL. */
 function hasSecretIn(value: unknown, depth = 0): boolean {
-  if (typeof value === 'string') return value.split('\n').some(line => hasSecret(line) || secretPattern.test(line));
+  if (typeof value === 'string') return value.split('\n').some(line => hasSecret(line) || secretPattern.test(line) || hasUrlCredentials(line));
   if (depth > 6) return false;
   if (Array.isArray(value)) return value.some(item => hasSecretIn(item, depth + 1));
   if (isObject(value)) return Object.values(value).some(item => hasSecretIn(item, depth + 1));
