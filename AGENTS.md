@@ -76,7 +76,7 @@ Datas seguem a ISO 8601: no knowledge, só a data (`AAAA-MM-DD`, ex.: `indexed_a
 ## Ambiente
 
 - `nix develop` (ou `direnv allow`, que usa o `.envrc` com `use flake`) entra num shell com Node LTS, TypeScript (`tsc`), Python 3 e jq, fixados pelo `flake.lock`. O shell também expõe o `@types/node` em `.direnv/types` para o `tsc` e o editor.
-- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`). O Node precisa ser ≥ 22.18 (`engines` em `scripts/package.json`). As skills chamam os scripts pelo `scripts/run.mjs`, que confere a versão; executar um `.ts` direto continua valendo no Node novo, mas no antigo falha sem mensagem de versão. `MOIRAS_TEST_NODE_VERSION` simula a versão só nos testes (`run.test.ts`); `MOIRAS_TEST_NODE_OLD` aponta para um Node antigo e liga os testes do launcher com ele.
+- Sem Nix, use `nvm use` (`.nvmrc` = `lts/*`). O Node precisa ser ≥ 22.18 (`engines` em `scripts/package.json`). As skills chamam os scripts pelo `scripts/run.mjs`, que confere a versão; executar um `.ts` direto continua valendo no Node novo, mas no antigo falha sem mensagem de versão. Os testes simulam versões chamando `checkNodeVersion(versão)` de `run.mjs`; `MOIRAS_TEST_NODE_OLD` aponta para um Node antigo e liga os testes do launcher com ele.
 - Para atualizar as versões: `nix flake update` e commite o `flake.lock`.
 
 ## Convenções

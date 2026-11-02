@@ -1,7 +1,6 @@
 // Launcher dos scripts do Moiras. Node < 22.18 não executa .ts e falha com um erro que não diz a versão,
 // então este arquivo (JavaScript comum, legível em Node antigo) confere a versão antes de carregar o .ts.
 // Uso: node scripts/run.mjs <config|github|knowledge|learn-github|memory> [argumentos]
-// MOIRAS_TEST_NODE_VERSION existe só para os testes (run.test.ts): substitui a versão lida do processo.
 import { realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,7 +19,7 @@ function atLeast22_18(core, prerelease) {
 }
 
 // Retorna a mensagem de erro para a versão dada, ou null quando o Node serve.
-export function checkNodeVersion(version) {
+export function checkNodeVersion(version = process.versions.node) {
   const match = typeof version === 'string' ? SEMVER.exec(version) : null;
   if (!match) return 'O Moiras precisa do Node 22.18 ou mais novo (versão não identificada).';
   const core = [Number(match[1]), Number(match[2]), Number(match[3])];
@@ -29,7 +28,7 @@ export function checkNodeVersion(version) {
 }
 
 async function launch(argv) {
-  const message = checkNodeVersion(process.env.MOIRAS_TEST_NODE_VERSION ?? process.versions.node);
+  const message = checkNodeVersion();
   if (message !== null) {
     process.stderr.write(`${message}\n`);
     process.exitCode = 2;

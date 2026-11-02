@@ -8,18 +8,11 @@ const launcher = join(import.meta.dirname, 'run.mjs');
 const clis = ['config', 'github', 'knowledge', 'learn-github', 'memory'];
 const message = (found: string) => `O Moiras precisa do Node 22.18 ou mais novo (encontrado v${found}).`;
 
-// MOIRAS_TEST_NODE_VERSION is test-only: it is always removed from the child env so an outer value never leaks in.
-function childEnv(extra: Record<string, string> = {}) {
-  const env: Record<string, string> = { ...process.env, ...extra } as Record<string, string>;
-  if (!('MOIRAS_TEST_NODE_VERSION' in extra)) delete env.MOIRAS_TEST_NODE_VERSION;
-  return env;
-}
-
-function launch(args: string[], options: { node?: string; env?: Record<string, string>; input?: string } = {}) {
+function launch(args: string[], options: { node?: string; input?: string } = {}) {
   return spawnSync(options.node ?? process.execPath, [launcher, ...args], {
     encoding: 'utf8',
     input: options.input ?? '',
-    env: childEnv(options.env),
+    env: process.env,
   });
 }
 
@@ -48,26 +41,21 @@ describe('checkNodeVersion', () => {
 
   it('says the version is unknown when it is not a version string', () => {
     const unknown = 'O Moiras precisa do Node 22.18 ou mais novo (versão não identificada).';
-    assert.equal(checkNodeVersion(undefined), unknown);
+    assert.equal(checkNodeVersion(null as unknown as string), unknown);
     assert.equal(checkNodeVersion(''), unknown);
     assert.equal(checkNodeVersion('v22.18.0; rm -rf /'), unknown);
   });
 });
 
 describe('launcher', () => {
-  it('stops with message, exit 2 and no ERR_UNKNOWN_FILE_EXTENSION when the version is too old', () => {
-    const result = launch(['config', 'check'], { env: { MOIRAS_TEST_NODE_VERSION: '20.20.2' } });
-    assert.equal(result.status, 2);
-    assert.match(result.stderr, /22\.18/);
-    assert.equal(result.stderr, `${message('20.20.2')}\n`);
-    assert.doesNotMatch(result.stderr, /ERR_UNKNOWN_FILE_EXTENSION/);
-    assert.equal(result.stdout, '');
-  });
-
-  it('does not stop when the version is 22.18.0', () => {
-    const result = launch(['config'], { env: { MOIRAS_TEST_NODE_VERSION: '22.18.0' } });
+  it('does not stop on the running Node, which the suite already requires to be 22.18 or newer', () => {
+    const result = launch(['config']);
     assert.doesNotMatch(result.stderr, /precisa do Node/);
     assert.equal(result.status, 2); // usage of config, not the version error
+  });
+
+  it('defaults to the running Node version', () => {
+    assert.equal(checkNodeVersion(), null);
   });
 
   it('answers the same as the direct run when no arguments are given', () => {
