@@ -482,9 +482,10 @@ export function main(argv: string[], input?: string): { output: string; code: nu
   return { output: JSON.stringify({ ...selection, truncated }), code: 0 };
 }
 
-if (import.meta.main) {
+// Runs the CLI with the given arguments. The direct guard below calls it; run.mjs calls it after an import.
+export function runCli(argv: string[] = process.argv.slice(2)): void {
   try {
-    const result = main(process.argv.slice(2));
+    const result = main(argv);
     process.stdout.write(`${result.output}\n`);
     process.exitCode = result.code;
   } catch (error) {
@@ -494,3 +495,4 @@ if (import.meta.main) {
   }
 }
 
+if (import.meta.main) runCli();

@@ -36,7 +36,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 3. **Pular o que o knowledge já cobre.** Rode:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" issues <local-dir> <dir-do-knowledge-compartilhado>...
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge issues <local-dir> <dir-do-knowledge-compartilhado>...
    ```
 
    Passe o `dir` de **todos** os knowledges de `knowledge` (o local e os compartilhados que existam em disco). A saída tem `issues` (chave → ids de soluções e padrões que a citam, só de registros que passam no `check`) e `ids` (todo id e nome de arquivo em uso). Issue já citada vira `already-known` e não entra na proposta; os `ids` evitam colisão de identificador e de caminho, também com o que já existe nos compartilhados. Registro inválido não cobre a issue: rode `moiras-audit` para ele. Se o comando falhar (por exemplo, uma pasta de `learnings/` que é link simbólico ou não é diretório), **pare**: um índice parcial reimportaria issues ou repetiria ids. Relate o erro e peça ao usuário para corrigir o knowledge.
@@ -54,7 +54,7 @@ Só roda no modo interativo: não existe `--auto`, porque todo registro depende 
 8. **Conferir** e corrigir o que falhar. O `check` não confere se os ids citados em `source`, `issues` e `Soluções que funcionaram` existem: ele **não** pega referência pendurada, então confira por conta própria que todo id citado por padrão e decisão foi gravado (ou já existe) antes de relatar. Correção que mude o conteúdo de um registro volta ao usuário para um novo "sim":
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only learnings
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check <local-dir> --only learnings
    ```
 
 9. **Relatar**, sem texto de issue: quantos registros por tipo, o que ficou de fora e por quê, os avisos (`criteria-missing`, `knowledge-stale`) e a sugestão de `moiras-audit learnings` e, se o knowledge tem `repository`, de `moiras-publish`.
@@ -79,7 +79,7 @@ O `--from-git` lê PRs pela **camada de provedor** (`scripts/providers.ts`): Git
 **Seleção.** Rode, com o `dir` de **todos** os knowledges em disco:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-git.ts" eligible --provider <github|bitbucket> --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-git eligible --provider <github|bitbucket> --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
 ```
 
 A saída tem `candidates` (com `outcome`, `reason_candidates` quando for rejeitado, e `superseded_by` quando houver) e `skipped` (referência e motivo). Ela nunca imprime texto de PR, de comentário ou de revisão. Para o aprendizado **resolvido** de um PR, o passo de síntese e de aprovação é o dos passos 3 a 6 acima. Para a **abordagem rejeitada**, o registro é o da seção "Modelos de reserva" (`learnings/decisions/`), com `outcome: rejected`, `reason` (uma frase, sem texto bruto, até 300 caracteres), `reference_url` do PR e `imported_from: git`. Solução de Bitbucket leva `imported_from: git`, e a de GitHub, `imported_from: github`. O candidato traz `key` (a identidade de dedup: a referência do GitHub, e `bitbucket:dono/repo#número` no Bitbucket) e, quando é rejeitado e o PR fecha uma issue do mesmo dono e repositório, `issue` (`dono/repo#número`). Nos registros, `issue` do registro rejeitado é esse campo, opcional: sem `issue` no candidato, o campo é omitido. Na solução (PR mergeado), o `issue` do candidato é a issue que o PR fecha, quando fecha uma, e o registro segue a regra do `issue` de "Aprender com o GitHub" (chave do Jira primeiro).
@@ -92,7 +92,7 @@ Atalho de `--from-git --provider github`. Mesmo fluxo dos passos 3 a 9 acima (de
 
 **Fontes válidas.** PR **mergeado e não revertido** vira solução; PR fechado sem merge (ou substituído) só entra com motivo explícito no próprio PR, como abordagem rejeitada (ver "Aprender com qualquer provedor git"); issue fechada como `COMPLETED`. Ficam de fora, com o motivo: PR aberto (`not-merged`), PR fechado sem merge sem motivo (`no-reason`), PR revertido (`reverted`) e o próprio PR de revert (`is-revert`: título que começa com Revert, Reverte, Reverter, Revertendo, Desfaz ou Desfazer, ou texto, no título ou no corpo, que diga "This reverts #n", "Reverte o #n" ou "Desfaz o #n"), issue fechada como não planejada ou duplicada (`not-completed`) e issue que um PR já cobre (`covered-by-pr`, o aprendizado é o do PR; só vale a referência `closingIssuesReferences` do **mesmo dono e repositório**, a de outro repositório ou sem dono e repositório é ignorada). Só leitura: `gh pr list`, `gh issue list` e `gh pr view`/`gh issue view`; nada é comentado, rotulado nem fechado.
 
-**Repositórios.** Os do argumento (`<dono/repo>`) ou, sem argumento, os clones que o `github.ts local` encontra para o padrão de `index.github` (o dono vem do padrão). Só entra PR ou issue cuja URL é do **dono e** do repositório informados (um fork ou outro repositório de mesmo nome é `invalid`). A referência gravada continua `repositório#número`.
+**Repositórios.** Os do argumento (`<dono/repo>`) ou, sem argumento, os clones que o `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" github local` encontra para o padrão de `index.github` (o dono vem do padrão). Só entra PR ou issue cuja URL é do **dono e** do repositório informados (um fork ou outro repositório de mesmo nome é `invalid`). A referência gravada continua `repositório#número`.
 
 **Filtros.** `--since` e `--until` (`AAAA-MM-DD`, inclusivos; filtram `mergedAt` do PR e `closedAt` da issue) e `--label` (repetível; basta uma das labels). Servem também para reprocessar um período: o que o knowledge já cita é pulado, então rodar duas vezes não duplica.
 
@@ -109,7 +109,7 @@ Atalho de `--from-git --provider github`. Mesmo fluxo dos passos 3 a 9 acima (de
 2. **Selecionar.** Rode, passando o `dir` de **todos** os knowledges em disco (como no passo 3 de "Passos"):
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" eligible --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github eligible --repo <dono/repo> [--since AAAA-MM-DD] [--until AAAA-MM-DD] [--label <nome>]... --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>
    ```
 
    A saída tem `candidates` (referência `dono/repo#número`, `url`, `closed_at`, `jira_key` quando o título ou a branch do PR tem a chave, `closes` e `suggested_id`) e `skipped` (referência e motivo: os acima, mais `outside-period`, `label-mismatch`, `already-known`, `already-pending`, `secret` e `invalid`). Ela nunca imprime texto de PR ou de issue. **Segredo**: item com segredo em qualquer texto (título, descrição, branch, labels, arquivos, comentários) sai com `secret` e nunca vira registro; mostre-o ao usuário só pela referência.
@@ -124,33 +124,33 @@ Atalho de `--from-git --provider github`. Mesmo fluxo dos passos 3 a 9 acima (de
    **Contexto adicional e segredos.** O que você ler além do JSON do passo 1 (comentários, revisões e conversa do PR ou da issue, com `gh pr view <número> --repo <dono/repo> --json comments,reviews,files` ou `gh issue view ... --json comments`) passa **antes de propor** pelo detector, com a saída do `gh` na entrada:
 
    ```bash
-   gh pr view <número> --repo <dono/repo> --json comments,reviews,files | node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan
-   gh issue view <número> --repo <dono/repo> --json comments | node "${CLAUDE_PLUGIN_ROOT}/scripts/learn-github.ts" scan
+   gh pr view <número> --repo <dono/repo> --json comments,reviews,files | node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github scan
+   gh issue view <número> --repo <dono/repo> --json comments | node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github scan
    ```
 
    (o primeiro para um PR, o segundo para uma issue)
 
    `{"secret":true}` (código de saída 1) **bloqueia o item inteiro**: nada dele é proposto nem sintetizado, o usuário o vê só pela referência (`dono/repo#número`, motivo `secret`) e ele sai da lista pendente (`pending remove`), porque seria barrado de novo. `{"secret":false}` libera a leitura; o texto lido continua sendo só insumo da síntese.
 4. **Aprovar e gravar** como nos passos 6 e 7, com um registro por item:
-   - `issue`, nesta ordem: a chave do Jira quando o PR a traz (`jira_key`); senão a issue que o PR fecha (`issue` do candidato, `dono/repo#número`, do mesmo dono e repositório, quando há `closes`); senão a referência `dono/repo#número` do PR (`key`). O `knowledge.ts check` aceita os três formatos (registros da primeira versão, com `repositório#número` sem dono, e com `bitbucket:dono/repo#número`, continuam válidos e contam como conhecidos). O campo guarda uma só chave: com chave do Jira, a issue fechada pelo PR não entra no `issue`, então uma abordagem rejeitada que fecha a mesma issue não casa com essa solução; a dedup dela continua pela referência do PR (`reference_url`).
+   - `issue`, nesta ordem: a chave do Jira quando o PR a traz (`jira_key`); senão a issue que o PR fecha (`issue` do candidato, `dono/repo#número`, do mesmo dono e repositório, quando há `closes`); senão a referência `dono/repo#número` do PR (`key`). O `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check` aceita os três formatos (registros da primeira versão, com `repositório#número` sem dono, e com `bitbucket:dono/repo#número`, continuam válidos e contam como conhecidos). O campo guarda uma só chave: com chave do Jira, a issue fechada pelo PR não entra no `issue`, então uma abordagem rejeitada que fecha a mesma issue não casa com essa solução; a dedup dela continua pela referência do PR (`reference_url`).
    - `reference_url`: a `url` do PR ou da issue. **Obrigatória** neste modo (`reference-url-missing` no `check`): é como se audita e se remove o registro depois.
    - `imported_from: github` e, na `Observação`, "Importado do GitHub; confira antes de publicar."
    - `result: resolved` só para PR mergeado (a evidência é o merge); issue fechada sem PR ligado precisa do comentário de fechamento dizendo o que foi feito, senão não vira solução (`no-evidence`).
    - `id` e nome de arquivo: `suggested_id`.
-   Depois do "sim", **tire** da lista pendente o que foi gravado ou descartado: `learn-github.ts pending remove --state .moiras/learn-github --ref <ref>...`.
+   Depois do "sim", **tire** da lista pendente o que foi gravado ou descartado: `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github pending remove --state .moiras/learn-github --ref <ref>...`.
 5. **Conferir e relatar** como nos passos 8 e 9. O `check` roda sobre o que foi gravado; registro que falhar não é entregue.
 
 **Onde fica.** Só `learnings/` do knowledge `local`, fora do repositório do plugin. A lista pendente e a marca d'água ficam em `.moiras/learn-github/` (`pending.json` e `watermark.json`), estado da máquina que nunca vai para um knowledge nem para um PR.
 
 ### Lista pendente da coleta automática
 
-O `moiras-sync` (`--auto`, ou o interativo, depois da sincronização) roda `learn-github.ts auto`: primeiro **tira da lista pendente** o que deixou de ser elegível (PR que um PR novo reverteu, mesmo que o original nem venha na coleta, issue que não está mais fechada como resolvida, item que o knowledge já cita ou que passou a ter segredo) e depois pega só o que fechou **desde a rodada anterior** (marca d'água por `dono/repo`, uma para PRs e outra para issues), aplica as mesmas regras e filtros e **só acrescenta à lista pendente**. A marca d'água é por `dono/repo`: marcas da versão anterior (só o nome do repositório) não são lidas, e a primeira rodada de cada repositório pede `--since` de novo. Não grava nenhum registro: a regra de que o `moiras-learn` só escreve com o "sim" do usuário à lista exata continua valendo.
+O `moiras-sync` (`--auto`, ou o interativo, depois da sincronização) roda `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github auto`: primeiro **tira da lista pendente** o que deixou de ser elegível (PR que um PR novo reverteu, mesmo que o original nem venha na coleta, issue que não está mais fechada como resolvida, item que o knowledge já cita ou que passou a ter segredo) e depois pega só o que fechou **desde a rodada anterior** (marca d'água por `dono/repo`, uma para PRs e outra para issues), aplica as mesmas regras e filtros e **só acrescenta à lista pendente**. A marca d'água é por `dono/repo`: marcas da versão anterior (só o nome do repositório) não são lidas, e a primeira rodada de cada repositório pede `--since` de novo. Não grava nenhum registro: a regra de que o `moiras-learn` só escreve com o "sim" do usuário à lista exata continua valendo.
 
 Com `--from-github --pending`, esta skill **revalida a elegibilidade antes de propor**: um item entrou na lista no passado e o PR pode ter sido revertido depois.
 
-1. `learn-github.ts pending list --state .moiras/learn-github` e, por repositório, a data (`closed_at`) do item mais antigo.
+1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github pending list --state .moiras/learn-github` e, por repositório, a data (`closed_at`) do item mais antigo.
 2. Colete de novo com os comandos do passo 1 de "Passos" (`--search 'updated:>=<essa data>'` para PRs e `'closed:>=<essa data>'` para issues), para ver também os reverts que vieram depois.
-3. Rode `learn-github.ts revalidate --repo <dono/repo> --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>`. A saída tem `valid` (pode propor), `removed` (já saiu da lista, com o motivo: `reverted`, `is-revert`, `not-completed`, `already-known`, `secret`...) e `unverified` (a coleta não mostrou o item: **não proponha**; refaça com data mais antiga ou `--limit` maior). Mostre ao usuário o que saiu da lista e por quê, só pela referência.
+3. Rode `node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github revalidate --repo <dono/repo> --state .moiras/learn-github --knowledge <local-dir> [--knowledge <dir>]... < <arquivo>`. A saída tem `valid` (pode propor), `removed` (já saiu da lista, com o motivo: `reverted`, `is-revert`, `not-completed`, `already-known`, `secret`...) e `unverified` (a coleta não mostrou o item: **não proponha**; refaça com data mais antiga ou `--limit` maior). Mostre ao usuário o que saiu da lista e por quê, só pela referência.
 4. Só o que está em `valid` segue: releia no GitHub cada item (síntese, arquivos), passe o contexto pelo `scan` (ver "Contexto adicional e segredos") e siga pelos passos de 3 a 5 acima, com a aprovação do usuário à lista exata. A lista pendente nunca tem texto de PR ou de issue: só referência, URL, data e chave do Jira.
 
 > **Ponto de decisão.** A escolha de a coleta automática só montar a lista é única e está marcada em `autoDisposition`, em `scripts/learn-github.ts`. Gravar direto, sem o "sim", seria outra decisão: exigiria mudar essa constante, o ramo correspondente do `auto`, esta seção e a regra do `AGENTS.md`. Não está implementado.
