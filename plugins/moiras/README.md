@@ -98,6 +98,7 @@ Limites de segurança:
 ```
 moiras/
 ├── .claude-plugin/plugin.json      # manifesto
+├── scripts/run.mjs                 # launcher: confere a versão do Node (≥ 22.18) e chama os scripts pelo nome
 ├── scripts/memory.ts               # memória das etapas (hash + JSONL)
 ├── scripts/config.ts               # cria e valida o .moiras/sources.json
 ├── scripts/github.ts               # repositórios do GitHub por padrão (index.github): match, plan-clone, local e clone
