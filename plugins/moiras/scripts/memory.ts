@@ -283,14 +283,11 @@ export function main(argv: string[], stdin: () => string = () => readFileSync(0,
   return JSON.stringify(query(stage, values));
 }
 
-// Runs the CLI with the given arguments. The direct guard below calls it; run.mjs calls it after an import.
-export function runCli(argv: string[] = process.argv.slice(2)): void {
+if (import.meta.main) {
   try {
-    process.stdout.write(`${main(argv)}\n`);
+    process.stdout.write(`${main(process.argv.slice(2))}\n`);
   } catch (error) {
     process.stderr.write(`${(error as Error).message}\n`);
     process.exitCode = 2;
   }
 }
-
-if (import.meta.main) runCli();

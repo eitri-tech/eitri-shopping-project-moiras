@@ -202,10 +202,9 @@ export function main(argv: string[], input?: string): { output: string; code: nu
   throw new Error(usage);
 }
 
-// Runs the CLI with the given arguments. The direct guard below calls it; run.mjs calls it after an import.
-export function runCli(argv: string[] = process.argv.slice(2)): void {
+if (import.meta.main) {
   try {
-    const result = main(argv);
+    const result = main(process.argv.slice(2));
     process.stdout.write(`${result.output}\n`);
     process.exitCode = result.code;
   } catch (error) {
@@ -214,5 +213,3 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
     process.exitCode = 2;
   }
 }
-
-if (import.meta.main) runCli();

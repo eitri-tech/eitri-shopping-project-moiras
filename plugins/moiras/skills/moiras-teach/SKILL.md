@@ -27,7 +27,7 @@ A Átropos só aprende critério quando o usuário discorda de um veredito. Esta
 6. **Conferir** e corrigir o que falhar (correção que mude o conteúdo volta ao usuário):
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" knowledge check <local-dir> --only criteria
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.ts" check <local-dir> --only criteria
    ```
 
 7. **Relatar** o que foi gravado, os avisos `knowledge-stale` e sugerir `moiras-publish` se o time deve compartilhar a regra.
