@@ -131,6 +131,24 @@ function assertInteractionKey(stage: Stage, key: string): void {
   }
 }
 
+// The model assembles the content of `jira:*` records, so its shape is pinned: a closed
+// field list, and a missing field hashes the same as an explicit null.
+export const jiraContentFields: readonly string[] = [
+  'summary', 'description', 'created_at', 'priority', 'status', 'duedate',
+  'end_date', 'end_date_source', 'buffer_days', 'agency',
+];
+
+function normalizeContent(stage: Stage, key: string, content: unknown): unknown {
+  if (stage !== 'clotho' || !key.startsWith('jira:')) return content;
+  if (!isObject(content)) throw new Error('Invalid content: jira record needs an object');
+  const normalized: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(content)) {
+    if (!jiraContentFields.includes(name)) throw new Error(`Unknown jira content field: ${name}`);
+    if (value !== null && value !== undefined) normalized[name] = value;
+  }
+  return normalized;
+}
+
 function validTimestamp(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const match = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(value);
@@ -219,7 +237,7 @@ export function record(
       }
     }
     const { content, ...rest } = entry;
-    if (Object.hasOwn(entry, 'content')) rest.hash = hash(content);
+    if (Object.hasOwn(entry, 'content')) rest.hash = hash(normalizeContent(stage, entry.key, content));
     else if (!Object.hasOwn(entry, 'hash')) throw new Error('Record without content or hash.');
     rest.ts ??= now();
     return rest as MemoryRecord;

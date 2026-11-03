@@ -62,6 +62,85 @@ describe('record', () => {
     assert.equal(record('clotho', { key: 'PROJ-1', content: { ...content, buffer_days: null } }, { dir })[0].change, 'changed');
   });
 
+  describe('jira content', () => {
+    const full = {
+      summary: 'Fix checkout', description: 'Details', created_at: '2026-10-01T10:00:00Z', priority: 'High',
+      status: 'To Do', duedate: '2026-11-30', end_date: '2026-11-30', end_date_source: 'issue', buffer_days: 15,
+    };
+    const nulls = { agency: null, duedate: null, buffer_days: null };
+
+    it('treats omitted fields and null alike', t => {
+      const { dir } = fixture(t);
+      const omitted = { summary: 'Fix checkout', status: 'To Do' };
+      const first = record('clotho', { key: 'jira:PROJ-123', content: omitted }, { dir })[0];
+      const second = record('clotho', { key: 'jira:PROJ-123', content: { ...omitted, ...nulls } }, { dir })[0];
+      assert.equal(first.change, 'new');
+      assert.equal(second.change, 'unchanged');
+      assert.equal(second.hash, first.hash);
+    });
+
+    it('detects real changes, including agency appearing', t => {
+      const { dir } = fixture(t);
+      record('clotho', { key: 'jira:PROJ-123', content: full }, { dir });
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: { ...full, status: 'Done' } }, { dir })[0].change, 'changed');
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: { ...full, status: 'Done' } }, { dir })[0].change, 'unchanged');
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: { ...full, status: 'Done', agency: 'Acme Agency' } }, { dir })[0].change, 'changed');
+    });
+
+    it('keeps an empty string distinct from null', t => {
+      const { dir } = fixture(t);
+      record('clotho', { key: 'jira:PROJ-123', content: { summary: 'S', description: null } }, { dir });
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: { summary: 'S', description: '' } }, { dir })[0].change, 'changed');
+    });
+
+    it('ignores a change that is only in updated_at', t => {
+      const { dir } = fixture(t);
+      record('clotho', { key: 'jira:PROJ-123', content: full, updated_at: '2026-10-02T10:00:00Z' }, { dir });
+      const again = record('clotho', { key: 'jira:PROJ-123', content: full, updated_at: '2026-10-03T10:00:00Z' }, { dir });
+      assert.equal(again[0].change, 'unchanged');
+    });
+
+    it('refuses unknown fields and non-object content', t => {
+      const { dir, file } = fixture(t);
+      assert.throws(() => record('clotho', { key: 'jira:PROJ-123', content: { foo: 1 } }, { dir }), /Unknown jira content field: foo/);
+      assert.throws(() => record('clotho', { key: 'jira:PROJ-123', content: { summary: 'S', updated_at: 'x' } }, { dir }), /Unknown jira content field: updated_at/);
+      for (const content of ['text', ['summary'], null, 3]) {
+        assert.throws(() => record('clotho', { key: 'jira:PROJ-123', content }, { dir }), /Invalid content: jira record needs an object/);
+      }
+      assert.equal(existsSync(file), false);
+    });
+
+    it('accepts an empty object (all fields empty)', t => {
+      const { dir } = fixture(t);
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: {} }, { dir })[0].change, 'new');
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', content: nulls }, { dir })[0].change, 'unchanged');
+    });
+
+    it('does not validate hash-only entries', t => {
+      const { dir } = fixture(t);
+      assert.equal(record('clotho', { key: 'jira:PROJ-123', hash: digest('x') }, { dir })[0].change, 'new');
+    });
+
+    it('writes nothing when one record of the batch is invalid', t => {
+      const { dir, file } = fixture(t);
+      assert.throws(() => record('clotho', [
+        { key: 'jira:PROJ-123', content: full }, { key: 'jira:PROJ-124', content: { foo: 1 } },
+      ], { dir }), /Unknown jira content field/);
+      assert.equal(existsSync(file), false);
+    });
+
+    it('leaves other keys and stages unconstrained', t => {
+      const { dir } = fixture(t);
+      const contents = [{ foo: 1 }, 'text', ['a'], null];
+      for (const [index, content] of contents.entries()) {
+        const expected = index === 0 ? 'new' : 'changed';
+        assert.equal(record('clotho', { key: 'slack:C1:1.0', content }, { dir })[0].change, expected);
+        assert.equal(record('clotho', { key: 'interaction:abc', content }, { dir })[0].change, expected);
+        assert.equal(record('lachesis', { key: 'jira:PROJ-123', content }, { dir })[0].change, expected);
+      }
+    });
+  });
+
   it('compares batch duplicates against earlier entries and the stored file', t => {
     const { dir } = fixture(t);
     record('clotho', { key: 'A', hash: digest('old') }, { dir });
@@ -349,6 +428,17 @@ describe('CLI', () => {
     const result = cli(['record', 'invalid']);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /Usage:/);
+  });
+
+  it('refuses an unknown jira content field with a non-zero exit', t => {
+    const { dir } = fixture(t);
+    const bad = cli(['record', 'clotho', '--dir', dir], '{"key":"jira:PROJ-123","content":{"foo":1}}');
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /Unknown jira content field: foo/);
+    const first = cli(['record', 'clotho', '--dir', dir], '{"key":"jira:PROJ-123","content":{"summary":"S"}}');
+    const second = cli(['record', 'clotho', '--dir', dir], '{"key":"jira:PROJ-123","content":{"summary":"S","agency":null}}');
+    assert.equal(JSON.parse(first.stdout)[0].change, 'new');
+    assert.equal(JSON.parse(second.stdout)[0].change, 'unchanged');
   });
 
   it('prints the hash of stdin', () => {
