@@ -95,6 +95,8 @@ const githubRef = /^(?:[A-Za-z0-9][A-Za-z0-9-]*\/)?[A-Za-z0-9_][A-Za-z0-9._-]*#\
 /** Origin of a learning taken from Bitbucket: `bitbucket:<workspace>/<repository>#<number>` (see gitSource). */
 const bitbucketRef = /^bitbucket:[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9._-]*#\d+$/;
 const issueKey = (value: string): boolean => jiraKey.test(value) || githubRef.test(value) || bitbucketRef.test(value);
+/** The rule of `issue` for a rejected approach, also applied to each item of its `issues`: `owner/repository#n` or a Jira key. */
+const rejectedIssue = (value: string): boolean => closedIssueRef.test(value) || jiraKey.test(value);
 // Optional pointer of a solution (usually a GitHub PR): a real https URL, no credentials, no whitespace.
 export function validReferenceUrl(value: string): boolean {
   if (!value || /\s/.test(value)) return false;
@@ -321,8 +323,9 @@ export function issues(dirs: string | string[]): { issues: Record<string, { solu
       // Empty and TODO records are not evidence (see moiras-triage), so they do not cover an issue.
       if (invalid.has(entry.path) || !entry.doc!.body.trim() || /\bTODO\b/.test(entry.doc!.body)) continue;
       const id = stem;
-      const raw = entry.kind.type === 'pattern' ? fields.issues : entry.kind.type === 'solution' || entry.kind.type === 'decision' ? fields.issue : undefined;
-      const keys = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map(key => key.trim()).filter(Boolean);
+      // A solution or a decision cites its `issue` and every item of `issues`; a pattern cites its `issues` only.
+      const raws = entry.kind.type === 'pattern' ? [fields.issues] : entry.kind.type === 'solution' || entry.kind.type === 'decision' ? [fields.issue, fields.issues] : [];
+      const keys = raws.flatMap(raw => (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [])).map(key => key.trim()).filter(Boolean);
       // The source URL of a solution (a GitHub PR or issue) is a second, canonical key: `<owner>/<repository>#<n>`. A learning from
       // GitHub stays known even when its `issue` is a Jira key that later goes missing from the title or branch of the PR.
       const source = entry.kind.type !== 'pattern' && typeof fields.reference_url === 'string' ? gitSource(fields.reference_url) : undefined;
@@ -461,7 +464,7 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
         else if (asScalar(fields.reason).length > maxReasonLength) add('reason-too-long', 'error');
         if (asScalar(fields.imported_from) !== 'git') add('rejected-import-invalid', 'error');
         // Optional: the issue the rejected PR closes, `<owner>/<repository>#<n>` (same owner and repository as the PR) or its Jira key.
-        if (fields.issue !== undefined && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !closedIssueRef.test(asScalar(fields.issue)) && !jiraKey.test(asScalar(fields.issue))))) add('issue-invalid', 'error');
+        if (fields.issue !== undefined && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !rejectedIssue(asScalar(fields.issue))))) add('issue-invalid', 'error');
       }
       if (kind.type === 'criterion' && fields.replaces !== undefined && (!Array.isArray(fields.replaces) || fields.replaces.some(id => !/^(?:[a-zA-Z0-9_-]+|knowledge:[^/\s]+\/criteria\/[a-zA-Z0-9_.-]+\.md)$/.test(id)))) add('replaces-invalid', 'error');
       if (kind.type === 'criterion' && asText(fields.applies_to) && !appliesTo.has(asScalar(fields.applies_to))) add('applies-to-invalid', 'error');
@@ -470,6 +473,12 @@ export function check(dir: string, only?: Scope): { checked: number; findings: F
       if (kind.type === 'solution' && !results.has(asScalar(fields.result))) add('result-invalid', 'error');
       if ((kind.type === 'solution' || kind.type === 'decision') && fields.reference_url !== undefined && (Array.isArray(fields.reference_url) || (!fieldPlaceholder.test(asScalar(fields.reference_url)) && !validReferenceUrl(asScalar(fields.reference_url))))) add('reference-url-invalid', 'error');
       if (kind.type === 'solution' && asText(fields.issue) && (Array.isArray(fields.issue) || (!fieldPlaceholder.test(asScalar(fields.issue)) && !issueKey(asScalar(fields.issue))))) add('issue-invalid', 'error');
+      // Optional list of further issues, each checked with the rule of `issue` for the same record (a non-rejected decision has none, as for `issue`).
+      if ((kind.type === 'solution' || kind.type === 'decision') && fields.issues !== undefined) {
+        const rule = kind.type === 'solution' ? issueKey : rejected ? rejectedIssue : undefined;
+        const list = Array.isArray(fields.issues) ? fields.issues : [];
+        if (!Array.isArray(fields.issues) || list.length === 0 || list.some(item => !fieldPlaceholder.test(item) && rule !== undefined && !rule(item))) add('issues-invalid', 'error');
+      }
       // A learning imported from GitHub points at its source PR or issue, so it can be audited and removed later.
       if ((kind.type === 'solution' || kind.type === 'decision') && historyOrigins.includes(asScalar(fields.imported_from)) && !validReferenceUrl(asScalar(fields.reference_url))) add('reference-url-missing', 'error');
       if ((kind.type === 'solution' || kind.type === 'pattern') && asText(fields.repositories)) {
