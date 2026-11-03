@@ -87,7 +87,7 @@ describe('which sources count', () => {
   });
 
   it('does not learn an issue twice through the PR that closed it', () => {
-    const selection = select({ prs: [pull(1, { closingIssuesReferences: [closing(10)] }), pull(2, { closingIssuesReferences: [closing(11)], title: 'Fix cart' }), pull(3, { title: 'Revert "Fix cart"' })], issues: [ticket(10), ticket(11)] }, { owner: 'acme', repository: repo });
+    const selection = select({ prs: [pull(1, { closingIssuesReferences: [closing(10)] }), pull(2, { closingIssuesReferences: [closing(11)], title: 'Fix cart' }), pull(3, { title: 'Revert "Fix cart"', mergedAt: '2026-10-12T12:00:00Z' })], issues: [ticket(10), ticket(11)] }, { owner: 'acme', repository: repo });
     assert.equal(reasons(selection)[`${slug}#10`], 'covered-by-pr');
     assert.equal(reasons(selection)[`${slug}#11`], 'reverted');
     assert.deepEqual(selection.candidates[0]!.closes, [`${slug}#10`]);
@@ -310,7 +310,7 @@ describe('review fixes', () => {
   it('takes a pending item off the list when it is no longer eligible, and keeps what the data does not show', t => {
     const dir = stateDir(t);
     queue(dir, { prs: [pull(1), pull(2), pull(3), pull(5)], issues: [ticket(10), ticket(11)] });
-    const data = { prs: [pull(1, { title: 'Revert "Keep the orderFormId (3)"' }), pull(2), pull(3), pull(5, { body: `token ${'ghp_'}${'c'.repeat(30)}` })], issues: [ticket(10, { stateReason: 'NOT_PLANNED' })] };
+    const data = { prs: [pull(1, { title: 'Revert "Keep the orderFormId (3)"', mergedAt: '2026-10-12T12:00:00Z' }), pull(2), pull(3), pull(5, { body: `token ${'ghp_'}${'c'.repeat(30)}` })], issues: [ticket(10, { stateReason: 'NOT_PLANNED' })] };
     const known = new Set([`${slug}#2`]);
     const result = revalidate(data, { owner: 'acme', repository: repo, state: dir, known });
     assert.deepEqual(result.valid, []);
@@ -469,5 +469,71 @@ describe('command line', () => {
       assert.throws(() => main(argv, '{}'), /Usage:/, argv.join(' '));
     }
     assert.throws(() => main(['eligible', '--repo', slug], 'not json'), /Invalid JSON/);
+  });
+
+  it('#77: a revert is matched by number first, and a qualified ref counts only for this repository', () => {
+    const own = select({ prs: [pull(31), pull(32, { title: 'Undo', body: `Reverts ${slug}#31`, mergedAt: '2026-10-12T12:00:00Z' })] }, { owner: 'acme', repository: repo });
+    assert.equal(reasons(own)[`${slug}#31`], 'reverted');
+    const other = select({ prs: [pull(31), pull(32, { title: 'Undo', body: 'Reverts outro/repo#31', mergedAt: '2026-10-12T12:00:00Z' })] }, { owner: 'acme', repository: repo });
+    assert.deepEqual(refs(other), [`${slug}#31`, `${slug}#32`]);
+    // A number wins over the title: the quoted title is not used when the revert names a PR.
+    const byNumber = select({ prs: [pull(1), pull(2, { title: 'Keep the orderFormId (1)' }), pull(3, { title: 'Revert "Keep the orderFormId (1)"', body: 'Reverts #1', mergedAt: '2026-10-12T12:00:00Z' })] }, { owner: 'acme', repository: repo });
+    assert.equal(reasons(byNumber)[`${slug}#1`], 'reverted');
+    assert.deepEqual(refs(byNumber), [`${slug}#2`]);
+  });
+
+  it('#77: the title fallback marks only the most recent PR merged before the revert, and ties go to the higher number', () => {
+    const title = 'Keep the cart';
+    const revert = pull(9, { title: `Revert "${title}"`, mergedAt: '2026-10-15T12:00:00Z' });
+    const run = (prs: unknown[]) => select({ prs }, { owner: 'acme', repository: repo });
+    const picked = run([
+      pull(1, { title, mergedAt: '2026-10-10T12:00:00Z' }), pull(2, { title, mergedAt: '2026-10-12T12:00:00Z' }),
+      pull(3, { title, mergedAt: '2026-10-20T12:00:00Z' }), revert,
+    ]);
+    assert.deepEqual(reasons(picked), { [`${slug}#2`]: 'reverted', [`${slug}#9`]: 'is-revert' });
+    assert.deepEqual(refs(picked), [`${slug}#1`, `${slug}#3`]);
+    const tie = run([pull(4, { title, mergedAt: '2026-10-12T12:00:00Z' }), pull(5, { title, mergedAt: '2026-10-12T12:00:00Z' }), revert]);
+    assert.equal(reasons(tie)[`${slug}#5`], 'reverted');
+    assert.deepEqual(refs(tie), [`${slug}#4`]);
+    // Merged at the same moment as the revert: not before it, so nothing is marked.
+    const same = run([pull(6, { title, mergedAt: '2026-10-15T12:00:00Z' }), revert]);
+    assert.deepEqual(refs(same), [`${slug}#6`]);
+  });
+
+  it('#77: revalidate applies the same revert matching', t => {
+    const dir = join(tmp(t), 'state');
+    const queue = (input: unknown) => auto(input, { owner: 'acme', repository: repo, state: dir, since: '2026-10-01', limit: 100 });
+    const title = 'Keep the cart';
+    queue({ prs: [pull(1, { title, mergedAt: '2026-10-10T12:00:00Z' }), pull(2, { title, mergedAt: '2026-10-12T12:00:00Z' }), pull(3, { title: 'Other', mergedAt: '2026-10-11T12:00:00Z' })] });
+    const data = { prs: [
+      pull(1, { title, mergedAt: '2026-10-10T12:00:00Z' }), pull(2, { title, mergedAt: '2026-10-12T12:00:00Z' }), pull(3, { title: 'Other', mergedAt: '2026-10-11T12:00:00Z' }),
+      pull(8, { title: `Revert "${title}"`, mergedAt: '2026-10-15T12:00:00Z' }), pull(9, { title: 'Undo', body: 'Reverts outro/repo#3', mergedAt: '2026-10-16T12:00:00Z' }),
+    ] };
+    const result = revalidate(data, { owner: 'acme', repository: repo, state: dir });
+    assert.deepEqual(result.removed.map(item => `${item.ref}:${item.reason}`), [`${slug}#2:reverted`]);
+    assert.deepEqual(result.valid, [`${slug}#1`, `${slug}#3`]);
+  });
+
+  it('#76: the issue a PR closes counts as already known, so the PR is already-known', () => {
+    const data = { prs: [pull(5, { closingIssuesReferences: [closing(20)] }), pull(6)], issues: [ticket(20)] };
+    const known = select(data, { owner: 'acme', repository: repo, known: new Set([`${slug}#20`]) });
+    assert.equal(reasons(known)[`${slug}#5`], 'already-known');
+    assert.deepEqual(refs(known), [`${slug}#6`]);
+    // The old format of the known ref (no owner) is read too.
+    const old = select(data, { owner: 'acme', repository: repo, known: new Set([`${repo}#20`]) });
+    assert.equal(reasons(old)[`${slug}#5`], 'already-known');
+  });
+
+  it('closed PR whose reason is only in a review is kept by auto and by revalidate when the collection carries reviews', t => {
+    const dir = join(tmp(t), 'state');
+    const queue = (input: unknown) => auto(input, { owner: 'acme', repository: repo, state: dir, since: '2026-10-01', limit: 100 });
+    const rejected = pull(7, { state: 'CLOSED', mergedAt: null, closedAt: '2026-10-20T12:00:00Z', comments: [],
+      reviews: [{ author: { login: 'beltrana' }, body: 'Vamos por outro caminho.', submittedAt: '2026-10-19T12:00:00Z' }] });
+    const first = queue({ prs: [rejected] });
+    assert.deepEqual(first.candidates.map(item => item.ref), [`${slug}#7`]);
+    const result = revalidate({ prs: [rejected] }, { owner: 'acme', repository: repo, state: dir });
+    assert.deepEqual(result.valid, [`${slug}#7`]);
+    assert.deepEqual(result.removed, []);
+    assert.deepEqual(readPending(dir).map(item => item.ref), [`${slug}#7`]);
   });
 });

@@ -125,8 +125,9 @@ const revertTitle = /^(?:revert(?:s|e|er|ing|endo)?|desfaz(?:er)?)(?![\p{L}\p{N}
 const revertQuoted = /^(?:revert(?:s|e|er|ing|endo)?|desfaz(?:er)?)\s+"(.+)"\s*$/iu;
 // A negation right before the verb ("não desfaz o #3", "does not reverts #3", "never reverts #3") is not a revert.
 const notNegated = String.raw`(?<!\b(?:n[ãa]o|nunca|not|never|n't)\s)(?<!n't\s)`;
-// `#n` alone: "org/repo#5" or "x#5" names another repository (or something else) and is ignored.
-const numberRef = String.raw`[^\n#]{0,80}?(?<![\p{L}\p{N}_/.-])#(\d{1,9})\b`;
+// `#n` or `owner/repo#n`: group 1 is the qualifying `owner/repo` (when written), group 2 the number. A qualified ref counts only for the
+// repository being read (`revertsOf` drops the others); "x#5" glued to a word is not a PR ref at all.
+const numberRef = String.raw`[^\n#]{0,80}?(?:(?<![\p{L}\p{N}_/.-])([A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9_][A-Za-z0-9._-]*)#|(?<![\p{L}\p{N}_/.-])#)(\d{1,9})\b`;
 // A plain English "revert" counts only in the title of a revert PR ("does not revert #3" is not one); the other verbs name a PR in any text.
 const revertNamed = new RegExp(`${notNegated}(?<![\\p{L}\\p{N}])(?:reverts|reverte|reverter|revertendo|desfaz|desfazer)(?![\\p{L}\\p{N}])${numberRef}`, 'giu');
 const revertNamedInTitle = new RegExp(`${notNegated}(?<![\\p{L}\\p{N}])(?:reverts?|reverte|reverter|reverting|revertendo|desfaz|desfazer)(?![\\p{L}\\p{N}])${numberRef}`, 'giu');
@@ -135,23 +136,53 @@ const supersedeLine = /^(?:this (?:pr |pull request )?)?(?:supersedes|replaces|s
 
 const startsWithRevert = (pr: Pull): boolean => revertTitle.test(pr.title.trim());
 
-/** Numbers of the PRs that this PR says it reverts (in its title and body). */
-function revertsOf(pr: Pull): number[] {
+/**
+ * Numbers of the PRs that this PR says it reverts (in its title and body). `#n` and `owner/repo#n` of the repository being read
+ * count; a ref qualified with another repository does not (that PR is not here).
+ */
+function revertsOf(pr: Pull, owner: string, repository: string): number[] {
   const title = pr.title.trim();
-  return [...`${title}\n${pr.body}`.matchAll(startsWithRevert(pr) ? revertNamedInTitle : revertNamed)].map(match => Number(match[1]));
+  const own = `${owner}/${repository}`.toLowerCase();
+  return [...`${title}\n${pr.body}`.matchAll(startsWithRevert(pr) ? revertNamedInTitle : revertNamed)]
+    .filter(match => match[1] === undefined || match[1].toLowerCase() === own)
+    .map(match => Number(match[2]));
 }
 
 /** A revert PR: a title that starts like one, or a text that says it reverts a PR ("This reverts #n", "Reverte o #n"). */
-const isRevert = (pr: Pull): boolean => startsWithRevert(pr) || revertsOf(pr).length > 0;
+const isRevert = (pr: Pull, owner: string, repository: string): boolean => startsWithRevert(pr) || revertsOf(pr, owner, repository).length > 0;
 
-/** PRs that revert PRs: by quoted title (`Revert "<title>"`) and by number. Only a merged revert counts: an open or closed one reverted nothing. */
-export function revertedBy(pulls: Pull[]): { titles: Set<string>; numbers: Set<number> } {
-  const titles = new Set<string>(), numbers = new Set<number>();
+/**
+ * PRs that were reverted by a merged revert (an open or closed one reverted nothing). The number comes first: a revert that names
+ * a PR of this repository ("This reverts #n", "Reverts owner/repo#n") marks that PR. Only a revert with no number falls back to its
+ * quoted title (`Revert "<title>"`), and then it marks one PR: the most recent one with that title merged BEFORE the revert (on a
+ * tie of `mergedAt`, the higher number), not every PR that happens to share the title. `titles` maps each such title to the
+ * `mergedAt` of its reverts.
+ */
+export function revertedBy(pulls: Pull[], owner: string, repository: string): { titles: Map<string, string[]>; numbers: Set<number> } {
+  const titles = new Map<string, string[]>(), numbers = new Set<number>();
   for (const pr of pulls) {
-    if (pr.state !== 'merged' || !moment(pr.mergedAt)) continue;
+    const mergedAt = moment(pr.mergedAt);
+    if (pr.state !== 'merged' || !mergedAt) continue;
+    const named = revertsOf(pr, owner, repository);
+    for (const number of named) numbers.add(number);
     const byTitle = revertQuoted.exec(pr.title.trim());
-    if (byTitle) titles.add(byTitle[1]!.trim().toLowerCase());
-    for (const number of revertsOf(pr)) numbers.add(number);
+    if (byTitle && !named.length) {
+      const title = byTitle[1]!.trim().toLowerCase();
+      titles.set(title, [...(titles.get(title) ?? []), mergedAt]);
+    }
+  }
+  for (const [title, times] of titles) {
+    for (const revertTime of times) {
+      let target: Pull | undefined, targetTime = -Infinity;
+      for (const pr of pulls) {
+        const at = moment(pr.mergedAt);
+        if (pr.state !== 'merged' || !at || pr.title.trim().toLowerCase() !== title || isRevert(pr, owner, repository)) continue;
+        const time = Date.parse(at);
+        if (time >= Date.parse(revertTime)) continue;
+        if (time > targetTime || (time === targetTime && pr.number > target!.number)) { target = pr; targetTime = time; }
+      }
+      if (target) numbers.add(target.number);
+    }
   }
   return { titles, numbers };
 }
@@ -235,23 +266,23 @@ export function selectItems(input: Input, options: Options): Selection {
   const result: Selection = { provider, owner, repository, candidates: [], skipped: [], watermark: {} };
   const pulls = input.pulls;
 
-  const { titles: revertTitles, numbers: revertNumbers } = revertedBy(pulls);
-  const reverted = (pr: Pull): boolean => revertNumbers.has(pr.number) || revertTitles.has(pr.title.trim().toLowerCase());
+  const { numbers: revertNumbers } = revertedBy(pulls, owner, repository);
+  const reverted = (pr: Pull): boolean => revertNumbers.has(pr.number);
   const replaced = supersessions(pulls);
   const closedBy = new Map<number, { good: boolean }>();
   for (const pr of pulls) {
-    if (pr.state !== 'merged' || !moment(pr.mergedAt) || isRevert(pr)) continue;
+    if (pr.state !== 'merged' || !moment(pr.mergedAt) || isRevert(pr, owner, repository)) continue;
     for (const number of pr.closes) closedBy.set(number, { good: (closedBy.get(number)?.good ?? false) || !reverted(pr) });
   }
 
   const pullVerdict = (pr: Pull): Verdict => {
     if (pr.state === 'merged') {
       if (!moment(pr.mergedAt)) return { skip: 'not-merged', outcome: 'resolved' };
-      if (isRevert(pr)) return { skip: 'is-revert', outcome: 'resolved' };
+      if (isRevert(pr, owner, repository)) return { skip: 'is-revert', outcome: 'resolved' };
       return reverted(pr) ? { skip: 'reverted', outcome: 'resolved' } : { outcome: 'resolved' };
     }
     if (pr.state === 'open') return { skip: 'not-merged', outcome: 'rejected' };
-    if (isRevert(pr)) return { skip: 'is-revert', outcome: 'rejected' };
+    if (isRevert(pr, owner, repository)) return { skip: 'is-revert', outcome: 'rejected' };
     const motives = motivesOf(pr, replaced, owner, repository);
     if (!motives.length) return { skip: 'no-reason', outcome: 'rejected' };
     const by = motives.find(motive => motive.superseded_by)?.superseded_by;
@@ -280,7 +311,8 @@ export function selectItems(input: Input, options: Options): Selection {
     if (hasSecretIn(record.raw)) return skip('secret');
     if (verdict.late) return skip('covered-by-pr');
     const key = providerKey(provider, ref);
-    const keys = [key, ...(record.jira ? [record.jira] : [])];
+    // The issues a PR closes are known too: a PR that closes an issue the knowledge already cites is covered by it.
+    const keys = [key, ...(record.jira ? [record.jira] : []), ...(record.closes ?? [])];
     if (keys.some(item => hasRef(known, item))) return skip('already-known');
     if (hasRef(pending, key)) return skip('already-pending');
     let suggested = `${repository.toLowerCase()}-${kind}-${number}`;

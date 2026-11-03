@@ -81,7 +81,7 @@ export interface Revalidation {
 export function revalidate(input: unknown, options: { owner: string; repository: string; state: string; known?: Set<string>; ids?: Set<string> }): Revalidation {
   const { owner, repository } = options;
   const selection = select(input, { owner, repository, known: options.known, ids: options.ids });
-  const { numbers: revertedNumbers } = revertedBy(githubInput(input, owner, repository).pulls);
+  const { numbers: revertedNumbers } = revertedBy(githubInput(input, owner, repository).pulls, owner, repository);
   const reasons = new Map(selection.skipped.map(item => [item.ref, item.reason]));
   const eligible = new Set(selection.candidates.map(candidate => candidate.ref));
   const result: Revalidation = { valid: [], removed: [], unverified: [] };
