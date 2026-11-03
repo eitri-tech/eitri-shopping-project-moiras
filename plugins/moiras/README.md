@@ -175,7 +175,7 @@ Para sincronizar o knowledge antes da triagem, rode `/moiras:moiras-sync --auto`
 
 ## Memória
 
-Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl`, pelo script `scripts/memory.ts` (Node ≥ 22.18, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes. A memória é local e nunca vai para um knowledge.
+Cada etapa grava uma memória só de acréscimo em `.moiras/memory/<stage>.jsonl`, pelo script `scripts/memory.ts` (Node ≥ 22.18, sem dependências): quando, com quem e o hash SHA-256 do conteúdo, nunca o texto bruto. A Cloto usa isso para saber o que é novo ou mudou, a Láquesis para reaproveitar classificações e a Átropos para guardar vereditos e escolhas pendentes. O `content` dos registros `jira:*` tem lista fechada de campos (`null` equivale a ausente, com o mesmo hash). A memória é local e nunca vai para um knowledge.
 
 ## Instalação
 

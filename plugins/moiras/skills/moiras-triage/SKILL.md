@@ -105,7 +105,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" memory hash < content.json
 node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" memory query lachesis --dir "${memory_dir}" --key PROJ-123 --since 2026-10-01T00:00:00Z
 ```
 
-O script rejeita campos fora da lista da etapa e hashes fora de `sha256:<64 hex>`. Metadados são resumos derivados; texto bruto só entra em `content`, que é descartado após o hash.
+O script rejeita campos fora da lista da etapa e hashes fora de `sha256:<64 hex>`. Também valida a forma do `content` dos registros `jira:*` da Cloto (lista fechada de campos; `null` equivale a ausente, então o hash é o mesmo). Metadados são resumos derivados; texto bruto só entra em `content`, que é descartado após o hash.
 
 Registros legados com chaves em português (`chave`, `com_quem` etc.) não são migrados: ao encontrar `chave`, o script avisa com arquivo e linha e ignora o registro, inclusive se também houver `key`. Nunca reescreve nem apaga linhas antigas. Recolete e reclassifique para acrescentar registros novos com chaves em inglês; eles iniciam uma nova comparação (`new` se não houver registro válido anterior). O diretório antigo `.moiras/memoria` não é descoberto automaticamente: a configuração define o diretório lido. Não renomeie campos manualmente nem trate classificações legadas como saída válida.
 
