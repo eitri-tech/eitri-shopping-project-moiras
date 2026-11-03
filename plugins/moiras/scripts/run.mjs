@@ -1,12 +1,12 @@
 // Launcher dos scripts do Moiras. Node < 22.18 não executa .ts e falha com um erro que não diz a versão,
 // então este arquivo (JavaScript comum, legível em Node antigo) confere a versão antes de carregar o .ts.
-// Uso: node scripts/run.mjs <config|github|knowledge|learn-github|memory> [argumentos]
+// Uso: node scripts/run.mjs <config|github|knowledge|learn-git|learn-github|memory> [argumentos]
 import { realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CLIS = ['config', 'github', 'knowledge', 'learn-github', 'memory'];
+const CLIS = ['config', 'github', 'knowledge', 'learn-git', 'learn-github', 'memory'];
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/;
 
 // Versão mínima: 22.18.0 (sem pré-lançamento, pois semver ordena 22.18.0-pre antes de 22.18.0).

@@ -55,12 +55,14 @@ Os argumentos limitam a execução a knowledges pelo `name`; sem nome, vale todo
 
 Com `--github <dono/repo>...`, depois de sincronizar, a skill procura o que fechou no GitHub desde a última rodada para o `moiras-learn --from-github`. É **só uma lista pendente**: nenhum registro é criado, nem no `local` (o `<local-dir>` continua intocado). Quem grava é o `moiras-learn --from-github --pending`, com o "sim" do usuário à lista exata.
 
-1. Leia (só leitura) os PRs mergeados e as issues fechadas de cada repositório, com os comandos exatos abaixo. `AAAA-MM-DD` é a data da marca d'água (`node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github watermark get --state .moiras/learn-github --repo <dono/repo>`, só o dia) ou, na primeira rodada, o `--since`; `<N>` é um limite alto (sugestão 500; se a lista vier com `<N>` itens, ela pode ter sido cortada: ver "Coleta completa" abaixo). O `auto` descarta o que é anterior à marca d'água, então o dia inteiro pode ser lido sem duplicar.
+1. Leia (só leitura) os PRs (de todos os estados, como no `moiras-learn`: também os fechados sem merge e os reverts, que o seletor precisa ver) e as issues fechadas de cada repositório, com os comandos exatos abaixo. `AAAA-MM-DD` é a data da marca d'água (`node "${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs" learn-github watermark get --state .moiras/learn-github --repo <dono/repo>`, só o dia) ou, na primeira rodada, o `--since`; `<N>` é um limite alto (sugestão 500; se a lista vier com `<N>` itens, ela pode ter sido cortada: ver "Coleta completa" abaixo). O `auto` descarta o que é anterior à marca d'água, então o dia inteiro pode ser lido sem duplicar.
 
    ```bash
-   gh pr list --repo <dono/repo> --state merged --limit <N> --search 'merged:>=AAAA-MM-DD' --json number,title,url,state,mergedAt,headRefName,labels,body,closingIssuesReferences,files
+   gh pr list --repo <dono/repo> --state all --limit <N> --search 'updated:>=AAAA-MM-DD' --json number,title,url,state,mergedAt,closedAt,headRefName,labels,body,closingIssuesReferences,files,comments,reviews
    gh issue list --repo <dono/repo> --state closed --limit <N> --search 'closed:>=AAAA-MM-DD' --json number,title,url,state,stateReason,closedAt,labels,body
    ```
+
+   `comments` e `reviews` vêm na própria listagem (a coleta automática só tem `gh pr list`): sem eles, um PR fechado sem merge com o motivo só num comentário ou numa revisão viraria `no-reason` e o `revalidate` tiraria da lista um pendente válido. Com eles, o `auto` e o `revalidate` usam os mesmos motivos do `moiras-learn`. O texto passa pelo detector de segredos do seletor e nunca é impresso.
 
    Junte as saídas em `{ "prs": [...], "issues": [...] }` num arquivo temporário, apagado ao terminar. Os campos estão explicados em `moiras-learn/SKILL.md`, "Aprender com o GitHub".
 2. Rode, por repositório (`--label` repetível filtra por label; `--since` só é exigido na primeira rodada, quando ainda não há marca d'água):

@@ -100,6 +100,21 @@ describe('issues', () => {
     assert.deepEqual(main(['issues', local]), { output: JSON.stringify(expected), code: 0 });
   });
 
+  it('indexes the issue and every item of the issues list of a solution and of a rejected approach', t => {
+    const { local, write } = workspace(t);
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1\n', 'issue: PROJ-1\nissues: [acme/acme-shop-checkout#12]\n'));
+    write('local', 'learnings/decisions/pr-12.md', '---\nid: pr-12\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/12\nimported_from: git\nissue: acme/acme-shop-checkout#12\nissues: [PROJ-2]\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n');
+    assert.deepEqual(check(local).findings, []);
+    assert.deepEqual(issues(local), {
+      issues: {
+        'PROJ-1': { solutions: ['PROJ-1-1'], patterns: [] },
+        'PROJ-2': { solutions: [], patterns: [], decisions: ['pr-12'] },
+        'acme/acme-shop-checkout#12': { solutions: ['PROJ-1-1'], patterns: [], decisions: ['pr-12'] },
+      },
+      ids: ['PROJ-1-1', 'pr-12'],
+    });
+  });
+
   it('returns empty collections for an empty directory and skips unreadable or unparsed records', t => {
     const { dir, local, write } = workspace(t);
     assert.deepEqual(issues(dir), { issues: {}, ids: [] });
@@ -109,6 +124,17 @@ describe('issues', () => {
     write('local', 'learnings/solutions/large.md', 'x'.repeat(2 * 1024 * 1024));
     symlinkSync(dir, join(local, 'learnings/solutions/link.md'));
     assert.deepEqual(issues(local), { issues: {}, ids: ['binary', 'large', 'link', 'no-frontmatter', 'unclosed'] });
+  });
+
+  it('indexes the issue of a rejected approach, as owner/repository#number or a Jira key', t => {
+    const { local, write } = workspace(t);
+    const rejected = (id: string, issue: string) => `---\nid: ${id}\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/5\nimported_from: git\nissue: ${issue}\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n`;
+    write('local', 'learnings/decisions/pr-5.md', rejected('pr-5', 'acme/acme-shop-checkout#3'));
+    write('local', 'learnings/decisions/pr-6.md', rejected('pr-6', 'PROJ-4'));
+    const index = issues(local);
+    assert.deepEqual(index.issues['acme/acme-shop-checkout#3'], { solutions: [], patterns: [], decisions: ['pr-5'] });
+    assert.deepEqual(index.issues['PROJ-4'], { solutions: [], patterns: [], decisions: ['pr-6'] });
+    assert.deepEqual(index.issues['acme/acme-shop-checkout#5'], { solutions: [], patterns: [], decisions: ['pr-5', 'pr-6'] });
   });
 
   it('ignores records that fail check, reserves their names, accepts a scalar issues and merges knowledges', t => {
@@ -248,6 +274,54 @@ describe('check', () => {
       'learnings/solutions/PROJ-9-3.md:issue-invalid',
     ]);
     assert.equal(check(local).findings.filter(f => f.path.endsWith('PROJ-9-1.md')).length, 5);
+  });
+
+  it('accepts the issue of a solution or a rejected approach as owner/repository#number or a Jira key', t => {
+    const { local, write } = workspace(t);
+    const decision = (issue: string) => `---\nid: acme-shop-checkout-pr-5\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/5\nimported_from: git\nissue: ${issue}\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n`;
+    // Solutions also keep the legacy `repo#n` and `bitbucket:ws/repo#n` forms; a rejected approach takes only owner/repository#n or the key.
+    for (const value of ['acme/acme-shop-checkout#3', 'acme-shop-checkout#3', 'bitbucket:acme/acme-shop-checkout#3', 'PROJ-123', 'AB-1']) {
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [], value);
+    }
+    for (const value of ['acme/acme-shop-checkout#3', 'PROJ-123']) {
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision(value));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [], value);
+    }
+    for (const value of ['proj-123', 'PROJ123', 'P-1-2', 'acme/acme-shop-checkout', 'acme/acme-shop-checkout#x']) {
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision('PROJ-123'));
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved').replace('issue: PROJ-1', `issue: ${value}`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), ['issue-invalid'], value);
+      write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved'));
+      write('local', 'learnings/decisions/acme-shop-checkout-pr-5.md', decision(value));
+      assert.deepEqual(check(local).findings.map(f => f.rule), ['issue-invalid'], value);
+    }
+  });
+
+  it('accepts a list of further issues on a solution or a rejected approach, each with the rule of its issue', t => {
+    const { local, write } = workspace(t);
+    const withIssues = (list: string) => solution('resolved').replace('issue: PROJ-1\n', `issue: PROJ-1\nissues: ${list}\n`);
+    const rejected = (issues: string) => `---\nid: pr-12\ntype: decision\ncreated_at: 2026-10-12\noutcome: rejected\nreason: Caches the seller list.\nreference_url: https://github.com/acme/acme-shop-checkout/pull/12\nimported_from: git\nissue: PROJ-1\nissues: ${issues}\n---\n\n# Do not cache\n\n**Decisão:** keep it live.\n`;
+    write('local', 'learnings/solutions/PROJ-1-1.md', withIssues('[PROJ-1, acme/acme-shop-checkout#12, bitbucket:acme/acme-shop-checkout#12]'));
+    assert.deepEqual(check(local).findings.map(f => f.rule), []);
+    write('local', 'learnings/decisions/pr-12.md', rejected('[PROJ-2, acme/acme-shop-checkout#12]'));
+    assert.deepEqual(check(local).findings.map(f => f.rule), []);
+    // Same rule as `issue`: a solution takes the legacy and Bitbucket forms too, a rejected approach only owner/repository#n or a key.
+    for (const [value, rule] of [['proj-2', 'issues-invalid'], ['bad<', 'issues-invalid'], ['PROJ-2, bad<', 'issues-invalid'], ['[]', 'issues-invalid'], ['<PROJ-2>', 'placeholder']] as const) {
+      write('local', 'learnings/solutions/PROJ-1-1.md', withIssues(`[${value}]`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [rule], value);
+    }
+    write('local', 'learnings/solutions/PROJ-1-1.md', withIssues('PROJ-2'));
+    assert.deepEqual(check(local).findings.map(f => f.rule), ['issues-invalid'], 'scalar issues');
+    write('local', 'learnings/solutions/PROJ-1-1.md', withIssues('[]'));
+    assert.deepEqual(check(local).findings.map(f => f.rule), ['issues-invalid'], 'empty issues');
+    write('local', 'learnings/solutions/PROJ-1-1.md', withIssues('[acme-shop-checkout#12]'));
+    assert.deepEqual(check(local).findings.map(f => f.rule), []);
+    write('local', 'learnings/solutions/PROJ-1-1.md', solution('resolved'));
+    for (const [value, rule] of [['bitbucket:acme/acme-shop-checkout#12', 'issues-invalid'], ['acme-shop-checkout#12', 'issues-invalid'], ['proj-2', 'issues-invalid']] as const) {
+      write('local', 'learnings/decisions/pr-12.md', rejected(`[${value}]`));
+      assert.deepEqual(check(local).findings.map(f => f.rule), [rule], value);
+    }
   });
 
   it('validates malformed placeholders and exempts complete placeholders from contract errors', t => {
