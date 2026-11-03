@@ -34,6 +34,7 @@ Dispare as duas buscas **na mesma rodada de chamadas de ferramenta**, sem espera
    Se `jira.agency_field` estiver configurado, peça também esse campo (nome ou id; texto, opção ou etiqueta) na mesma busca. O valor vira `agency` da issue; campo vazio ou não configurado é `null`, sem aviso: a agência é opcional.
    Se `jira.team` estiver configurado (`field` e `value`, um só, porque o Team do Jira é de valor único), peça também esse campo na mesma busca. No formato REST do Jira o Team vem como objeto (`id`, `name`, ...): compare o `id` dele com `value`, nunca o objeto nem o nome. O time **não filtra**: é só uma expectativa, porque as issues são criadas à mão e o time pode faltar ou variar. O épico é o escopo forte. Issue cujo time for diferente de `value`, ou sem time, continua na triagem e ganha o aviso `team-mismatch:<time atual>` (`team-mismatch:none` sem time). Não leia o time das issues se o campo não vier do conector: aviso `team-unavailable` no lugar, uma vez por issue. Sem `jira.team`, nada disso vale.
    Peça também `created` de cada issue e exponha como `created_at` (timestamp ISO 8601 com fuso, sem truncar para dia). Se indisponível, use `null` e o aviso `creation-date-unavailable`.
+   Peça na mesma busca `description`, `updated` e `reporter`, e também quem fez a última alteração (`updated_by`; se o conector não der, `null`). Exponha `updated` como `updated_at` (ISO 8601 com fuso) e `reporter`/`updated_by` como `with_whom` (`{ "reporter": "...", "updated_by": "..." }`, omitindo o que for `null`). Se a `description` vier vazia do conector, busque a issue individualmente antes de classificar só pelo título; se continuar indisponível, use `description: null` e o aviso `description-unavailable`.
 3. Para cada issue, calcule a data fim efetiva (`end_date`) e de onde ela veio (`end_date_source`), nesta ordem de prioridade:
    1. a `duedate` da **própria issue** (`end_date_source: issue`);
    2. senão, a data fim do **épico da issue** (`epic`), lida no passo 1 (`epic`);
@@ -158,6 +159,8 @@ Regras:
         "summary": "",
         "description": "",
         "created_at": "2026-10-01T10:00:00Z",
+        "updated_at": "2026-10-05T17:40:00-03:00",
+        "with_whom": { "reporter": "Fulano", "updated_by": "Beltrana" },
         "epic": "PROJ-100 | null",
         "priority": "High",
         "status": "To Do",
@@ -223,7 +226,7 @@ Depois da coleta, registre **cada item coletado** numa única chamada `record cl
     "source": "jira",
     "with_whom": { "reporter": "Fulano", "updated_by": "Beltrana" },
     "updated_at": "2026-10-05T17:40:00-03:00",
-    "content": { "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "", "status": "", "duedate": "", "end_date": "", "end_date_source": "", "buffer_days": "" }
+    "content": { "summary": "", "description": "", "created_at": "2026-10-01T10:00:00Z", "priority": "", "status": "", "duedate": "", "end_date": "", "end_date_source": "", "buffer_days": "", "agency": null }
   },
   {
     "key": "slack:C0123456789:1696341120.000100",
@@ -237,7 +240,8 @@ Depois da coleta, registre **cada item coletado** numa única chamada `record cl
 ```
 
 - `ts` (quando a Cloto viu o item) é preenchido pelo script; `content` vira `hash` e não é guardado.
-- Inclua `agency` em `content` das issues só quando houver valor: trocar a agência conta como `changed`. A inclusão de `created_at`, e depois a de `end_date`, `end_date_source` e `buffer_days` (que faz a mudança da data do épico ou do projeto contar como `changed` também para a issue com `duedate` própria, porque muda a folga), provoca uma única mudança de hash nos registros antigos, mesmo sem agência: o primeiro `--auto` depois da atualização reprocessa todas as issues uma vez.
+- O `content` de `jira:*` leva **somente** estes campos: `summary`, `description`, `created_at`, `priority`, `status`, `duedate`, `end_date`, `end_date_source`, `buffer_days`, `agency`. `updated_at` e `with_whom` ficam no nível do registro (vêm de `jira.issues[].updated_at` e `.with_whom`; não se improvisa). Campo vazio pode ser omitido ou `null`: o script normaliza e o hash é o mesmo (string vazia não vira `null`). O script recusa chave fora da lista (`Unknown jira content field`) e `content` que não seja objeto, sem gravar nada do lote.
+- `agency` entra em `content` quando houver valor (ausente e `null` são equivalentes): trocar a agência conta como `changed`. A primeira gravação depois desta atualização pode contar `changed` uma única vez para registros antigos cujo hash foi calculado com `null` explícito. A inclusão de `created_at`, e depois a de `end_date`, `end_date_source` e `buffer_days` (que faz a mudança da data do épico ou do projeto contar como `changed` também para a issue com `duedate` própria, porque muda a folga), provoca uma única mudança de hash nos registros antigos, mesmo sem agência: o primeiro `--auto` depois da atualização reprocessa todas as issues uma vez.
 - O retorno diz se cada item é `new`, `changed` ou `unchanged` desde a última execução. Copie isso para o campo `change` de cada issue em `jira.issues`. Uma issue também conta como `changed` se alguma mensagem do Slack que a cita for `new` ou `changed`.
 - No modo automático (sem `--full`), issues `new` ou `changed` seguem para a Láquesis. Uma `unchanged` só pode ser pulada com conclusão comprovada em relatório completo para o mesmo `ticket` (sem `change`), a mesma entrada da Láquesis e o mesmo `knowledge_fingerprint` (ver `SKILL.md`). Sem essa prova, inclusive após falha de contrato ou mudança no knowledge ou em `siblings`, tente novamente e mantenha `change: unchanged`: coleta e conclusão são coisas distintas.
 - Cada interação aplicada tem registro próprio, consultável pela regra 6: a chave é `interaction:` + o `id` da interação na saída (ex.: `interaction:slack:C0123456789:1696341120.000100:reaction`), com `content` = tipo, texto e link. O script recusa chave de interação fora da forma `interaction:<id>`. Os registros desta seção são dos itens coletados, não das interações.
@@ -251,7 +255,7 @@ Com as duas coletas prontas, monte uma entrada da Láquesis por issue, na ordem 
 - `key`, `summary`, `description`, `created_at`, `epic`, `priority`, `agency`: do item de `jira.issues`.
 - `evidence`: as mensagens do Slack cuja `cited_issues` contém a chave, **e cada resposta da thread** como fonte separada (`ref` = permalink, `excerpt` = texto, `verified_at` = data).
 - `siblings`: `jira.siblings` sem a própria issue.
-- `warnings`: os da issue (`no-due-date`: a issue não tem data própria; `no-end-date`: nem o épico nem o projeto têm data, então não há teto para comparar; `exceeds-epic`, `creation-date-unavailable`, `team-mismatch:<time atual>`, `team-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
+- `warnings`: os da issue (`no-due-date`: a issue não tem data própria; `no-end-date`: nem o épico nem o projeto têm data, então não há teto para comparar; `exceeds-epic`, `creation-date-unavailable`, `description-unavailable`, `team-mismatch:<time atual>`, `team-unavailable`) mais os da coleta (`slack-unavailable`, `epic-not-found:<KEY>`).
 
 Mensagens que não citam nenhuma issue ficam em `slack.without_issue`, como contexto geral.
 
