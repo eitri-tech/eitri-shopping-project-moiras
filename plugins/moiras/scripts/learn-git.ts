@@ -20,7 +20,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { hasSecret, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
+import { hasSecret, hasUrlCredentials, isCalendarDate, issues as knownIssues, patterns, validReferenceUrl } from './knowledge.ts';
 import { adapterFor, isBotLogin, isObject, type Adapter, type Discussion, type Issue, type Json, type Provider, type Pull } from './providers.ts';
 
 export const usage = 'Usage: node learn-git.ts eligible --provider <github|bitbucket> --repo <owner/name> [--since <date>] [--until <date>] [--after <ts>] [--label <name>]... [--state <dir>] [--knowledge <dir>]... [--limit <n>]';
@@ -105,9 +105,9 @@ const closingWindowDays = 7;
 const moment = (value: unknown): string | undefined => (typeof value === 'string' && timestamp.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
 const later = (a: string | undefined, b: string): string => (a === undefined || Date.parse(b) > Date.parse(a) ? b : a);
 
-/** True when any string of the record (title, body, branch, labels, file paths, comments) carries a secret. */
+/** True when any string of the record (title, body, branch, labels, file paths, comments) carries a secret or a credential in a URL. */
 export function hasSecretIn(value: unknown, depth = 0): boolean {
-  if (typeof value === 'string') return value.split('\n').some(line => hasSecret(line) || secretPattern.test(line));
+  if (typeof value === 'string') return value.split('\n').some(line => hasSecret(line) || secretPattern.test(line) || hasUrlCredentials(line));
   if (depth > 6) return false;
   if (Array.isArray(value)) return value.some(item => hasSecretIn(item, depth + 1));
   if (isObject(value)) return Object.values(value).some(item => hasSecretIn(item, depth + 1));

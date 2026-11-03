@@ -391,3 +391,36 @@ describe('index.github', () => {
     }
   });
 });
+
+describe('other sources', () => {
+  // A block the Clotho does not document yet is kept as given: it is not read, but its secrets, credentials and paths are checked.
+  it('keeps an unknown block without findings when it carries no secret', () => {
+    assert.deepEqual(rules({ ...minimal(), backend_monitoring: { services: ['acme-shop-checkout'], window_hours: 24 }, $schema: 'https://example.com/sources.schema.json' }), []);
+    assert.deepEqual(rules({ ...minimal(), backend_monitoring: '<token>' }), []);
+  });
+
+  it('refuses secrets and credentials in an unknown block, at any depth', () => {
+    assert.deepEqual(rules({ ...minimal(), backend_monitoring: { api_key: 'plain-value', queries: [{ auth: { password: 'plain-value' } }] } }), [
+      'backend_monitoring.api_key:secret:error',
+      'backend_monitoring.queries[0].auth.password:secret:error',
+    ]);
+    assert.deepEqual(rules({ ...minimal(), crashes: { url: 'https://user:hunter2@crashes.example.com/apps' } }), ['crashes.url:url-credentials:error']);
+    assert.deepEqual(rules({ ...minimal(), status_page: { token: 'synthetic', hook: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789' } }), ['status_page.hook:secret:error', 'status_page.token:secret:error']);
+  });
+
+  it('warns about personal paths in an unknown block and still reports a malformed known source', () => {
+    assert.deepEqual(rules({ ...minimal(), crashes: { dir: '/home/fulano/crashes' }, slack: { channels: 'C0123456789' } }), ['crashes.dir:absolute-path:warning', 'slack.channels:not-a-list:error']);
+  });
+
+  it('validates a known source even when unknown blocks sit beside it', () => {
+    assert.deepEqual(rules({ ...minimal(), backend_monitoring: { services: [] }, jira: { site: 'example.atlassian.net', epics: [] } }), ['jira.epics:not-a-list:error']);
+  });
+
+  it('init refuses a secret in an unknown block and writes nothing', t => {
+    const { target } = workspace(t);
+    const result = init({ ...minimal(), backend_monitoring: { api_key: 'plain-value' } }, target);
+    assert.deepEqual(result.created, []);
+    assert.deepEqual(result.findings.map(finding => `${finding.path}:${finding.rule}:${finding.severity}`), ['backend_monitoring.api_key:secret:error']);
+    assert.ok(!existsSync(target));
+  });
+});

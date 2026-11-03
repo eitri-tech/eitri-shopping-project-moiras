@@ -35,7 +35,7 @@ Antes da seleção de issues, calcule o fingerprint do knowledge descrito abaixo
 Cada etapa tem um contrato `{input, output}` descrito no seu arquivo. A saída de uma etapa alimenta a entrada da seguinte:
 
 ```
-Cloto     : configuração + escopo    → issues + mensagens das fontes configuradas
+Cloto     : configuração + escopo    → issues + material das fontes configuradas
 Láquesis  : uma issue + evidências   → repositórios, categoria, confiança, duplicatas, fontes
 Átropos   : issue + classificação    → justificativa, ação e normalmente de 3 a 5 soluções com % de confiança
             + precedentes             → (após a escolha do usuário) registro no aprendizado
@@ -113,11 +113,13 @@ Nunca escreva nesses arquivos à mão nem grave texto bruto de issue ou mensagem
 
 ## Fontes
 
-Toda fonte segue este formato:
+Toda fonte segue este formato, seja ela do knowledge, do Jira, do Slack ou de outra fonte configurada:
 
 ```json
-{ "ref": "knowledge:acme/glossary/acme-shop-checkout.md | PROJ-187 | <permalink do Slack>", "excerpt": "", "verified_at": "2026-09-15 | null" }
+{ "ref": "knowledge:acme/glossary/acme-shop-checkout.md | PROJ-187 | <permalink do Slack> | <fonte>:<id>", "excerpt": "", "verified_at": "2026-09-15 | null" }
 ```
+
+Hoje a Cloto implementa duas fontes, Jira (issues) e Slack (conversas). Outras fontes configuradas entram pelo padrão de `stages/clotho.md` ("Outras fontes", passos de 1 a 7) e chegam à Láquesis no mesmo formato de evidência, sem mudar o contrato dela.
 
 ## Limites
 

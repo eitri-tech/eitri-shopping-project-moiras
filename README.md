@@ -7,7 +7,7 @@
 
 # Moiras
 
-Plugin para Claude que faz triagem de issues do Jira com Slack e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
+Plugin para Claude que faz triagem de issues do Jira com as fontes configuradas (hoje Jira e Slack) e um knowledge do time: coleta o que foi pedido, classifica cada issue e propõe soluções, com a decisão sempre nas mãos de quem trabalha no projeto.
 
 ## Como funciona
 
@@ -24,7 +24,7 @@ flowchart LR
     voce -. "a escolha vira aprendizado" .-> kb
 ```
 
-- **Cloto (fia):** junta o material cru das fontes configuradas, em paralelo: as issues sem responsável do escopo e as conversas relevantes. Ainda não opina; só puxa os fios.
+- **Cloto (fia):** junta o material cru das fontes configuradas, em paralelo: as issues sem responsável do escopo e as conversas relevantes. Ainda não opina; só puxa os fios. Hoje são implementadas duas fontes, Jira e Slack; qualquer outra fonte configurada entra pelo mesmo padrão, descrito em [`stages/clotho.md`](plugins/moiras/skills/moiras-triage/stages/clotho.md#outras-fontes).
 - **Láquesis (mede):** descobre onde a issue mora (repositório e componente), classifica (categoria, origem, confiança) e confere se alguém já abriu a mesma coisa.
 - **Átropos (corta):** dá o veredito (`duplicate`, `blocked`, `ready-for-dev`, `needs-info` ou `close`), justifica e propõe de 3 a 5 soluções com % de confiança. Quem corta o fio, no fim, é você: a solução escolhida volta para o knowledge.
 
@@ -113,7 +113,7 @@ Para o cron sem perguntas, o exemplo da linha com `--auto` (e as ferramentas a l
 ## Segurança
 
 - Só lê e sugere no Jira e no Slack; nada é escrito sem o "sim" à lista exata. A exceção são as interações opcionais da Cloto (reação no Slack, comentário curto no Jira), desligadas por padrão (`interactions.enabled`). Com elas ligadas, só a reação autorizada em `interactions.auto_types` roda no `--auto` sem o "sim"; comentário sempre pede aprovação.
-- O knowledge fica fora deste repositório: local (`.moiras/knowledge/`, fora do git) ou em repositórios privados criados a partir de um template público. Nunca guarda cópia de código nem segredos.
+- O knowledge fica fora deste repositório: local (`.moiras/knowledge/`, fora do git) ou em repositórios privados criados a partir de um template público. Nunca guarda cópia de código nem segredos. O detector de segredos reconhece tokens do GitHub, Slack, AWS, OpenAI (`sk-`, `sk-proj-`, `sk-svcacct-`), Google (`AIza...`), JWT, chaves privadas PEM, `Bearer`, atribuições como `PASSWORD=` e credenciais em URL (`usuário:senha@`, sem contar `<placeholder>`); a lista não é exaustiva, e a revisão humana continua necessária.
 - A memória das etapas é local, só de acréscimo, e guarda hash e metadados, nunca o texto bruto.
 - `moiras-publish` sempre abre PR num branch novo: nunca faz push na principal, `force push` nem merge.
 
